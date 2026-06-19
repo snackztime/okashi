@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestPreviewToggle(t *testing.T) {
@@ -193,5 +194,41 @@ func TestWheelOverPreviewScrolls(t *testing.T) {
 	m = nm.(model)
 	if m.preview.YOffset == 0 {
 		t.Fatal("wheel over preview should scroll it")
+	}
+}
+
+func TestMouseClickSelectsAndDoubleClickOpens(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "draft.md")
+	if err := os.WriteFile(path, []byte("hi there words"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.files.SetDir(dir)
+
+	bannerH := lipgloss.Height(bannerView(m.width))
+	// entries: ["..", "draft.md"] → draft.md is visible row 1.
+	click := tea.MouseMsg{X: 2, Y: bannerH + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+
+	// Single click selects but does NOT open.
+	nm, _ = m.Update(click)
+	m = nm.(model)
+	if got := m.files.entries[m.files.selected].name; got != "draft.md" {
+		t.Fatalf("single click should select draft.md, got %q", got)
+	}
+	if m.currentFile != "" {
+		t.Fatalf("single click should not open a file, currentFile = %q", m.currentFile)
+	}
+
+	// Second click on the same row (instant, within 400ms) opens it.
+	nm, _ = m.Update(click)
+	m = nm.(model)
+	if m.currentFile != path {
+		t.Fatalf("double click should open the file, currentFile = %q", m.currentFile)
+	}
+	if m.focus != focusEditor {
+		t.Fatal("opening via double click should focus the editor")
 	}
 }
