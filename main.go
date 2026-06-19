@@ -290,7 +290,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Route everything else to whichever pane has focus. Preview is a modal
 	// read-only state, so it wins over pane focus — keys/wheel scroll it and
-	// nothing reaches the editor or filepicker underneath.
+	// nothing reaches the editor or file list underneath.
 	var cmd tea.Cmd
 	if m.previewing {
 		m.preview, cmd = m.preview.Update(msg)

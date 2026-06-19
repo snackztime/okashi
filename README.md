@@ -44,10 +44,13 @@ git tag v0.1.0 && git push origin v0.1.0
 | `tab`    | Switch focus between sidebar and editor |
 | `ctrl+n` | Create a new file (type a name, Enter)  |
 | `ctrl+p` | Toggle a rendered Markdown preview       |
+| `ctrl+t` | Toggle typewriter scrolling (centered caret) |
 | `ctrl+s` | Save the open file                      |
 | `ctrl+c` | Quit                                    |
 
-Inside the sidebar, arrow keys + Enter navigate folders and open a file.
+Inside the sidebar, arrow keys + Enter navigate folders and open a file; the
+mouse works too — wheel scrolls, a single click selects (and focuses the pane),
+a double-click opens a file or enters a folder.
 `ctrl+n` opens a blank buffer in the folder you're currently browsing — give it
 a name (a bare name gets `.md`) and `ctrl+s` writes it to disk.
 
@@ -105,11 +108,12 @@ code, total control — where a polished v1 ends up).
 
 ## Roadmap
 
-1. **Typewriter scroll** (above) — the signature feel.
+1. ~~**Typewriter scroll**~~ ✅ Done — caret pinned to center; `ctrl+t` toggles.
 2. **Focus dimming** — render the non-current sentence/paragraph in a dim style.
 3. ~~**Word count / session stats** in the status line.~~ ✅ Done — the status bar
    shows live `N words · +N session` (net words added since the file was opened).
-4. **Chapter list** — swap the filepicker for a flat `list` of a project's files.
+4. ~~**Chapter list**~~ ✅ Done — owned `filelist` replaces the filepicker
+   (and adds mouse support).
 5. **Editor-core hardening** — if `bubbles/textarea` strains on long manuscripts
    (undo depth, huge files, soft-wrap edge cases), move to a rope-backed buffer.
 
