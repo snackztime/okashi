@@ -135,3 +135,63 @@ func TestMouseWheelScrollsFileList(t *testing.T) {
 		t.Fatal("wheel over the pane should focus it")
 	}
 }
+
+func TestSaveRefreshesSidebarForNewFile(t *testing.T) {
+	dir := t.TempDir()
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.files.SetDir(dir)
+
+	m.currentFile = filepath.Join(dir, "fresh.md")
+	m.editor.SetValue("hello")
+	if m.files.has("fresh.md") {
+		t.Fatal("precondition: fresh.md should not be listed before save")
+	}
+
+	m.save()
+
+	if !m.files.has("fresh.md") {
+		t.Fatal("save should refresh the sidebar to show the new file")
+	}
+	if m.files.entries[m.files.selected].name != "fresh.md" {
+		t.Fatalf("saved new file should be selected, got %q", m.files.entries[m.files.selected].name)
+	}
+}
+
+func TestWheelOverEditorMovesCaret(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.editor.SetValue("l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7")
+	for i := 0; i < 20; i++ {
+		m.editor.CursorUp() // caret to top
+	}
+	// Wheel down over the editor area (X past the sidebar).
+	nm, _ = m.Update(tea.MouseMsg{X: 50, Y: 10, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.editor.Line() != 3 {
+		t.Fatalf("wheel down over editor: caret line = %d, want 3", m.editor.Line())
+	}
+}
+
+func TestWheelOverPreviewScrolls(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	m = nm.(model)
+	var sb strings.Builder
+	for i := 0; i < 100; i++ {
+		fmt.Fprintf(&sb, "line %d\n", i)
+	}
+	m.editor.SetValue(sb.String())
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlP}) // enter preview
+	m = nm.(model)
+	if m.preview.YOffset != 0 {
+		t.Fatalf("preview should start at top, got %d", m.preview.YOffset)
+	}
+	nm, _ = m.Update(tea.MouseMsg{X: 50, Y: 10, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.preview.YOffset == 0 {
+		t.Fatal("wheel over preview should scroll it")
+	}
+}

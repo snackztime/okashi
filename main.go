@@ -200,42 +200,66 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
-		if !m.sidebarVisible || msg.X >= sidebarWidth {
-			return m, nil // editor-pane mouse is out of scope
+		inSidebar := m.sidebarVisible && msg.X < sidebarWidth
+
+		// Wheel scrolls whichever pane is under the pointer.
+		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
+			up := msg.Button == tea.MouseButtonWheelUp
+			switch {
+			case inSidebar:
+				m.focus = focusSidebar
+				m.editor.Blur()
+				if up {
+					m.files.moveBy(-1)
+				} else {
+					m.files.moveBy(1)
+				}
+				return m, nil
+			case m.previewing:
+				// Read-only preview: let the viewport scroll itself.
+				var cmd tea.Cmd
+				m.preview, cmd = m.preview.Update(msg)
+				return m, cmd
+			default:
+				// Editor: with typewriter the view is caret-locked, so scrolling
+				// means moving the caret. Step by the viewport's wheel delta.
+				m.focus = focusEditor
+				m.editor.Focus()
+				const wheelStep = 3
+				for i := 0; i < wheelStep; i++ {
+					if up {
+						m.editor.CursorUp()
+					} else {
+						m.editor.CursorDown()
+					}
+				}
+				return m, nil
+			}
+		}
+
+		// Click selection / open is file-pane only.
+		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+			return m, nil
 		}
 		bannerH := lipgloss.Height(bannerView(m.width))
-		switch msg.Button {
-		case tea.MouseButtonWheelUp:
-			m.focus = focusSidebar
-			m.editor.Blur()
-			m.files.moveBy(-1)
-		case tea.MouseButtonWheelDown:
-			m.focus = focusSidebar
-			m.editor.Blur()
-			m.files.moveBy(1)
-		case tea.MouseButtonLeft:
-			if msg.Action != tea.MouseActionPress {
-				return m, nil
+		row := sidebarRow(msg.Y, bannerH, m.files.height)
+		if row < 0 {
+			return m, nil
+		}
+		m.focus = focusSidebar
+		m.editor.Blur()
+		m.files.selectRow(row)
+		now := time.Now()
+		if row == m.lastClickRow && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+			if path, ok := m.files.activate(); ok {
+				m.loadFile(path)
+				m.focus = focusEditor
+				m.editor.Focus()
 			}
-			row := sidebarRow(msg.Y, bannerH, m.files.height)
-			if row < 0 {
-				return m, nil
-			}
-			m.focus = focusSidebar
-			m.editor.Blur()
-			m.files.selectRow(row)
-			now := time.Now()
-			if row == m.lastClickRow && now.Sub(m.lastClickTime) < 400*time.Millisecond {
-				if path, ok := m.files.activate(); ok {
-					m.loadFile(path)
-					m.focus = focusEditor
-					m.editor.Focus()
-				}
-				m.lastClickTime = time.Time{} // consume the double-click
-			} else {
-				m.lastClickRow = row
-				m.lastClickTime = now
-			}
+			m.lastClickTime = time.Time{} // consume the double-click
+		} else {
+			m.lastClickRow = row
+			m.lastClickTime = now
 		}
 		return m, nil
 
@@ -523,6 +547,13 @@ func (m *model) save() {
 		return
 	}
 	m.status = "saved " + filepath.Base(m.currentFile)
+
+	// Surface a newly-created file in the sidebar if we're browsing its folder.
+	// Re-saving an already-listed file leaves the selection undisturbed.
+	if base := filepath.Base(m.currentFile); filepath.Dir(m.currentFile) == m.files.dir && !m.files.has(base) {
+		m.files.SetDir(m.files.dir)
+		m.files.selectName(base)
+	}
 }
 
 func main() {

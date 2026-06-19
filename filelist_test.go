@@ -105,3 +105,20 @@ func TestFilelistActivate(t *testing.T) {
 		t.Fatalf("after .. dir = %q, want %q", f.dir, filepath.Dir(dir))
 	}
 }
+
+func TestFilelistHasAndSelectName(t *testing.T) {
+	f := newFilelist()
+	f.entries = []fileEntry{{name: ".."}, {name: "a.md"}, {name: "b.md"}}
+
+	if !f.has("a.md") || f.has("nope.md") {
+		t.Fatal("has() should report membership correctly")
+	}
+	f.selectName("b.md")
+	if f.selected != 2 {
+		t.Fatalf("selectName: selected = %d, want 2", f.selected)
+	}
+	f.selectName("missing") // no-op
+	if f.selected != 2 {
+		t.Fatalf("selectName(missing) should be a no-op, selected = %d", f.selected)
+	}
+}

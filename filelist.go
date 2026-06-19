@@ -154,3 +154,24 @@ func (f *filelist) activate() (string, bool) {
 	}
 	return filepath.Join(f.dir, e.name), true
 }
+
+// has reports whether an entry with the given name is currently listed.
+func (f filelist) has(name string) bool {
+	for _, e := range f.entries {
+		if e.name == name {
+			return true
+		}
+	}
+	return false
+}
+
+// selectName moves the selection to the entry with the given name, if present.
+func (f *filelist) selectName(name string) {
+	for i, e := range f.entries {
+		if e.name == name {
+			f.selected = i
+			f.scrollIntoView()
+			return
+		}
+	}
+}
