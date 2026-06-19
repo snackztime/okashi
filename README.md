@@ -107,7 +107,8 @@ code, total control — where a polished v1 ends up).
 
 1. **Typewriter scroll** (above) — the signature feel.
 2. **Focus dimming** — render the non-current sentence/paragraph in a dim style.
-3. **Word count / session stats** in the status line (`m.editor.Value()`).
+3. ~~**Word count / session stats** in the status line.~~ ✅ Done — the status bar
+   shows live `N words · +N session` (net words added since the file was opened).
 4. **Chapter list** — swap the filepicker for a flat `list` of a project's files.
 5. **Editor-core hardening** — if `bubbles/textarea` strains on long manuscripts
    (undo depth, huge files, soft-wrap edge cases), move to a rope-backed buffer.

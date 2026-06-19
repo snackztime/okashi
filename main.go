@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/filepicker"
@@ -54,9 +55,10 @@ type model struct {
 	creatingFile   bool
 	previewing     bool
 
-	mdStyle     string // glamour theme, detected once at startup
-	currentFile string
-	status      string
+	mdStyle         string // glamour theme, detected once at startup
+	sessionBaseline int    // word count when the current file was opened/created
+	currentFile     string
+	status          string
 }
 
 func initialModel() model {
@@ -287,11 +289,7 @@ func (m model) View() string {
 		body = lipgloss.Place(m.width, bodyH, lipgloss.Center, lipgloss.Top, pane)
 	}
 
-	statusText := m.status
-	if m.creatingFile {
-		statusText = m.nameInput.View()
-	}
-	status := statusStyle.Width(m.width).Render(statusText)
+	status := statusStyle.Width(m.width).Render(m.statusBar())
 	return lipgloss.JoinVertical(lipgloss.Left, banner, body, status)
 }
 
@@ -326,6 +324,7 @@ func (m *model) loadFile(path string) {
 	}
 	m.editor.SetValue(string(data))
 	m.currentFile = path
+	m.sessionBaseline = wordCount(string(data))
 	m.previewing = false
 	m.status = "opened " + filepath.Base(path)
 }
@@ -347,6 +346,7 @@ func (m *model) confirmNewFile() {
 
 	m.currentFile = filepath.Join(m.filepicker.CurrentDirectory, name)
 	m.editor.SetValue("")
+	m.sessionBaseline = 0
 	m.focus = focusEditor
 	m.editor.Focus()
 	m.status = "new file: " + name + " — ctrl+s to save"
@@ -390,6 +390,63 @@ func (m *model) togglePreview() {
 	m.status = "preview (read-only) · ctrl+p to edit · ↑/↓ scroll"
 }
 
+// wordCount counts whitespace-separated words.
+func wordCount(s string) int {
+	return len(strings.Fields(s))
+}
+
+// commafy formats an integer with thousands separators: 1240 -> "1,240".
+func commafy(n int) string {
+	s := strconv.Itoa(n)
+	neg := strings.HasPrefix(s, "-")
+	if neg {
+		s = s[1:]
+	}
+	var b strings.Builder
+	for i := 0; i < len(s); i++ {
+		if i > 0 && (len(s)-i)%3 == 0 {
+			b.WriteByte(',')
+		}
+		b.WriteByte(s[i])
+	}
+	if neg {
+		return "-" + b.String()
+	}
+	return b.String()
+}
+
+// signedComma formats a signed delta with an explicit sign: 142 -> "+142".
+func signedComma(n int) string {
+	if n < 0 {
+		return "-" + commafy(-n)
+	}
+	return "+" + commafy(n)
+}
+
+// statsText is the live readout shown on the right of the status bar:
+// total words in the buffer, plus net words added since this file was opened.
+func (m model) statsText() string {
+	words := wordCount(m.editor.Value())
+	delta := words - m.sessionBaseline
+	return fmt.Sprintf("%s words · %s session", commafy(words), signedComma(delta))
+}
+
+// statusBar composes the bottom line: the status message on the left, the live
+// word-count readout right-aligned. While naming a new file the prompt owns the
+// whole bar; on a terminal too narrow for both, the stats drop out rather than
+// truncate. Width is the bar minus statusStyle's 1-col padding each side.
+func (m model) statusBar() string {
+	if m.creatingFile {
+		return m.nameInput.View()
+	}
+	stats := m.statsText()
+	gap := (m.width - 2) - lipgloss.Width(m.status) - lipgloss.Width(stats)
+	if gap < 1 {
+		return m.status
+	}
+	return m.status + strings.Repeat(" ", gap) + stats
+}
+
 func (m *model) save() {
 	if m.currentFile == "" {
 		m.status = "no file open — pick one from the sidebar first"
@@ -412,10 +469,10 @@ func (m *model) save() {
 //  2. Compute the desired offset so caretRow lands at editorHeight/2.
 //  3. The textarea doesn't expose its viewport offset, so you have two routes:
 //     (a) vendor bubbles/textarea and add a SetViewportOffset method (cleanest,
-//         ~20 lines), or
+//     ~20 lines), or
 //     (b) drop textarea for the writing pane and render your own window over a
-//         []string of soft-wrapped lines centered on the caret (more control,
-//         more code — this is what a polished v1 eventually wants).
+//     []string of soft-wrapped lines centered on the caret (more control,
+//     more code — this is what a polished v1 eventually wants).
 //
 // For now this is a no-op so the scaffold runs. Build this next.
 func (m *model) applyTypewriterScroll() {}
