@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -60,6 +61,9 @@ type model struct {
 	sessionBaseline int    // word count when the current file was opened/created
 	currentFile     string
 	status          string
+
+	lastClickRow  int
+	lastClickTime time.Time
 }
 
 func initialModel() model {
@@ -150,6 +154,16 @@ func writingDir() string {
 	return dir
 }
 
+// sidebarRow maps an absolute mouse Y to a row index within the file list, or
+// -1 if the click is outside the list. The list starts just below the banner.
+func sidebarRow(mouseY, bannerH, listHeight int) int {
+	row := mouseY - bannerH
+	if row < 0 || row >= listHeight {
+		return -1
+	}
+	return row
+}
+
 func (m model) Init() tea.Cmd {
 	return nil
 }
@@ -183,6 +197,46 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.layout()
+		return m, nil
+
+	case tea.MouseMsg:
+		if !m.sidebarVisible || msg.X >= sidebarWidth {
+			return m, nil // editor-pane mouse is out of scope
+		}
+		bannerH := lipgloss.Height(bannerView(m.width))
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			m.focus = focusSidebar
+			m.editor.Blur()
+			m.files.moveBy(-1)
+		case tea.MouseButtonWheelDown:
+			m.focus = focusSidebar
+			m.editor.Blur()
+			m.files.moveBy(1)
+		case tea.MouseButtonLeft:
+			if msg.Action != tea.MouseActionPress {
+				return m, nil
+			}
+			row := sidebarRow(msg.Y, bannerH, m.files.height)
+			if row < 0 {
+				return m, nil
+			}
+			m.focus = focusSidebar
+			m.editor.Blur()
+			m.files.selectRow(row)
+			now := time.Now()
+			if row == m.lastClickRow && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+				if path, ok := m.files.activate(); ok {
+					m.loadFile(path)
+					m.focus = focusEditor
+					m.editor.Focus()
+				}
+				m.lastClickTime = time.Time{} // consume the double-click
+			} else {
+				m.lastClickRow = row
+				m.lastClickTime = now
+			}
+		}
 		return m, nil
 
 	case tea.KeyMsg:

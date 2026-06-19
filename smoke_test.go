@@ -102,3 +102,36 @@ func TestFilelistOpensFileFromSidebar(t *testing.T) {
 		t.Fatal("opening a file should move focus to the editor")
 	}
 }
+
+func TestSidebarRowMapping(t *testing.T) {
+	// banner 4 rows tall, list 10 rows. Y=4 -> row 0; Y=13 -> row 9; Y=3 -> -1.
+	if got := sidebarRow(4, 4, 10); got != 0 {
+		t.Fatalf("sidebarRow(4,4,10) = %d, want 0", got)
+	}
+	if got := sidebarRow(13, 4, 10); got != 9 {
+		t.Fatalf("sidebarRow(13,4,10) = %d, want 9", got)
+	}
+	if got := sidebarRow(3, 4, 10); got != -1 {
+		t.Fatalf("sidebarRow above list = %d, want -1", got)
+	}
+	if got := sidebarRow(14, 4, 10); got != -1 {
+		t.Fatalf("sidebarRow below list = %d, want -1", got)
+	}
+}
+
+func TestMouseWheelScrollsFileList(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.files.entries = []fileEntry{{name: "a"}, {name: "b"}, {name: "c"}}
+	m.files.selected = 0
+
+	nm, _ = m.Update(tea.MouseMsg{X: 2, Y: 5, Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.files.selected != 1 {
+		t.Fatalf("wheel down: selected = %d, want 1", m.files.selected)
+	}
+	if m.focus != focusSidebar {
+		t.Fatal("wheel over the pane should focus it")
+	}
+}
