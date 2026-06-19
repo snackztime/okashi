@@ -99,3 +99,58 @@ func (f filelist) View() string {
 	}
 	return b.String()
 }
+
+func (f *filelist) moveBy(n int) {
+	if len(f.entries) == 0 {
+		return
+	}
+	f.selected += n
+	if f.selected < 0 {
+		f.selected = 0
+	}
+	if f.selected >= len(f.entries) {
+		f.selected = len(f.entries) - 1
+	}
+	f.scrollIntoView()
+}
+
+func (f *filelist) scrollIntoView() {
+	if f.selected < f.offset {
+		f.offset = f.selected
+	} else if f.height > 0 && f.selected >= f.offset+f.height {
+		f.offset = f.selected - f.height + 1
+	}
+	if f.offset < 0 {
+		f.offset = 0
+	}
+}
+
+// selectRow sets the selection from a row index within the visible window.
+func (f *filelist) selectRow(visibleRow int) {
+	if visibleRow < 0 {
+		return
+	}
+	idx := f.offset + visibleRow
+	if idx >= len(f.entries) {
+		return
+	}
+	f.selected = idx
+}
+
+// activate acts on the selected entry: directories (and "..") navigate and
+// return ok=false; a file returns its absolute path with ok=true.
+func (f *filelist) activate() (string, bool) {
+	if len(f.entries) == 0 {
+		return "", false
+	}
+	e := f.entries[f.selected]
+	if e.isDir {
+		if e.name == ".." {
+			f.SetDir(filepath.Dir(f.dir))
+		} else {
+			f.SetDir(filepath.Join(f.dir, e.name))
+		}
+		return "", false
+	}
+	return filepath.Join(f.dir, e.name), true
+}

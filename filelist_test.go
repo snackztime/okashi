@@ -40,3 +40,68 @@ func mustWrite(t *testing.T, path, body string) {
 		t.Fatal(err)
 	}
 }
+
+func TestFilelistNavigationAndScroll(t *testing.T) {
+	f := newFilelist()
+	f.height = 3
+	f.entries = []fileEntry{
+		{name: ".."}, {name: "a"}, {name: "b"}, {name: "c"}, {name: "d"},
+	}
+
+	f.moveBy(-1) // clamp at 0
+	if f.selected != 0 {
+		t.Fatalf("selected = %d, want 0", f.selected)
+	}
+	f.moveBy(4) // to last; window should scroll
+	if f.selected != 4 {
+		t.Fatalf("selected = %d, want 4", f.selected)
+	}
+	if f.offset != 2 { // height 3 → window [2,3,4]
+		t.Fatalf("offset = %d, want 2", f.offset)
+	}
+	f.moveBy(10) // clamp at last
+	if f.selected != 4 {
+		t.Fatalf("selected = %d, want 4 (clamped)", f.selected)
+	}
+}
+
+func TestFilelistSelectRow(t *testing.T) {
+	f := newFilelist()
+	f.height = 3
+	f.offset = 2
+	f.entries = []fileEntry{
+		{name: ".."}, {name: "a"}, {name: "b"}, {name: "c"}, {name: "d"},
+	}
+	f.selectRow(1) // offset 2 + row 1 = index 3
+	if f.selected != 3 {
+		t.Fatalf("selected = %d, want 3", f.selected)
+	}
+	f.selectRow(99) // out of range: ignored
+	if f.selected != 3 {
+		t.Fatalf("selected = %d, want 3 (unchanged)", f.selected)
+	}
+}
+
+func TestFilelistActivate(t *testing.T) {
+	dir := t.TempDir()
+	mustWrite(t, filepath.Join(dir, "note.md"), "x")
+	f := newFilelist()
+	f.SetDir(dir)
+
+	// Select the file (entries: "..", "note.md") and activate it.
+	f.selected = 1
+	path, ok := f.activate()
+	if !ok || path != filepath.Join(dir, "note.md") {
+		t.Fatalf("activate file = (%q, %v), want (%q, true)", path, ok, filepath.Join(dir, "note.md"))
+	}
+
+	// Activating ".." navigates up and opens nothing.
+	f.SetDir(dir)
+	f.selected = 0
+	if _, ok := f.activate(); ok {
+		t.Fatal("activating .. should not open a file")
+	}
+	if f.dir != filepath.Dir(dir) {
+		t.Fatalf("after .. dir = %q, want %q", f.dir, filepath.Dir(dir))
+	}
+}
