@@ -59,3 +59,20 @@ func TestPreviewToggle(t *testing.T) {
 		t.Fatal("expected previewing=false after second ctrl+p")
 	}
 }
+
+func TestTypewriterToggle(t *testing.T) {
+	m := initialModel()
+	if !m.typewriter || !m.editor.Typewriter {
+		t.Fatal("typewriter should default on")
+	}
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = nm.(model)
+	if m.typewriter || m.editor.Typewriter {
+		t.Fatal("ctrl+t should turn typewriter off")
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT})
+	m = nm.(model)
+	if !m.typewriter || !m.editor.Typewriter {
+		t.Fatal("ctrl+t should turn typewriter back on")
+	}
+}

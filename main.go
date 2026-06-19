@@ -11,11 +11,11 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 
-	"okashi/internal/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+	"okashi/internal/textarea"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=…".
@@ -55,6 +55,7 @@ type model struct {
 	focus          focus
 	creatingFile   bool
 	previewing     bool
+	typewriter     bool
 
 	mdStyle         string // glamour theme, detected once at startup
 	sessionBaseline int    // word count when the current file was opened/created
@@ -83,6 +84,7 @@ func initialModel() model {
 	ta.FocusedStyle.Base = lipgloss.NewStyle()
 	ta.BlurredStyle.Base = lipgloss.NewStyle()
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ta.Typewriter = true // typewriter scrolling on by default; ctrl+t toggles
 
 	ti := textinput.New()
 	ti.Prompt = "new file ▸ "
@@ -99,7 +101,8 @@ func initialModel() model {
 		mdStyle:        previewStyle(),
 		sidebarVisible: true,
 		focus:          focusSidebar,
-		status:         "ctrl+b sidebar · tab switch · ctrl+n new · ctrl+p preview · ctrl+s save · ctrl+c quit",
+		typewriter:     true,
+		status:         "ctrl+b sidebar · tab switch · ctrl+n new · ctrl+p preview · ctrl+t typewriter · ctrl+s save · ctrl+c quit",
 	}
 }
 
@@ -203,6 +206,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		case "ctrl+p":
 			m.togglePreview()
+			return m, nil
+		case "ctrl+t":
+			m.typewriter = !m.typewriter
+			m.editor.Typewriter = m.typewriter
+			if m.typewriter {
+				m.status = "typewriter on"
+			} else {
+				m.status = "typewriter off"
+			}
 			return m, nil
 		case "ctrl+b":
 			m.sidebarVisible = !m.sidebarVisible
