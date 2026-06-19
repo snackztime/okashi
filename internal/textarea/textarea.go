@@ -16,13 +16,13 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/runeutil"
-	"okashi/internal/textarea/memoization"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 	rw "github.com/mattn/go-runewidth"
 	"github.com/rivo/uniseg"
+	"okashi/internal/textarea/memoization"
 )
 
 const (
@@ -225,6 +225,10 @@ type Model struct {
 
 	// Cursor is the text area cursor.
 	Cursor cursor.Model
+
+	// Typewriter, when true, pins the caret's row to the vertical center of
+	// the viewport instead of edge-anchoring it. okashi:typewriter
+	Typewriter bool
 
 	// CharLimit is the maximum number of characters this input element will
 	// accept. If 0 or less, there's no limit.
@@ -481,6 +485,12 @@ func (m *Model) LineCount() int {
 // Line returns the line position.
 func (m Model) Line() int {
 	return m.row
+}
+
+// ViewportYOffset returns the current vertical scroll offset of the internal
+// viewport. okashi:typewriter
+func (m Model) ViewportYOffset() int {
+	return m.viewport.YOffset
 }
 
 // CursorDown moves the cursor down by one line.
@@ -858,6 +868,9 @@ func (m Model) LineInfo() LineInfo {
 // repositionView repositions the view of the viewport based on the defined
 // scrolling behavior.
 func (m *Model) repositionView() {
+	if m.Typewriter {
+		return // centering is applied in renderViewport during View. okashi:typewriter
+	}
 	min := m.viewport.YOffset
 	max := min + m.viewport.Height - 1
 
@@ -866,6 +879,21 @@ func (m *Model) repositionView() {
 	} else if row > max {
 		m.viewport.LineDown(row - max)
 	}
+}
+
+// renderViewport sets the viewport content and returns the rendered view. When
+// Typewriter is on it prepends Height/2 blank rows so the caret's wrapped row
+// can sit at screen-center (the buffer already pads Height end-of-buffer rows
+// below, covering the bottom). okashi:typewriter
+func (m Model) renderViewport(content string) string {
+	if m.Typewriter && m.height > 0 {
+		pad := m.height / 2
+		m.viewport.SetContent(strings.Repeat("\n", pad) + content)
+		m.viewport.SetYOffset(m.cursorLineNumber())
+	} else {
+		m.viewport.SetContent(content)
+	}
+	return m.style.Base.Render(m.viewport.View())
 }
 
 // Width returns the width of the textarea.
@@ -1198,8 +1226,7 @@ func (m Model) View() string {
 		s.WriteRune('\n')
 	}
 
-	m.viewport.SetContent(s.String())
-	return m.style.Base.Render(m.viewport.View())
+	return m.renderViewport(s.String())
 }
 
 // formatLineNumber formats the line number for display dynamically based on
@@ -1295,8 +1322,7 @@ func (m Model) placeholderView() string {
 		s.WriteRune('\n')
 	}
 
-	m.viewport.SetContent(s.String())
-	return m.style.Base.Render(m.viewport.View())
+	return m.renderViewport(s.String())
 }
 
 // Blink returns the blink command for the cursor.
