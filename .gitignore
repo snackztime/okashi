@@ -3,3 +3,6 @@
 
 # macOS cruft
 .DS_Store
+
+# SDD scratch
+.superpowers/
