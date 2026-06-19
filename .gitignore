@@ -1,0 +1,5 @@
+# Compiled binary (produced by `go build`)
+/okashi
+
+# macOS cruft
+.DS_Store
