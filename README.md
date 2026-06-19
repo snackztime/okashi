@@ -80,7 +80,7 @@ The folder is created on first run; you don't need to make it yourself.
 It's a standard Bubble Tea app — one `model` holds all state, `Update` handles
 messages, `View` renders. The pieces:
 
-- **`main.go`** — the root model. Holds the `filepicker`, the `textarea`, the
+- **`main.go`** — the root model. Holds the `filelist`, the (vendored) `textarea`, the
   `sidebarVisible` flag, and which pane has `focus`. `Update` intercepts the
   global keys (collapse, switch, save, quit) and otherwise forwards messages to
   whichever pane is focused. `View` builds the screen top-to-bottom: banner,
@@ -96,15 +96,14 @@ which pads both sides evenly — so the text is left-justified *within* the
 column, but the column floats in the middle of the available space. Collapsing
 the sidebar just hands the editor the full window width to center within.
 
-### Typewriter scrolling — your next build
+### Typewriter scrolling
 
-This is the one feature the framework doesn't hand you. The `textarea` keeps its
-own internal viewport pinned to the *bottom*, not the center. See
-`applyTypewriterScroll` in `main.go` for the full plan. Short version: track the
-caret's wrapped row, then either (a) vendor `bubbles/textarea` and add a
-`SetViewportOffset` method (~20 lines, cleanest), or (b) replace the writing
-pane with a custom renderer over soft-wrapped lines centered on the caret (more
-code, total control — where a polished v1 ends up).
+The caret stays pinned to the vertical center of the writing pane (`ctrl+t`
+toggles it; on by default). Bubble Tea's `textarea` only edge-anchors its
+viewport, so okashi vendors it under `internal/textarea/` and adds a small
+`Typewriter` patch: it pads the view with half a screen of blank rows and sets
+the scroll offset to the caret's wrapped row, centering every line — including
+the first and last while writing at the end of the file.
 
 ## Roadmap
 

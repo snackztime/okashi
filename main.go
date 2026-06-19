@@ -315,10 +315,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	} else {
 		m.editor, cmd = m.editor.Update(msg)
 		cmds = append(cmds, cmd)
-		// >>> TYPEWRITER SCROLL HOOK <<<
-		// After the editor updates, this is where you pin the caret's line to
-		// the vertical center. See applyTypewriterScroll below for the plan.
-		m.applyTypewriterScroll()
 	}
 
 	return m, tea.Batch(cmds...)
@@ -528,24 +524,6 @@ func (m *model) save() {
 	}
 	m.status = "saved " + filepath.Base(m.currentFile)
 }
-
-// applyTypewriterScroll is the ONE genuinely custom feature. The bubbles
-// textarea keeps its own internal viewport that scrolls to keep the caret
-// visible (bottom-anchored), but it will not center the current line.
-//
-// The plan to implement it:
-//  1. Find the caret's visual row: m.editor.Line() gives the logical line, but
-//     with soft-wrap you need the *wrapped* row. Track it as the user moves.
-//  2. Compute the desired offset so caretRow lands at editorHeight/2.
-//  3. The textarea doesn't expose its viewport offset, so you have two routes:
-//     (a) vendor bubbles/textarea and add a SetViewportOffset method (cleanest,
-//     ~20 lines), or
-//     (b) drop textarea for the writing pane and render your own window over a
-//     []string of soft-wrapped lines centered on the caret (more control,
-//     more code — this is what a polished v1 eventually wants).
-//
-// For now this is a no-op so the scaffold runs. Build this next.
-func (m *model) applyTypewriterScroll() {}
 
 func main() {
 	if len(os.Args) > 1 {
