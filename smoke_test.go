@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -74,5 +76,29 @@ func TestTypewriterToggle(t *testing.T) {
 	m = nm.(model)
 	if !m.typewriter || !m.editor.Typewriter {
 		t.Fatal("ctrl+t should turn typewriter back on")
+	}
+}
+
+func TestFilelistOpensFileFromSidebar(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "draft.md")
+	if err := os.WriteFile(path, []byte("hello world words"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.files.SetDir(dir)
+
+	// Select the file (".." then "draft.md") and press enter.
+	m.files.selected = 1
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+
+	if m.currentFile != path {
+		t.Fatalf("currentFile = %q, want %q", m.currentFile, path)
+	}
+	if m.focus != focusEditor {
+		t.Fatal("opening a file should move focus to the editor")
 	}
 }

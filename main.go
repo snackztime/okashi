@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/filepicker"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 
@@ -46,10 +45,10 @@ const (
 type model struct {
 	width, height int
 
-	filepicker filepicker.Model
-	editor     textarea.Model
-	nameInput  textinput.Model
-	preview    viewport.Model
+	files     filelist
+	editor    textarea.Model
+	nameInput textinput.Model
+	preview   viewport.Model
 
 	sidebarVisible bool
 	focus          focus
@@ -64,14 +63,8 @@ type model struct {
 }
 
 func initialModel() model {
-	fp := filepicker.New()
-	fp.CurrentDirectory = writingDir()
-	fp.DirAllowed = true
-	fp.FileAllowed = true
-	fp.ShowHidden = false
-	fp.AutoHeight = false
-	// Narrow the picker to writing files. Comment out to show everything.
-	fp.AllowedTypes = []string{".md", ".txt", ".wg", ".markdown"}
+	fl := newFilelist()
+	fl.SetDir(writingDir())
 
 	ta := textarea.New()
 	ta.Placeholder = "Start writing…"
@@ -94,7 +87,7 @@ func initialModel() model {
 	vp := viewport.New(columnWidth, 1) // real size set in layout()
 
 	return model{
-		filepicker:     fp,
+		files:          fl,
 		editor:         ta,
 		nameInput:      ti,
 		preview:        vp,
@@ -158,7 +151,7 @@ func writingDir() string {
 }
 
 func (m model) Init() tea.Cmd {
-	return m.filepicker.Init()
+	return nil
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -249,12 +242,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.preview, cmd = m.preview.Update(msg)
 		cmds = append(cmds, cmd)
 	} else if m.focus == focusSidebar && m.sidebarVisible {
-		m.filepicker, cmd = m.filepicker.Update(msg)
-		cmds = append(cmds, cmd)
-		if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-			m.loadFile(path)
-			m.focus = focusEditor
-			m.editor.Focus()
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "up", "k":
+				m.files.moveBy(-1)
+			case "down", "j":
+				m.files.moveBy(1)
+			case "enter", "right", "l":
+				if path, ok := m.files.activate(); ok {
+					m.loadFile(path)
+					m.focus = focusEditor
+					m.editor.Focus()
+				}
+			case "left", "h", "backspace":
+				m.files.SetDir(filepath.Dir(m.files.dir))
+			}
 		}
 	} else {
 		m.editor, cmd = m.editor.Update(msg)
@@ -290,7 +292,7 @@ func (m model) View() string {
 		side := sidebarStyle.
 			Width(sidebarWidth - 2).
 			Height(bodyH - 2).
-			Render(m.filepicker.View())
+			Render(m.files.View())
 
 		// Center the 80-col column inside the space left of the sidebar.
 		editorArea := m.width - sidebarWidth
@@ -320,7 +322,8 @@ func (m *model) layout() {
 
 	colWidth := min(columnWidth, m.width-2)
 	if m.sidebarVisible {
-		m.filepicker.Height = bodyH - 4
+		m.files.height = bodyH - 2
+		m.files.width = sidebarWidth - 2
 		colWidth = min(columnWidth, m.width-sidebarWidth-2)
 	}
 	m.editor.SetWidth(colWidth)
@@ -357,7 +360,7 @@ func (m *model) confirmNewFile() {
 		name += ".md"
 	}
 
-	m.currentFile = filepath.Join(m.filepicker.CurrentDirectory, name)
+	m.currentFile = filepath.Join(m.files.dir, name)
 	m.editor.SetValue("")
 	m.sessionBaseline = 0
 	m.focus = focusEditor
