@@ -24,6 +24,10 @@ var statusStyle = lipgloss.NewStyle().
 	Foreground(subtle).
 	Padding(0, 1)
 
+var selectedStyle = lipgloss.NewStyle().
+	Foreground(lipgloss.Color("#FFFFFF")).
+	Background(accent)
+
 // bannerArt is figlet's "small" font. Regenerate for your app's real name:
 //
 //	figlet -f small YOURNAME
