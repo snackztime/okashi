@@ -11,6 +11,7 @@ Make okashi feel like a real writing app:
 1. **Two screens** — a Crush-style **launch screen** (logo + recent files + projects) that collapses into a **minimal writing zone** (no banner) once you're in a file.
 2. **Superfile-style file pane** — Nerd Font icons for folders/files (plain fallback), no permission clutter.
 3. **Autosave** — debounced ~2s-idle saving so work is never lost.
+4. **Focus dimming** — sentence-level (iA-style) dimming as part of focus mode.
 
 Note: the "showing `-rw-r-xr-x`" report was a **stale `./okashi` binary** (the old `filepicker`). The current `filelist` already renders names only; this spec adds icons on top.
 
@@ -155,6 +156,46 @@ The status bar's right side (currently `N words · +N session`) gains a leading 
 
 ---
 
+## Section 5 — Focus dimming (sentence-level, iA-style)
+
+Part of "focus mode": dims everything except the sentence under the cursor.
+
+### Behavior
+
+- A `dimEnabled bool` setting, **default true**. Dimming is active when
+  `typewriter && dimEnabled`. So `ctrl+t` (typewriter) is the master focus-mode
+  switch (centered caret + dimming); a **dedicated toggle key turns just the
+  dimming off/on** while typewriter stays on (centering without dimming).
+- Toggle key: a dedicated key finalized in the plan after confirming it's
+  unbound in the vendored textarea's KeyMap (candidate: `ctrl+d`). Status shows
+  the state ("dim on"/"dim off").
+- Forward-looking: `dimEnabled` is a plain setting so the future options pane
+  (out of scope, below) can drive it without refactoring.
+
+### Rendering (vendored textarea patch)
+
+- When active, the render loop styles each character by whether it falls within
+  the **current sentence span**: inside → normal foreground; outside → `subtle`
+  (dim). The current sentence is the gleaming line; with typewriter it's the
+  centered one.
+- **Current sentence span:** from the previous sentence terminator (`.`/`!`/`?`
+  followed by whitespace) — or the paragraph start — up to and including the
+  next terminator. A blank line (paragraph break) is a hard boundary on both
+  sides, so dimming never bleeds across paragraphs.
+- This is the deepest patch: the typewriter patch only set a scroll offset; this
+  styles per character based on the character's absolute text offset. The plan
+  details the offset mapping inside the existing wrapped-line render loop.
+
+### Testability
+
+- Pure `currentSentenceSpan(text string, cursorOffset int) (start, end int)` —
+  unit-tested: mid-sentence, on a terminator, first/last sentence, multi-line
+  sentence, paragraph-break boundaries, empty buffer.
+- Integration: with dimming active, characters outside the span carry the dim
+  style and characters inside do not (assert on the rendered output).
+
+---
+
 ## Persistence — recent files
 
 - **Location:** `<os.UserConfigDir()>/okashi/recent.json` (e.g. `~/Library/Application Support/okashi/recent.json` on macOS). Created lazily.
@@ -167,6 +208,11 @@ The status bar's right side (currently `N words · +N session`) gains a leading 
 
 ## Out of scope (non-goals)
 
+- **Settings/options pane** (a right-side panel for dimming, spelling, syntax,
+  etc.) — a future feature with its own design; `dimEnabled` is pre-structured
+  for it. Spell-check and syntax highlighting are likewise future, separate.
+- **Editor-core rope buffer** (roadmap #5) — deferred until a real performance
+  problem appears (YAGNI).
 - Fuzzy-filtering the launch list (plain up/down for now).
 - Quick "new note" directly from home (use project → `ctrl+n`).
 - Recursive/nested project discovery (only immediate subdirs of the okashi dir).
@@ -184,4 +230,5 @@ The status bar's right side (currently `N words · +N session`) gains a leading 
 
 1. **Autosave** — independent, highest safety value.
 2. **Icons** — local to `filelist`/`icons.go`.
-3. **Launch screen + screens** — the structural change; depends on icons for the recent/project rows.
+3. **Focus dimming** — vendored-textarea render patch; pairs with typewriter.
+4. **Launch screen + screens** — the structural change; depends on icons for the recent/project rows.
