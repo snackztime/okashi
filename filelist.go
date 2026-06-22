@@ -24,6 +24,7 @@ type filelist struct {
 	width    int
 	height   int
 	allowed  map[string]bool
+	icons    iconSet
 }
 
 func newFilelist() filelist {
@@ -33,6 +34,7 @@ func newFilelist() filelist {
 		allowed: map[string]bool{
 			".md": true, ".txt": true, ".wg": true, ".markdown": true,
 		},
+		icons: resolveIcons(),
 	}
 }
 
@@ -83,14 +85,13 @@ func (f filelist) View() string {
 	var b strings.Builder
 	for i := f.offset; i < end; i++ {
 		e := f.entries[i]
-		label := e.name
-		if e.isDir && e.name != ".." {
-			label += "/"
-		}
-		label = ansi.Truncate(label, f.width, "…")
-		if i == f.selected {
+		label := ansi.Truncate(f.icons.icon(e)+e.name, f.width, "…")
+		switch {
+		case i == f.selected:
 			b.WriteString(selectedStyle.Width(f.width).Render(label))
-		} else {
+		case e.isDir:
+			b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(label))
+		default:
 			b.WriteString(label)
 		}
 		if i < end-1 {

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -120,5 +121,21 @@ func TestFilelistHasAndSelectName(t *testing.T) {
 	f.selectName("missing") // no-op
 	if f.selected != 2 {
 		t.Fatalf("selectName(missing) should be a no-op, selected = %d", f.selected)
+	}
+}
+
+func TestFilelistViewShowsIconsNoSlash(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "plain")
+	f := newFilelist()
+	f.width = 20
+	f.height = 5
+	f.entries = []fileEntry{{name: "proj", isDir: true}, {name: "a.md"}}
+
+	view := f.View()
+	if strings.Contains(view, "proj/") {
+		t.Fatal("dir should not get a trailing slash (the icon conveys it)")
+	}
+	if !strings.Contains(view, "▸ proj") {
+		t.Fatalf("plain folder icon missing; view=%q", view)
 	}
 }

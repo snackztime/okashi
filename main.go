@@ -61,6 +61,7 @@ type model struct {
 	sessionBaseline int    // word count when the current file was opened/created
 	currentFile     string
 	status          string
+	icons           iconSet
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -103,6 +104,7 @@ func initialModel() model {
 		focus:          focusSidebar,
 		typewriter:     true,
 		status:         "ctrl+b sidebar · tab switch · ctrl+n new · ctrl+p preview · ctrl+t typewriter · ctrl+s save · ctrl+c quit",
+		icons:          resolveIcons(),
 	}
 }
 
