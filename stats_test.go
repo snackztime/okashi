@@ -134,7 +134,7 @@ func TestSessionBaselineResetsOnNewFile(t *testing.T) {
 	m.sessionBaseline = 3
 
 	m.nameInput.SetValue("draft.md")
-	m.confirmNewFile()
+	m.confirmCreate()
 
 	// A new file starts empty: 0 words, 0 written this session.
 	if m.sessionBaseline != 0 {

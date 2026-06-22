@@ -129,6 +129,7 @@ type model struct {
 	sidebarVisible bool
 	focus          focus
 	creatingFile   bool
+	creatingFolder bool
 	previewing     bool
 	typewriter     bool
 
@@ -166,7 +167,7 @@ func initialModel() model {
 	ta.Typewriter = true // typewriter scrolling on by default; ctrl+t toggles
 
 	ti := textinput.New()
-	ti.Prompt = "new file ▸ "
+	ti.Prompt = ""
 	ti.Placeholder = "chapter-01.md"
 	ti.CharLimit = 255
 
@@ -295,7 +296,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.status = "new file cancelled"
 				return m, nil
 			case "enter":
-				m.confirmNewFile()
+				m.confirmCreate()
 				return m, nil
 			}
 		}
@@ -591,21 +592,46 @@ func (m *model) loadFile(path string) {
 	m.dirty = false
 }
 
-// confirmNewFile turns the typed name into a fresh, unsaved buffer pointed at
-// the picker's current folder. Nothing hits disk until the user hits ctrl+s.
-func (m *model) confirmNewFile() {
+// confirmCreate turns the typed name into a new file or folder in the current
+// pane dir. A trailing "/" (or an explicit New-project) makes a folder; an
+// explicit New-project then enters it, while the sidebar "name/" convention
+// creates-and-stays. Files default to .md and open a blank buffer.
+func (m *model) confirmCreate() {
 	name := strings.TrimSpace(m.nameInput.Value())
+	explicitFolder := m.creatingFolder
 	m.creatingFile = false
+	m.creatingFolder = false
 	m.nameInput.Blur()
 	if name == "" {
-		m.status = "new file cancelled (no name)"
+		m.status = "create cancelled (no name)"
 		return
 	}
-	// Default writing files to Markdown so they stay visible in the picker.
+
+	folder := explicitFolder || strings.HasSuffix(name, "/")
+	name = strings.TrimSuffix(name, "/")
+
+	if folder {
+		dir := filepath.Join(m.files.dir, name)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			m.status = "couldn't create folder: " + err.Error()
+			return
+		}
+		if explicitFolder {
+			m.files.SetDir(dir) // New project → enter the folder
+			m.status = "new project " + name
+		} else {
+			m.files.SetDir(m.files.dir) // name/ → refresh, stay
+			m.files.selectName(name)
+			m.status = "created folder " + name
+		}
+		m.focus = focusSidebar
+		m.editor.Blur()
+		return
+	}
+
 	if filepath.Ext(name) == "" {
 		name += ".md"
 	}
-
 	m.currentFile = filepath.Join(m.files.dir, name)
 	m.editor.SetValue("")
 	m.sessionBaseline = 0
@@ -700,7 +726,21 @@ func (m model) statsText() string {
 // truncate. Width is the bar minus statusStyle's 1-col padding each side.
 func (m model) statusBar() string {
 	if m.creatingFile {
-		return m.nameInput.View()
+		folderMode := m.creatingFolder || strings.HasSuffix(m.nameInput.Value(), "/")
+		label := "new file ▸ "
+		if folderMode {
+			label = "new folder ▸ "
+		}
+		bar := label + m.nameInput.View()
+		if folderMode {
+			return bar
+		}
+		hint := lipgloss.NewStyle().Foreground(subtle).Render("end with / for a folder")
+		gap := (m.width - 2) - lipgloss.Width(bar) - lipgloss.Width(hint)
+		if gap < 1 {
+			return bar
+		}
+		return bar + strings.Repeat(" ", gap) + hint
 	}
 	mark := "✓"
 	if m.dirty {

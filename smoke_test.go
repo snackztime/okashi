@@ -372,7 +372,7 @@ func TestNewFileDoesNotAutosaveEmpty(t *testing.T) {
 	m.lastEditAt = time.Now().Add(-10 * time.Second)
 	// Create a new file via the prompt flow.
 	m.nameInput.SetValue("fresh.md")
-	m.confirmNewFile()
+	m.confirmCreate()
 	if m.dirty {
 		t.Fatal("a brand-new unedited buffer must not be dirty")
 	}
@@ -605,6 +605,55 @@ func TestSidebarClickRowAccountsForBreadcrumb(t *testing.T) {
 	m = nm.(model)
 	if m.files.entries[m.files.selected].name != "draft.md" {
 		t.Fatalf("click at Y=1 should select the first list row, got %q", m.files.entries[m.files.selected].name)
+	}
+}
+
+func TestConfirmCreateFolderTrailingSlash(t *testing.T) {
+	dir := t.TempDir()
+	m := initialModel()
+	m.files.root = ""
+	m.files.SetDir(dir)
+	m.creatingFile = true
+	m.nameInput.SetValue("notes/")
+	m.confirmCreate()
+
+	if _, err := os.Stat(filepath.Join(dir, "notes")); err != nil {
+		t.Fatalf("trailing-slash name should create a folder: %v", err)
+	}
+	if m.files.dir != dir {
+		t.Fatalf("sidebar name/ should stay in the current dir, got %q", m.files.dir)
+	}
+	if !m.files.has("notes") {
+		t.Fatal("the new folder should be listed")
+	}
+}
+
+func TestConfirmCreateExplicitFolderEnters(t *testing.T) {
+	dir := t.TempDir()
+	m := initialModel()
+	m.files.root = ""
+	m.files.SetDir(dir)
+	m.creatingFile = true
+	m.creatingFolder = true
+	m.nameInput.SetValue("Book One")
+	m.confirmCreate()
+
+	if m.files.dir != filepath.Join(dir, "Book One") {
+		t.Fatalf("explicit New project should enter the folder, got %q", m.files.dir)
+	}
+}
+
+func TestConfirmCreateFile(t *testing.T) {
+	dir := t.TempDir()
+	m := initialModel()
+	m.files.root = ""
+	m.files.SetDir(dir)
+	m.creatingFile = true
+	m.nameInput.SetValue("draft")
+	m.confirmCreate()
+
+	if m.currentFile != filepath.Join(dir, "draft.md") {
+		t.Fatalf("a bare name should make a .md file, got %q", m.currentFile)
 	}
 }
 
