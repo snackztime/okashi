@@ -702,3 +702,87 @@ func TestOpenProjectKeepsWorkspaceRoot(t *testing.T) {
 		t.Fatalf("opening a project must keep the workspace root %q, got %q", want, m.files.root)
 	}
 }
+
+func TestHomeMouseWheelMovesSelection(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = nm.(model)
+	m.homeItems = []homeItem{
+		{kind: homeProject, label: "novel", path: "/p/novel"},
+		{kind: homeNewDocument, label: "New document"},
+	}
+	m.homeSelected = 0
+
+	nm, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.homeSelected != 1 {
+		t.Fatalf("wheel down should move selection to 1, got %d", m.homeSelected)
+	}
+	nm, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.homeSelected != 0 {
+		t.Fatalf("wheel up should move selection back to 0, got %d", m.homeSelected)
+	}
+}
+
+func TestHomeMouseClickSelectsItem(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = nm.(model)
+	m.homeItems = []homeItem{
+		{kind: homeProject, label: "novel", path: "/p/novel"},
+		{kind: homeNewDocument, label: "New document"},
+	}
+	m.homeSelected = 0
+
+	// Compute the Y coordinate for item 1 using homeRows, as the handler does.
+	_, itemRow, h := homeRows(m.homeItems, m.homeSelected, m.icons)
+	off := (m.height - h) / 2
+
+	// Single click on item 1 should select it without activating.
+	click := tea.MouseMsg{X: 10, Y: off + itemRow[1], Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+	nm, _ = m.Update(click)
+	m = nm.(model)
+	if m.homeSelected != 1 {
+		t.Fatalf("click should select item 1, got %d", m.homeSelected)
+	}
+	if m.screen != screenHome {
+		t.Fatal("single click should not leave the home screen")
+	}
+}
+
+func TestHomeMouseDoubleClickActivates(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = nm.(model)
+	m.homeItems = []homeItem{
+		{kind: homeProject, label: "novel", path: t.TempDir()},
+		{kind: homeNewDocument, label: "New document"},
+	}
+	m.homeSelected = 0
+
+	// Compute the Y coordinate for item 0 using homeRows.
+	_, itemRow, h := homeRows(m.homeItems, m.homeSelected, m.icons)
+	off := (m.height - h) / 2
+
+	click := tea.MouseMsg{X: 10, Y: off + itemRow[0], Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+
+	// First click selects but doesn't activate.
+	nm, _ = m.Update(click)
+	m = nm.(model)
+	if m.homeSelected != 0 {
+		t.Fatalf("first click should select item 0, got %d", m.homeSelected)
+	}
+	if m.screen != screenHome {
+		t.Fatal("first click should stay on home")
+	}
+
+	// Second click immediately (within 400ms) activates the item.
+	nm, _ = m.Update(click)
+	m = nm.(model)
+	if m.screen != screenWriting {
+		t.Fatalf("double click on project should switch to writing, screen=%d", m.screen)
+	}
+}

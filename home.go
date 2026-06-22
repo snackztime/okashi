@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -79,50 +80,105 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m, m.openHomeSelection()
 		}
+	case tea.MouseMsg:
+		switch msg.Button {
+		case tea.MouseButtonWheelUp:
+			if m.homeSelected > 0 {
+				m.homeSelected--
+			}
+		case tea.MouseButtonWheelDown:
+			if m.homeSelected < len(m.homeItems)-1 {
+				m.homeSelected++
+			}
+		case tea.MouseButtonLeft:
+			if msg.Action != tea.MouseActionPress {
+				return m, nil
+			}
+			idx := homeItemAtY(m.homeItems, m.homeSelected, m.icons, m.height, msg.Y)
+			if idx < 0 {
+				return m, nil
+			}
+			m.homeSelected = idx
+			now := time.Now()
+			if idx == m.lastClickRow && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+				m.lastClickTime = time.Time{}
+				return m, m.openHomeSelection()
+			}
+			m.lastClickRow = idx
+			m.lastClickTime = now
+		}
+		return m, nil
 	}
 	return m, nil
 }
 
-// homeView renders the centered logo and the launch list with group headers.
-func (m model) homeView() string {
+// homeRows builds the launch content: the logo, group headers, and item rows.
+// It returns the lines, the content-row of each item (by index), and the total
+// height — so the renderer and the mouse hit-test share one layout.
+func homeRows(items []homeItem, sel int, icons iconSet) (lines []string, itemRow []int, height int) {
 	header := lipgloss.NewStyle().Foreground(subtle).Bold(true)
-	var b strings.Builder
+	for _, l := range strings.Split(bannerArt, "\n") {
+		lines = append(lines, l)
+	}
+	lines = append(lines, "") // gap under the logo
+
+	itemRow = make([]int, len(items))
 	printedRecent, printedProjects := false, false
-	for i, it := range m.homeItems {
+	for i, it := range items {
 		switch it.kind {
 		case homeRecentFile:
 			if !printedRecent {
-				b.WriteString(header.Render("RECENT") + "\n")
+				lines = append(lines, header.Render("RECENT"))
 				printedRecent = true
 			}
 		case homeProject:
 			if !printedProjects {
-				b.WriteString("\n" + header.Render("PROJECTS") + "\n")
+				lines = append(lines, "", header.Render("PROJECTS"))
 				printedProjects = true
 			}
 		case homeNewDocument:
-			b.WriteString("\n") // blank line before the actions group
+			lines = append(lines, "")
 		}
 
 		var icon string
 		switch it.kind {
 		case homeProject, homeOpenOther:
-			icon = m.icons.folder
+			icon = icons.folder
 		case homeNewDocument, homeNewProject:
-			icon = m.icons.action
+			icon = icons.action
 		default:
-			icon = m.icons.icon(fileEntry{name: it.label})
+			icon = icons.icon(fileEntry{name: it.label})
 		}
-		line := "  " + icon + it.label
-		if i == m.homeSelected {
-			line = selectedStyle.Render(" " + icon + it.label + " ")
+		row := "  " + icon + it.label
+		if i == sel {
+			row = selectedStyle.Render(" " + icon + it.label + " ")
 		}
-		b.WriteString(line + "\n")
+		itemRow[i] = len(lines)
+		lines = append(lines, row)
 	}
+	return lines, itemRow, len(lines)
+}
 
-	logo := bannerView(m.width)
-	content := lipgloss.JoinVertical(lipgloss.Center, logo, "", b.String())
+func (m model) homeView() string {
+	lines, _, _ := homeRows(m.homeItems, m.homeSelected, m.icons)
+	content := strings.Join(lines, "\n")
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+}
+
+// homeItemAtY maps an absolute screen Y to a launch item index, or -1.
+func homeItemAtY(items []homeItem, sel int, icons iconSet, screenH, y int) int {
+	_, itemRow, h := homeRows(items, sel, icons)
+	off := (screenH - h) / 2
+	if off < 0 {
+		off = 0
+	}
+	contentRow := y - off
+	for i, r := range itemRow {
+		if r == contentRow {
+			return i
+		}
+	}
+	return -1
 }
 
 // openHomeSelection acts on the highlighted launch item and enters writing mode.

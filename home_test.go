@@ -84,3 +84,31 @@ func TestBuildHomeItemsHasActions(t *testing.T) {
 		}
 	}
 }
+
+func TestHomeRowsAndHitTest(t *testing.T) {
+	items := []homeItem{
+		{kind: homeProject, label: "novel", path: "/p/novel"},
+		{kind: homeNewDocument, label: "New document"},
+	}
+	ic := resolveIcons()
+	lines, itemRow, h := homeRows(items, 0, ic)
+	if h != len(lines) {
+		t.Fatalf("height %d != len(lines) %d", h, len(lines))
+	}
+	if len(itemRow) != len(items) {
+		t.Fatalf("itemRow should have one entry per item, got %d", len(itemRow))
+	}
+	if itemRow[0] >= itemRow[1] {
+		t.Fatal("item rows should be strictly increasing")
+	}
+	// A click on item 0's content row (centered in a tall screen) hits item 0.
+	screenH := 40
+	off := (screenH - h) / 2
+	if got := homeItemAtY(items, 0, ic, screenH, off+itemRow[0]); got != 0 {
+		t.Fatalf("hit-test at item 0's row = %d, want 0", got)
+	}
+	// A click on a non-item row (row 0 of content = a header/logo area) misses.
+	if got := homeItemAtY(items, 0, ic, screenH, off+0); got == 0 && itemRow[0] != 0 {
+		t.Fatal("hit-test on a non-item row should not return item 0")
+	}
+}
