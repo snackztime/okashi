@@ -23,15 +23,14 @@ func resolveIcons() iconSet {
 		return iconSet{folder: "▸ ", parent: "↑ ", file: "  ", byExt: map[string]string{}}
 	}
 	return iconSet{
-		folder: " ", // nf-fa-folder
-		parent: " ", // nf-fa-arrow_up
-		file:   " ", // nf-fa-file
+		folder: " ", // nf-fa-folder
+		parent: " ", // nf-fa-arrow_up
+		file:   " ", // nf-fa-file
 		byExt: map[string]string{
-			".md":       " ", // nf-oct-markdown
-			".markdown": " ",
-			".txt":      " ", // nf-fa-file_text
-			".wg":       " ",
-			".go":       " ", // nf-seti-go
+			".md":       " ", // nf-fa-file_text_o
+			".markdown": " ",
+			".txt":      " ",
+			".wg":       " ",
 		},
 	}
 }
