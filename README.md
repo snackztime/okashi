@@ -92,6 +92,10 @@ top of the pane (`okashi / Book Name`) shows where you are, and you can't browse
 above the workspace. "Browse all files" on the launch screen returns to the
 workspace root.
 
+The breadcrumb segments are clickable — click `okashi` or a parent folder to jump
+there. On deep paths it shows `okashi / … / Drafts`, keeping the nearest folders
+clickable. A `3/12` indicator appears when the list is taller than the pane.
+
 ## Icons
 
 The file pane and launch lists use Nerd Font glyphs. If your terminal isn't
