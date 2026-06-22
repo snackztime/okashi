@@ -64,6 +64,9 @@ type model struct {
 
 	lastClickRow  int
 	lastClickTime time.Time
+
+	dirty      bool
+	lastEditAt time.Time
 }
 
 func initialModel() model {
@@ -154,6 +157,20 @@ func writingDir() string {
 	return dir
 }
 
+type autosaveTickMsg time.Time
+
+// autosaveTick schedules the next autosave check. One loop runs for the app's
+// lifetime, started in Init.
+func autosaveTick() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return autosaveTickMsg(t) })
+}
+
+// autosaveDue reports whether the buffer should be flushed: there are unsaved
+// edits to a real file and the writer has paused for at least 2s.
+func (m model) autosaveDue(now time.Time) bool {
+	return m.dirty && m.currentFile != "" && now.Sub(m.lastEditAt) >= 2*time.Second
+}
+
 // sidebarRow maps an absolute mouse Y to a row index within the file list, or
 // -1 if the click is outside the list. The list starts just below the banner.
 func sidebarRow(mouseY, bannerH, listHeight int) int {
@@ -165,7 +182,7 @@ func sidebarRow(mouseY, bannerH, listHeight int) int {
 }
 
 func (m model) Init() tea.Cmd {
-	return nil
+	return autosaveTick()
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -193,6 +210,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case autosaveTickMsg:
+		if m.autosaveDue(time.Time(msg)) {
+			m.save()
+		}
+		return m, autosaveTick()
+
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -337,8 +360,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	} else {
+		before := m.editor.Value()
 		m.editor, cmd = m.editor.Update(msg)
 		cmds = append(cmds, cmd)
+		if m.editor.Value() != before {
+			m.dirty = true
+			m.lastEditAt = time.Now()
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -529,7 +557,11 @@ func (m model) statusBar() string {
 	if m.creatingFile {
 		return m.nameInput.View()
 	}
-	stats := m.statsText()
+	mark := "✓"
+	if m.dirty {
+		mark = "●"
+	}
+	stats := mark + " " + m.statsText()
 	gap := (m.width - 2) - lipgloss.Width(m.status) - lipgloss.Width(stats)
 	if gap < 1 {
 		return m.status
@@ -544,8 +576,9 @@ func (m *model) save() {
 	}
 	if err := os.WriteFile(m.currentFile, []byte(m.editor.Value()), 0o644); err != nil {
 		m.status = "save failed: " + err.Error()
-		return
+		return // dirty stays true → retried next tick
 	}
+	m.dirty = false
 	m.status = "saved " + filepath.Base(m.currentFile)
 
 	// Surface a newly-created file in the sidebar if we're browsing its folder.

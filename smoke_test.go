@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -230,5 +231,55 @@ func TestMouseClickSelectsAndDoubleClickOpens(t *testing.T) {
 	}
 	if m.focus != focusEditor {
 		t.Fatal("opening via double click should focus the editor")
+	}
+}
+
+func TestAutosaveDue(t *testing.T) {
+	m := initialModel()
+	now := time.Now()
+	m.currentFile = "/tmp/x.md"
+
+	m.dirty = true
+	m.lastEditAt = now.Add(-3 * time.Second)
+	if !m.autosaveDue(now) {
+		t.Fatal("should be due: dirty, has file, idle 3s")
+	}
+	m.lastEditAt = now.Add(-500 * time.Millisecond)
+	if m.autosaveDue(now) {
+		t.Fatal("not due: only idle 0.5s")
+	}
+	m.dirty, m.lastEditAt = false, now.Add(-3*time.Second)
+	if m.autosaveDue(now) {
+		t.Fatal("not due: not dirty")
+	}
+	m.dirty, m.currentFile = true, ""
+	if m.autosaveDue(now) {
+		t.Fatal("not due: no current file")
+	}
+}
+
+func TestAutosaveTickWritesWhenDue(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "auto.md")
+	if err := os.WriteFile(path, []byte("start"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.currentFile = path
+	m.editor.SetValue("updated text")
+	m.dirty = true
+	m.lastEditAt = time.Now().Add(-3 * time.Second)
+
+	nm, _ = m.Update(autosaveTickMsg(time.Now()))
+	m = nm.(model)
+
+	data, _ := os.ReadFile(path)
+	if string(data) != "updated text" {
+		t.Fatalf("autosave did not write; file = %q", string(data))
+	}
+	if m.dirty {
+		t.Fatal("dirty should clear after a successful autosave")
 	}
 }
