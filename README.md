@@ -41,7 +41,8 @@ git tag v0.1.0 && git push origin v0.1.0
 | Key      | Action                                  |
 |----------|-----------------------------------------|
 | `ctrl+b` | Toggle the file sidebar (focus mode)    |
-| `tab`    | Switch focus between sidebar and editor |
+| `esc`    | Switch focus between sidebar and editor (exit preview) |
+| `tab`    | Indent (Shift+Tab to outdent) in the editor             |
 | `ctrl+n` | Create a new file (type a name, Enter)  |
 | `ctrl+p` | Toggle a rendered Markdown preview       |
 | `ctrl+t` | Toggle typewriter scrolling (centered caret) |
@@ -64,6 +65,15 @@ snapshot — `↑`/`↓` scroll, `ctrl+p` flips back to editing. The theme follo
 your terminal's background (dark/light); override with `OKASHI_THEME=light`.
 
 [glamour]: https://github.com/charmbracelet/glamour
+
+## Writing ergonomics
+
+- **Tab / Shift+Tab** indent and outdent (two spaces).
+- **Enter** on a Markdown list line (`- `, `* `, `+ `, `1.`) continues the list;
+  Enter on an empty item ends it.
+- **Smart quotes** turn `'`/`"` into curly quotes as you type (on by default;
+  set `OKASHI_SMARTQUOTES=off` for code-heavy writing).
+- **Column width** defaults to 65; set `OKASHI_WIDTH=<n>` (20–200) to taste.
 
 ## Launch screen
 
