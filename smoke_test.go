@@ -92,6 +92,7 @@ func TestFilelistOpensFileFromSidebar(t *testing.T) {
 	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
+	m.files.root = "" // allow testing with arbitrary temp directories
 	m.files.SetDir(dir)
 
 	// Select the file (".." then "draft.md") and press enter.
@@ -146,6 +147,7 @@ func TestSaveRefreshesSidebarForNewFile(t *testing.T) {
 	m := initialModel()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
+	m.files.root = "" // allow testing with arbitrary temp directories
 	m.files.SetDir(dir)
 
 	m.currentFile = filepath.Join(dir, "fresh.md")
@@ -215,6 +217,7 @@ func TestMouseClickSelectsAndDoubleClickOpens(t *testing.T) {
 	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
+	m.files.root = "" // allow testing with arbitrary temp directories
 	m.files.SetDir(dir)
 
 	// entries: ["..", "draft.md"] → draft.md is visible row 1.
@@ -356,6 +359,7 @@ func TestLoadFileClearsDirty(t *testing.T) {
 func TestNewFileDoesNotAutosaveEmpty(t *testing.T) {
 	dir := t.TempDir()
 	m := initialModel()
+	m.files.root = "" // allow testing with arbitrary temp directories
 	m.files.SetDir(dir)
 	// Simulate: prior edits left dirty set, idle long ago.
 	m.dirty = true

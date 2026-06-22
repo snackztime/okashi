@@ -139,3 +139,29 @@ func TestFilelistViewShowsIconsNoSlash(t *testing.T) {
 		t.Fatalf("plain folder icon missing; view=%q", view)
 	}
 }
+
+func TestFilelistConfinedToRoot(t *testing.T) {
+	root := t.TempDir()
+	sub := filepath.Join(root, "novel")
+	if err := os.Mkdir(sub, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	f := newFilelist()
+	f.root = root
+
+	// At root: no ".." entry.
+	f.SetDir(root)
+	if f.has("..") {
+		t.Fatal("root should not show a .. entry")
+	}
+	// In a subdir: ".." present.
+	f.SetDir(sub)
+	if !f.has("..") {
+		t.Fatal("subdir should show a .. entry")
+	}
+	// Trying to go above root clamps back to root.
+	f.SetDir(filepath.Dir(root))
+	if f.dir != root {
+		t.Fatalf("navigating above root should clamp to root, got %q", f.dir)
+	}
+}

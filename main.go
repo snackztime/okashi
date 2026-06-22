@@ -148,6 +148,7 @@ type model struct {
 
 func initialModel() model {
 	fl := newFilelist()
+	fl.root = writingDir()
 	fl.SetDir(writingDir())
 
 	ta := textarea.New()

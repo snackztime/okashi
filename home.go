@@ -47,7 +47,7 @@ func buildHomeItems(recents []string, projectsDir string) []homeItem {
 		}
 	}
 
-	items = append(items, homeItem{kind: homeOpenOther, label: "Open another folder…"})
+	items = append(items, homeItem{kind: homeOpenOther, label: "Browse all files"})
 	return items
 }
 
@@ -124,15 +124,18 @@ func (m *model) openHomeSelection() {
 	it := m.homeItems[m.homeSelected]
 	switch it.kind {
 	case homeRecentFile:
+		m.files.root = filepath.Dir(it.path)
 		m.files.SetDir(filepath.Dir(it.path))
 		m.loadFile(it.path)
 		m.focus = focusEditor
 		m.editor.Focus()
 	case homeProject:
+		m.files.root = it.path
 		m.files.SetDir(it.path)
 		m.focus = focusSidebar
 		m.editor.Blur()
 	case homeOpenOther:
+		m.files.root = writingDir()
 		m.files.SetDir(writingDir())
 		m.focus = focusSidebar
 		m.editor.Blur()

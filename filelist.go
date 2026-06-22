@@ -18,6 +18,7 @@ type fileEntry struct {
 // filelist is a minimal, mouse-friendly file browser we fully own.
 type filelist struct {
 	dir      string
+	root     string
 	entries  []fileEntry
 	selected int
 	offset   int // index of the top visible row
@@ -38,14 +39,30 @@ func newFilelist() filelist {
 	}
 }
 
+// withinRoot reports whether dir is root or a descendant of it.
+func withinRoot(dir, root string) bool {
+	rel, err := filepath.Rel(root, dir)
+	if err != nil {
+		return false
+	}
+	return rel == "." || !strings.HasPrefix(rel, "..")
+}
+
 // SetDir loads dir's entries (filtered, sorted dirs-first) and resets the cursor.
 func (f *filelist) SetDir(dir string) {
+	if f.root != "" && !withinRoot(dir, f.root) {
+		dir = f.root
+	}
 	f.dir = dir
 	f.entries = nil
 	f.selected = 0
 	f.offset = 0
 
-	if parent := filepath.Dir(dir); parent != dir {
+	showParent := filepath.Dir(dir) != dir // not at filesystem root
+	if f.root != "" {
+		showParent = dir != f.root // confined: only below the workspace root
+	}
+	if showParent {
 		f.entries = append(f.entries, fileEntry{name: "..", isDir: true})
 	}
 
