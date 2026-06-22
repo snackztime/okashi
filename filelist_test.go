@@ -202,3 +202,47 @@ func TestFilelistGutterAndDimExtension(t *testing.T) {
 		t.Fatal("a file extension should be dimmed with the subtle style")
 	}
 }
+
+func TestBreadcrumbSegments(t *testing.T) {
+	f := filelist{root: "/home/me/okashi", dir: "/home/me/okashi/Book/Drafts"}
+	segs := f.breadcrumbSegments()
+	want := []breadcrumbSeg{
+		{"okashi", "/home/me/okashi"},
+		{"Book", "/home/me/okashi/Book"},
+		{"Drafts", "/home/me/okashi/Book/Drafts"},
+	}
+	if len(segs) != len(want) {
+		t.Fatalf("got %d segments, want %d: %+v", len(segs), len(want), segs)
+	}
+	for i := range want {
+		if segs[i] != want[i] {
+			t.Fatalf("segment %d = %+v, want %+v", i, segs[i], want[i])
+		}
+	}
+}
+
+func TestBreadcrumbBarFitsWithHits(t *testing.T) {
+	f := filelist{root: "/r/okashi", dir: "/r/okashi/Book", height: 5}
+	f.entries = []fileEntry{{name: "a"}, {name: "b"}} // 2 < height → no indicator
+	row, hits := f.breadcrumbBar(40)
+	if !strings.Contains(row, "okashi / Book") {
+		t.Fatalf("row = %q", row)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("want 2 clickable segments, got %d", len(hits))
+	}
+	// The "Book" hit's column range should contain its rune.
+	if hits[1].path != "/r/okashi/Book" || hits[1].start >= hits[1].end {
+		t.Fatalf("bad hit %+v", hits[1])
+	}
+}
+
+func TestBreadcrumbBarIndicator(t *testing.T) {
+	f := filelist{root: "/r/okashi", dir: "/r/okashi", height: 2}
+	f.selected = 2
+	f.entries = make([]fileEntry, 10) // 10 > height 2 → indicator
+	row, _ := f.breadcrumbBar(40)
+	if !strings.Contains(row, "3/10") {
+		t.Fatalf("expected scroll indicator 3/10, row = %q", row)
+	}
+}

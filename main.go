@@ -15,7 +15,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 	"okashi/internal/textarea"
 )
@@ -533,7 +532,7 @@ func (m model) View() string {
 	if m.sidebarVisible {
 		sideInner := lipgloss.JoinVertical(
 			lipgloss.Left,
-			breadcrumbStyle.Render(ansi.Truncate(m.files.breadcrumb(), sidebarWidth-3, "…")),
+			func() string { row, _ := m.files.breadcrumbBar(sidebarWidth - 3); return breadcrumbStyle.Render(row) }(),
 			m.files.View(),
 		)
 		side := sidebarStyle.

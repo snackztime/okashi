@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -212,4 +213,99 @@ func (f *filelist) selectName(name string) {
 			return
 		}
 	}
+}
+
+type breadcrumbSeg struct {
+	label string
+	path  string
+}
+
+// segHit is a clickable column range [start,end) in the breadcrumb row.
+type segHit struct {
+	start, end int
+	path       string
+}
+
+// breadcrumbSegments returns the segments from the workspace root (base name
+// first) down to the current dir, each with its target path.
+func (f filelist) breadcrumbSegments() []breadcrumbSeg {
+	segs := []breadcrumbSeg{{label: filepath.Base(f.root), path: f.root}}
+	rel, err := filepath.Rel(f.root, f.dir)
+	if err == nil && rel != "." && rel != "" {
+		cur := f.root
+		for _, part := range strings.Split(rel, string(filepath.Separator)) {
+			cur = filepath.Join(cur, part)
+			segs = append(segs, breadcrumbSeg{label: part, path: cur})
+		}
+	}
+	return segs
+}
+
+// breadcrumbBar renders the breadcrumb head-truncated to width, with a
+// right-aligned "sel/total" indicator when the list overflows, and returns the
+// clickable column ranges of the visible segments (the "…" is not clickable).
+func (f filelist) breadcrumbBar(width int) (string, []segHit) {
+	segs := f.breadcrumbSegments()
+
+	ind := ""
+	if f.height > 0 && len(f.entries) > f.height {
+		ind = fmt.Sprintf("%d/%d", f.selected+1, len(f.entries))
+	}
+	avail := width
+	if ind != "" {
+		avail -= lipgloss.Width(ind) + 1
+	}
+	if avail < 1 {
+		avail = 1
+	}
+
+	const sep = " / "
+	labels := make([]string, len(segs))
+	for i, s := range segs {
+		labels[i] = s.label
+	}
+
+	var visible []breadcrumbSeg
+	if lipgloss.Width(strings.Join(labels, sep)) <= avail {
+		visible = segs
+	} else {
+		root := segs[0]
+		used := lipgloss.Width(root.label) + lipgloss.Width(sep) + lipgloss.Width("…")
+		var tail []breadcrumbSeg
+		for i := len(segs) - 1; i >= 1; i-- {
+			w := lipgloss.Width(sep) + lipgloss.Width(segs[i].label)
+			if used+w > avail {
+				break
+			}
+			used += w
+			tail = append([]breadcrumbSeg{segs[i]}, tail...)
+		}
+		visible = append([]breadcrumbSeg{root, {label: "…", path: ""}}, tail...)
+	}
+
+	var b strings.Builder
+	var hits []segHit
+	col := 0
+	for i, s := range visible {
+		if i > 0 {
+			b.WriteString(sep)
+			col += lipgloss.Width(sep)
+		}
+		start := col
+		b.WriteString(s.label)
+		col += lipgloss.Width(s.label)
+		if s.path != "" {
+			hits = append(hits, segHit{start: start, end: col, path: s.path})
+		}
+	}
+	left := b.String()
+
+	if ind == "" {
+		return left, hits
+	}
+	gap := width - lipgloss.Width(left) - lipgloss.Width(ind)
+	if gap < 1 {
+		gap = 1
+	}
+	return left + strings.Repeat(" ", gap) + ind, hits
 }
