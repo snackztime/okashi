@@ -46,6 +46,7 @@ git tag v0.1.0 && git push origin v0.1.0
 | `ctrl+n` | Create a new file (type a name, Enter)  |
 | `ctrl+p` | Toggle a rendered Markdown preview       |
 | `ctrl+t` | Toggle typewriter scrolling (centered caret) |
+| `ctrl+d` | Toggle focus dimming (dim all but the current sentence) |
 | `ctrl+o` | Back to the launch screen (recent files / projects) |
 | `ctrl+s` | Save the open file                      |
 | `ctrl+c` | Quit                                    |
@@ -74,6 +75,14 @@ your terminal's background (dark/light); override with `OKASHI_THEME=light`.
 - **Smart quotes** turn `'`/`"` into curly quotes as you type (on by default;
   set `OKASHI_SMARTQUOTES=off` for code-heavy writing).
 - **Column width** defaults to 65; set `OKASHI_WIDTH=<n>` (20–200) to taste.
+
+## Focus mode
+
+With typewriter on (`ctrl+t`), okashi also dims everything except the sentence
+you're in — your current sentence stays bright and centered, the rest fades.
+`ctrl+d` toggles just the dimming (keeping centered scrolling). Turning
+typewriter off turns both off. (`ctrl+d` takes over the editor's delete-forward;
+use Delete/Backspace instead.)
 
 ## Launch screen
 
