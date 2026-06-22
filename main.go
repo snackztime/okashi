@@ -43,6 +43,13 @@ const (
 	focusEditor
 )
 
+type screen int
+
+const (
+	screenHome screen = iota
+	screenWriting
+)
+
 type model struct {
 	width, height int
 
@@ -50,6 +57,10 @@ type model struct {
 	editor    textarea.Model
 	nameInput textinput.Model
 	preview   viewport.Model
+
+	screen       screen
+	homeItems    []homeItem
+	homeSelected int
 
 	sidebarVisible bool
 	focus          focus
@@ -100,6 +111,8 @@ func initialModel() model {
 		nameInput:      ti,
 		preview:        vp,
 		mdStyle:        previewStyle(),
+		screen:         screenHome,
+		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir()),
 		sidebarVisible: true,
 		focus:          focusSidebar,
 		typewriter:     true,
@@ -189,6 +202,10 @@ func (m model) Init() tea.Cmd {
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
+
+	if m.screen == screenHome {
+		return m.updateHome(msg)
+	}
 
 	// While naming a new file, the prompt captures all input.
 	if m.creatingFile {
@@ -377,6 +394,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m model) View() string {
 	if m.width == 0 {
 		return "loading…"
+	}
+
+	if m.screen == screenHome {
+		return m.homeView()
 	}
 
 	banner := bannerView(m.width)

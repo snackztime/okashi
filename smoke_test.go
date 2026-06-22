@@ -14,6 +14,7 @@ import (
 
 func TestPreviewToggle(t *testing.T) {
 	m := initialModel()
+	m.screen = screenWriting
 	// Give it a size so layout() sizes the viewport.
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = nm.(model)
@@ -66,6 +67,7 @@ func TestPreviewToggle(t *testing.T) {
 
 func TestTypewriterToggle(t *testing.T) {
 	m := initialModel()
+	m.screen = screenWriting
 	if !m.typewriter || !m.editor.Typewriter {
 		t.Fatal("typewriter should default on")
 	}
@@ -88,6 +90,7 @@ func TestFilelistOpensFileFromSidebar(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := initialModel()
+	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
 	m.files.SetDir(dir)
@@ -123,6 +126,7 @@ func TestSidebarRowMapping(t *testing.T) {
 
 func TestMouseWheelScrollsFileList(t *testing.T) {
 	m := initialModel()
+	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
 	m.files.entries = []fileEntry{{name: "a"}, {name: "b"}, {name: "c"}}
@@ -163,6 +167,7 @@ func TestSaveRefreshesSidebarForNewFile(t *testing.T) {
 
 func TestWheelOverEditorMovesCaret(t *testing.T) {
 	m := initialModel()
+	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
 	m.editor.SetValue("l0\nl1\nl2\nl3\nl4\nl5\nl6\nl7")
@@ -179,6 +184,7 @@ func TestWheelOverEditorMovesCaret(t *testing.T) {
 
 func TestWheelOverPreviewScrolls(t *testing.T) {
 	m := initialModel()
+	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
 	m = nm.(model)
 	var sb strings.Builder
@@ -205,6 +211,7 @@ func TestMouseClickSelectsAndDoubleClickOpens(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := initialModel()
+	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
 	m.files.SetDir(dir)
@@ -265,6 +272,7 @@ func TestAutosaveTickWritesWhenDue(t *testing.T) {
 		t.Fatal(err)
 	}
 	m := initialModel()
+	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
 	m.currentFile = path
@@ -281,5 +289,30 @@ func TestAutosaveTickWritesWhenDue(t *testing.T) {
 	}
 	if m.dirty {
 		t.Fatal("dirty should clear after a successful autosave")
+	}
+}
+
+func TestLaunchStartsOnHomeAndNavigates(t *testing.T) {
+	m := initialModel()
+	if m.screen != screenHome {
+		t.Fatal("app should start on the home screen")
+	}
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	// Force a known home list: two items.
+	m.homeItems = []homeItem{
+		{kind: homeProject, label: "novel", path: "/p/novel"},
+		{kind: homeOpenOther, label: "Open another folder…"},
+	}
+	m.homeSelected = 0
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
+	m = nm.(model)
+	if m.homeSelected != 1 {
+		t.Fatalf("down should move selection to 1, got %d", m.homeSelected)
+	}
+	view := m.View()
+	if !strings.Contains(view, "novel") {
+		t.Fatalf("home view should list the project; view=%q", view)
 	}
 }
