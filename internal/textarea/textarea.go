@@ -230,6 +230,11 @@ type Model struct {
 	// the viewport instead of edge-anchoring it. okashi:typewriter
 	Typewriter bool
 
+	// okashi:dim — when Dim is true, characters outside the cursor's sentence
+	// render with DimStyle.
+	Dim      bool
+	DimStyle lipgloss.Style
+
 	// CharLimit is the maximum number of characters this input element will
 	// accept. If 0 or less, there's no limit.
 	CharLimit int
@@ -881,6 +886,34 @@ func (m *Model) repositionView() {
 	}
 }
 
+// cursorRuneOffset returns the cursor's absolute rune offset in Value().
+// okashi:dim
+func (m Model) cursorRuneOffset() int {
+	off := 0
+	for i := 0; i < m.row; i++ {
+		off += len(m.value[i]) + 1 // +1 for the joining newline
+	}
+	return off + m.col
+}
+
+// renderSeg renders seg (first rune at absolute offset absStart). When Dim is
+// off it's just style.Render; when on, out-of-[span0,span1) runs use DimStyle.
+// okashi:dim
+func (m Model) renderSeg(seg []rune, absStart, span0, span1 int, style lipgloss.Style) string {
+	if !m.Dim {
+		return style.Render(string(seg))
+	}
+	var b strings.Builder
+	for _, run := range splitDimRuns(seg, absStart, span0, span1) {
+		if run.dim {
+			b.WriteString(m.DimStyle.Render(run.text))
+		} else {
+			b.WriteString(style.Render(run.text))
+		}
+	}
+	return b.String()
+}
+
 // renderViewport sets the viewport content and returns the rendered view. When
 // Typewriter is on it prepends Height/2 blank rows so the caret's wrapped row
 // can sit at screen-center (the buffer already pads Height end-of-buffer rows
@@ -1135,9 +1168,16 @@ func (m Model) View() string {
 		lineInfo         = m.LineInfo()
 	)
 
+	var dimSpan0, dimSpan1 int
+	if m.Dim {
+		dimSpan0, dimSpan1 = currentSentenceSpan(m.Value(), m.cursorRuneOffset())
+	}
+	lineOffset := 0
+
 	displayLine := 0
 	for l, line := range m.value {
 		wrappedLines := m.memoizedWrap(line, m.width)
+		pieceStart := 0 // rune offset of the current wrapped piece within this line
 
 		if m.row == l {
 			style = m.style.computedCursorLine()
@@ -1146,6 +1186,7 @@ func (m Model) View() string {
 		}
 
 		for wl, wrappedLine := range wrappedLines {
+			pieceLen := len(wrappedLine) // source rune count of this piece (before TrimSuffix)
 			prompt := m.getPromptString(displayLine)
 			prompt = m.style.computedPrompt().Render(prompt)
 			s.WriteString(style.Render(prompt))
@@ -1192,22 +1233,24 @@ func (m Model) View() string {
 				padding -= m.width - strwidth
 			}
 			if m.row == l && lineInfo.RowOffset == wl {
-				s.WriteString(style.Render(string(wrappedLine[:lineInfo.ColumnOffset])))
+				s.WriteString(m.renderSeg(wrappedLine[:lineInfo.ColumnOffset], lineOffset+pieceStart, dimSpan0, dimSpan1, style))
 				if m.col >= len(line) && lineInfo.CharOffset >= m.width {
 					m.Cursor.SetChar(" ")
 					s.WriteString(m.Cursor.View())
 				} else {
 					m.Cursor.SetChar(string(wrappedLine[lineInfo.ColumnOffset]))
 					s.WriteString(style.Render(m.Cursor.View()))
-					s.WriteString(style.Render(string(wrappedLine[lineInfo.ColumnOffset+1:])))
+					s.WriteString(m.renderSeg(wrappedLine[lineInfo.ColumnOffset+1:], lineOffset+pieceStart+lineInfo.ColumnOffset+1, dimSpan0, dimSpan1, style))
 				}
 			} else {
-				s.WriteString(style.Render(string(wrappedLine)))
+				s.WriteString(m.renderSeg(wrappedLine, lineOffset+pieceStart, dimSpan0, dimSpan1, style))
 			}
 			s.WriteString(style.Render(strings.Repeat(" ", max(0, padding))))
 			s.WriteRune('\n')
 			newLines++
+			pieceStart += pieceLen
 		}
+		lineOffset += len(line) + 1
 	}
 
 	// Always show at least `m.Height` lines at all times.

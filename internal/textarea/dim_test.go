@@ -1,6 +1,11 @@
 package textarea
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"github.com/charmbracelet/lipgloss"
+)
 
 func TestCurrentSentenceSpan(t *testing.T) {
 	cases := []struct {
@@ -38,5 +43,32 @@ func TestSplitDimRuns(t *testing.T) {
 		if runs[i] != want[i] {
 			t.Fatalf("run %d = %+v, want %+v", i, runs[i], want[i])
 		}
+	}
+}
+
+func TestDimAppliesOutOfSpan(t *testing.T) {
+	old := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(2) // force ANSI256 so styles emit codes in tests
+	defer lipgloss.SetColorProfile(old)
+
+	ta := New()
+	ta.Prompt = ""
+	ta.ShowLineNumbers = false
+	ta.SetWidth(60)
+	ta.SetHeight(5)
+	ta.DimStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("240"))
+	ta.SetValue("First one. Second two.")
+	ta.SetCursor(2) // inside "First one."
+
+	dimSeq := ta.DimStyle.Render("x")
+	dimCode := dimSeq[:strings.Index(dimSeq, "x")] // the opening SGR of DimStyle
+
+	ta.Dim = false
+	if strings.Contains(ta.View(), dimCode) {
+		t.Fatal("no dim styling expected when Dim is off")
+	}
+	ta.Dim = true
+	if !strings.Contains(ta.View(), dimCode) {
+		t.Fatal("expected the out-of-span text to carry the dim style when Dim is on")
 	}
 }
