@@ -449,3 +449,52 @@ func TestEscTogglesFocusAndTabIndents(t *testing.T) {
 		t.Fatal("esc should toggle focus to the sidebar")
 	}
 }
+func TestSmartQuoteHelper(t *testing.T) {
+	cases := []struct {
+		prev    rune
+		hasPrev bool
+		q       rune
+		want    rune
+	}{
+		{0, false, '\'', rune(0x2018)},  // start of line → opening '
+		{' ', true, '"', rune(0x201C)},  // after space → opening "
+		{'n', true, '\'', rune(0x2019)}, // contraction don't → closing '
+		{'d', true, '"', rune(0x201D)},  // after letter → closing "
+		{'(', true, '\'', rune(0x2018)}, // after ( → opening
+	}
+	for _, c := range cases {
+		if got := smartQuote(c.prev, c.hasPrev, c.q); got != c.want {
+			t.Fatalf("smartQuote(%q,%v,%q) = %q, want %q", c.prev, c.hasPrev, c.q, got, c.want)
+		}
+	}
+}
+
+func TestResolveSmartQuotes(t *testing.T) {
+	t.Setenv("OKASHI_SMARTQUOTES", "")
+	if !resolveSmartQuotes() {
+		t.Fatal("default should be on")
+	}
+	t.Setenv("OKASHI_SMARTQUOTES", "off")
+	if resolveSmartQuotes() {
+		t.Fatal("off should disable")
+	}
+}
+
+func TestEditorSmartQuoteInsert(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.smartQuotes = true
+	m.editor.SetValue("")
+	m.editor.SetCursor(0)
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'"'}})
+	m = nm.(model)
+	expected := string([]rune{rune(0x201C)}) // left double quote
+	if m.editor.Value() != expected {
+		t.Fatalf("typing \" at start should insert a left double curly quote, got %q", m.editor.Value())
+	}
+}

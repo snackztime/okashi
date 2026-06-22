@@ -47,6 +47,36 @@ func resolveColumnWidth() int {
 	return defaultColumnWidth
 }
 
+// resolveSmartQuotes reads OKASHI_SMARTQUOTES; off/false/0 disable, default on.
+func resolveSmartQuotes() bool {
+	switch strings.ToLower(os.Getenv("OKASHI_SMARTQUOTES")) {
+	case "off", "false", "0":
+		return false
+	}
+	return true
+}
+
+// smartQuote returns the curly form of a straight quote. It's an opening quote
+// at the start of a line or after whitespace / an opening bracket; otherwise
+// closing (which also yields the right apostrophe in contractions).
+func smartQuote(prev rune, hasPrev bool, q rune) rune {
+	opening := !hasPrev || prev == ' ' || prev == '\t' || prev == '\n' ||
+		prev == '(' || prev == '[' || prev == '{'
+	switch q {
+	case '\'':
+		if opening {
+			return rune(0x2018) // U+2018 left single quote
+		}
+		return rune(0x2019) // U+2019 right single quote
+	case '"':
+		if opening {
+			return rune(0x201C) // U+201C left double quote
+		}
+		return rune(0x201D) // U+201D right double quote
+	}
+	return q
+}
+
 type focus int
 
 const (
@@ -81,6 +111,7 @@ type model struct {
 
 	mdStyle         string // glamour theme, detected once at startup
 	colWidth        int
+	smartQuotes     bool
 	sessionBaseline int // word count when the current file was opened/created
 	currentFile     string
 	status          string
@@ -124,6 +155,7 @@ func initialModel() model {
 		preview:        vp,
 		mdStyle:        previewStyle(),
 		colWidth:       resolveColumnWidth(),
+		smartQuotes:    resolveSmartQuotes(),
 		screen:         screenHome,
 		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir()),
 		sidebarVisible: true,
@@ -417,6 +449,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	} else {
+		if km, ok := msg.(tea.KeyMsg); ok && m.smartQuotes &&
+			km.Type == tea.KeyRunes && len(km.Runes) == 1 &&
+			(km.Runes[0] == '\'' || km.Runes[0] == '"') {
+			prev, hasPrev := m.editor.CharBeforeCursor()
+			m.editor.InsertString(string(smartQuote(prev, hasPrev, km.Runes[0])))
+			m.dirty = true
+			m.lastEditAt = time.Now()
+			return m, nil
+		}
 		before := m.editor.Value()
 		m.editor, cmd = m.editor.Update(msg)
 		cmds = append(cmds, cmd)
