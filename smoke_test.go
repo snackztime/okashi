@@ -297,21 +297,26 @@ func TestAutosaveTickWritesWhenDue(t *testing.T) {
 }
 
 func TestHomeOpenProjectAndCtrlOReturns(t *testing.T) {
-	dir := t.TempDir()
 	m := initialModel()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
-	m.homeItems = []homeItem{{kind: homeProject, label: "p", path: dir}}
+	// Create a project path within the workspace root.
+	projPath := filepath.Join(m.files.root, "testproject")
+	m.homeItems = []homeItem{{kind: homeProject, label: "testproject", path: projPath}}
 	m.homeSelected = 0
 
-	// Enter on a project → writing mode, sidebar rooted at the project.
+	// Enter on a project → writing mode, sidebar displays the project.
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(model)
 	if m.screen != screenWriting {
 		t.Fatal("opening a project should switch to writing")
 	}
-	if m.files.dir != dir {
-		t.Fatalf("sidebar should be rooted at the project, got %q", m.files.dir)
+	if m.files.dir != projPath {
+		t.Fatalf("sidebar should display the project, got %q", m.files.dir)
+	}
+	// But the workspace root must remain unchanged.
+	if m.files.root == projPath {
+		t.Fatal("workspace root must not change when opening a project")
 	}
 
 	// ctrl+o returns to home.
@@ -577,5 +582,20 @@ func TestEnterEndsEmptyListItem(t *testing.T) {
 	m = nm.(model)
 	if m.editor.Value() != "" {
 		t.Fatalf("Enter on an empty bullet should clear it with no extra newline, got %q", m.editor.Value())
+	}
+}
+
+func TestOpenProjectKeepsWorkspaceRoot(t *testing.T) {
+	m := initialModel()
+	want := m.files.root // writingDir(), the workspace
+	if want == "" {
+		t.Skip("no workspace root resolved")
+	}
+	proj := filepath.Join(want, "someproject")
+	m.homeItems = []homeItem{{kind: homeProject, label: "someproject", path: proj}}
+	m.homeSelected = 0
+	m.openHomeSelection()
+	if m.files.root != want {
+		t.Fatalf("opening a project must keep the workspace root %q, got %q", want, m.files.root)
 	}
 }
