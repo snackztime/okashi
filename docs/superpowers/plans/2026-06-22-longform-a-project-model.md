@@ -1,3 +1,22 @@
+> **RESUME NOTE (saved before a cache clear) — 2026-06-22**
+>
+> **TOOL-CALL WORKAROUND (critical):** a recurring generation bug emits a stray
+> `court` token and/or drops the `antml:` namespace, silently no-op'ing tool
+> calls. The mitigation that works: emit **exactly one tool call per message, as
+> the FIRST element of the reply** (no prose before it), and put all explanation
+> AFTER the tool result. The opening tag MUST be `<invoke name="...">` with
+> `<parameter name="...">` children. (See memory `tool-call-syntax-court-bug`.)
+>
+> **STATUS:** This is **Plan A of 4** for the long-form project system.
+> - Spec (approved): `docs/superpowers/specs/2026-06-22-long-form-projects-design.md`
+> - **Plan A (this file): NOT YET EXECUTED.** Ready for subagent-driven-development.
+>   `main @ 9927708`; no feature branch yet.
+> - Plans **B** (outline view), **C** (manuscript pager), **D** (RTF+PDF export)
+>   are not yet written — write each against the real code after the prior merges.
+> - Queued after long-form: **Tufte preview** brainstorm, then **project rename**
+>   (okashi → TBD: sweeps module path, `OKASHI_*` env, workspace folder, repo, formula).
+> - Build/test via `/opt/homebrew/bin/go` (not on PATH).
+
 # Long-form Plan A — Project Model Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
