@@ -300,6 +300,18 @@ func (f filelist) breadcrumbBar(width int) (string, []segHit) {
 	}
 	left := b.String()
 
+	if lipgloss.Width(left) > avail {
+		left = ansi.Truncate(left, avail, "…")
+		visibleW := lipgloss.Width(left)
+		kept := hits[:0]
+		for _, h := range hits {
+			if h.end <= visibleW {
+				kept = append(kept, h)
+			}
+		}
+		hits = kept
+	}
+
 	if ind == "" {
 		return left, hits
 	}

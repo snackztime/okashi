@@ -246,3 +246,12 @@ func TestBreadcrumbBarIndicator(t *testing.T) {
 		t.Fatalf("expected scroll indicator 3/10, row = %q", row)
 	}
 }
+
+func TestBreadcrumbBarNeverOverflows(t *testing.T) {
+	root := "/x/this-is-a-very-long-workspace-folder-name"
+	f := filelist{root: root, dir: filepath.Join(root, "Sub", "Deeper"), height: 5}
+	row, _ := f.breadcrumbBar(29)
+	if lipgloss.Width(row) > 29 {
+		t.Fatalf("breadcrumb row width %d exceeds budget 29: %q", lipgloss.Width(row), row)
+	}
+}
