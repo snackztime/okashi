@@ -3,7 +3,10 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestBuildHomeItems(t *testing.T) {
@@ -40,5 +43,18 @@ func TestBuildHomeItemsEmpty(t *testing.T) {
 	items := buildHomeItems(nil, dir)
 	if len(items) != 1 || items[0].kind != homeOpenOther {
 		t.Fatalf("empty state should be just open-other, got %+v", items)
+	}
+}
+
+func TestHomeViewUsesPerExtensionIconForRecents(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "") // nerd set so .md has a distinct glyph
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.homeItems = []homeItem{{kind: homeRecentFile, label: "chapter.md", path: "/x/chapter.md"}}
+	m.homeSelected = 0
+	want := resolveIcons().icon(fileEntry{name: "chapter.md"})
+	if !strings.Contains(m.homeView(), want) {
+		t.Fatalf("recent row should use the .md glyph %q", want)
 	}
 }

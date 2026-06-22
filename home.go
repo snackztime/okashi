@@ -97,9 +97,12 @@ func (m model) homeView() string {
 			b.WriteString("\n")
 		}
 
-		icon := m.icons.file
-		if it.kind == homeProject || it.kind == homeOpenOther {
+		var icon string
+		switch it.kind {
+		case homeProject, homeOpenOther:
 			icon = m.icons.folder
+		default:
+			icon = m.icons.icon(fileEntry{name: it.label})
 		}
 		line := "  " + icon + it.label
 		if i == m.homeSelected {

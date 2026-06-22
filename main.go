@@ -475,6 +475,7 @@ func (m *model) loadFile(path string) {
 	m.previewing = false
 	m.status = "opened " + filepath.Base(path)
 	addRecent(recentPath(), path)
+	m.dirty = false
 }
 
 // confirmNewFile turns the typed name into a fresh, unsaved buffer pointed at
@@ -495,6 +496,7 @@ func (m *model) confirmNewFile() {
 	m.currentFile = filepath.Join(m.files.dir, name)
 	m.editor.SetValue("")
 	m.sessionBaseline = 0
+	m.dirty = false
 	m.focus = focusEditor
 	m.editor.Focus()
 	m.status = "new file: " + name + " — ctrl+s to save"

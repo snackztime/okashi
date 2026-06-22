@@ -339,6 +339,38 @@ func TestAutosaveTickSurvivesHomeScreen(t *testing.T) {
 	}
 }
 
+func TestLoadFileClearsDirty(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "a.md")
+	if err := os.WriteFile(p, []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := initialModel()
+	m.dirty = true
+	m.loadFile(p)
+	if m.dirty {
+		t.Fatal("opening a file should clear dirty (fresh buffer is saved)")
+	}
+}
+
+func TestNewFileDoesNotAutosaveEmpty(t *testing.T) {
+	dir := t.TempDir()
+	m := initialModel()
+	m.files.SetDir(dir)
+	// Simulate: prior edits left dirty set, idle long ago.
+	m.dirty = true
+	m.lastEditAt = time.Now().Add(-10 * time.Second)
+	// Create a new file via the prompt flow.
+	m.nameInput.SetValue("fresh.md")
+	m.confirmNewFile()
+	if m.dirty {
+		t.Fatal("a brand-new unedited buffer must not be dirty")
+	}
+	if m.autosaveDue(time.Now()) {
+		t.Fatal("a new empty file must not be autosave-due before any edit")
+	}
+}
+
 func TestLaunchStartsOnHomeAndNavigates(t *testing.T) {
 	m := initialModel()
 	if m.screen != screenHome {
