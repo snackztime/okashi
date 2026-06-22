@@ -1511,3 +1511,51 @@ func max(a, b int) int {
 	}
 	return b
 }
+
+// --- okashi:editing helpers ---
+
+const okashiIndentUnit = "  "
+
+// Indent inserts the indent unit (two spaces) at the start of the current line.
+func (m *Model) Indent() {
+	unit := []rune(okashiIndentUnit)
+	m.value[m.row] = append(unit, m.value[m.row]...)
+	m.SetCursor(m.col + len(unit))
+}
+
+// Outdent removes up to one indent unit of leading spaces from the current line.
+func (m *Model) Outdent() {
+	line := m.value[m.row]
+	removed := 0
+	for removed < len(okashiIndentUnit) && len(line) > 0 && line[0] == ' ' {
+		line = line[1:]
+		removed++
+	}
+	m.value[m.row] = line
+	m.SetCursor(m.col - removed)
+}
+
+// CurrentLine returns the text of the line the cursor is on.
+func (m Model) CurrentLine() string {
+	return string(m.value[m.row])
+}
+
+// AtLineEnd reports whether the cursor is at the end of the current line.
+func (m Model) AtLineEnd() bool {
+	return m.col >= len(m.value[m.row])
+}
+
+// CharBeforeCursor returns the rune immediately left of the cursor, or
+// (0, false) at the start of a line.
+func (m Model) CharBeforeCursor() (rune, bool) {
+	if m.col == 0 {
+		return 0, false
+	}
+	return m.value[m.row][m.col-1], true
+}
+
+// ClearLine empties the current line and moves the cursor to its start.
+func (m *Model) ClearLine() {
+	m.value[m.row] = m.value[m.row][:0]
+	m.SetCursor(0)
+}
