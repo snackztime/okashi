@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestPreviewToggle(t *testing.T) {
@@ -816,5 +817,26 @@ func TestCtrlNResetsFolderMode(t *testing.T) {
 	m = nm.(model)
 	if !m.creatingFile || m.creatingFolder {
 		t.Fatal("ctrl+n should open the prompt in file mode, resetting folder mode")
+	}
+}
+
+func TestSidebarFrameFitsAndAligns(t *testing.T) {
+	line := strings.Repeat("x", sidebarWidth-3) // the file-pane content budget
+	out := sidebarStyle.Width(sidebarWidth - 1).Render(line)
+	if lipgloss.Height(out) != 1 {
+		t.Fatalf("a %d-char line wrapped in the sidebar frame (height %d)", sidebarWidth-3, lipgloss.Height(out))
+	}
+	if w := lipgloss.Width(out); w != sidebarWidth {
+		t.Fatalf("sidebar frame total width = %d, want %d", w, sidebarWidth)
+	}
+}
+
+func TestLayoutFilePaneWidth(t *testing.T) {
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = nm.(model)
+	if m.files.width != sidebarWidth-3 {
+		t.Fatalf("files.width = %d, want %d", m.files.width, sidebarWidth-3)
 	}
 }

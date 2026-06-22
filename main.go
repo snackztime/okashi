@@ -533,11 +533,11 @@ func (m model) View() string {
 	if m.sidebarVisible {
 		sideInner := lipgloss.JoinVertical(
 			lipgloss.Left,
-			breadcrumbStyle.Render(ansi.Truncate(m.files.breadcrumb(), sidebarWidth-2, "…")),
+			breadcrumbStyle.Render(ansi.Truncate(m.files.breadcrumb(), sidebarWidth-3, "…")),
 			m.files.View(),
 		)
 		side := sidebarStyle.
-			Width(sidebarWidth - 2).
+			Width(sidebarWidth - 1).
 			Height(bodyH - 2).
 			Render(sideInner)
 
@@ -570,7 +570,7 @@ func (m *model) layout() {
 	cw := min(m.colWidth, m.width-2)
 	if m.sidebarVisible {
 		m.files.height = bodyH - 3 // sidebar content height (bodyH-2) minus the breadcrumb row
-		m.files.width = sidebarWidth - 2
+		m.files.width = sidebarWidth - 3
 		cw = min(m.colWidth, m.width-sidebarWidth-2)
 	}
 	m.editor.SetWidth(cw)
