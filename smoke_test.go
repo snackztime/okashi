@@ -786,3 +786,35 @@ func TestHomeMouseDoubleClickActivates(t *testing.T) {
 		t.Fatalf("double click on project should switch to writing, screen=%d", m.screen)
 	}
 }
+
+func TestConfirmCreateRejectsTraversal(t *testing.T) {
+	dir := t.TempDir()
+	m := initialModel()
+	m.files.root = dir
+	m.files.SetDir(dir)
+	m.creatingFile = true
+	m.nameInput.SetValue("../evil/")
+	m.confirmCreate()
+	if _, err := os.Stat(filepath.Join(filepath.Dir(dir), "evil")); err == nil {
+		t.Fatal("a traversal name must not create anything outside the pane dir")
+	}
+	m.creatingFile = true
+	m.nameInput.SetValue("../escape.md")
+	m.confirmCreate()
+	if m.currentFile == filepath.Join(filepath.Dir(dir), "escape.md") {
+		t.Fatal("a traversal file name must be rejected, not set as currentFile")
+	}
+}
+
+func TestCtrlNResetsFolderMode(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.creatingFolder = true // leaked from a prior New project
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	m = nm.(model)
+	if !m.creatingFile || m.creatingFolder {
+		t.Fatal("ctrl+n should open the prompt in file mode, resetting folder mode")
+	}
+}

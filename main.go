@@ -292,8 +292,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "esc":
 				m.creatingFile = false
+				m.creatingFolder = false
 				m.nameInput.Blur()
-				m.status = "new file cancelled"
+				m.status = "create cancelled"
 				return m, nil
 			case "enter":
 				m.confirmCreate()
@@ -389,6 +390,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+n":
 			m.previewing = false
 			m.creatingFile = true
+			m.creatingFolder = false
 			m.nameInput.SetValue("")
 			m.nameInput.Focus()
 			m.editor.Blur()
@@ -609,6 +611,11 @@ func (m *model) confirmCreate() {
 
 	folder := explicitFolder || strings.HasSuffix(name, "/")
 	name = strings.TrimSuffix(name, "/")
+
+	if strings.Contains(name, "/") || name == "." || name == ".." {
+		m.status = "name can't contain a path separator"
+		return
+	}
 
 	if folder {
 		dir := filepath.Join(m.files.dir, name)
