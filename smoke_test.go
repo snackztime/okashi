@@ -867,3 +867,29 @@ func TestBreadcrumbClickNavigates(t *testing.T) {
 		t.Fatalf("clicking the root breadcrumb should navigate to the root, got %q", m.files.dir)
 	}
 }
+
+func TestDimFollowsTypewriterAndToggle(t *testing.T) {
+	m := initialModel()
+	m.screen = screenWriting
+	// default: typewriter on, dimEnabled on → editor.Dim on
+	if !m.dimEnabled || !m.editor.Dim {
+		t.Fatal("dim should default on (typewriter on, dimEnabled on)")
+	}
+	// ctrl+d turns dimming off but keeps typewriter
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlD})
+	m = nm.(model)
+	if m.dimEnabled || m.editor.Dim {
+		t.Fatal("ctrl+d should turn dimming off")
+	}
+	if !m.typewriter {
+		t.Fatal("ctrl+d must not affect typewriter")
+	}
+	// ctrl+t off → dim off regardless of dimEnabled
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlD}) // dim back on
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlT}) // typewriter off
+	m = nm.(model)
+	if m.editor.Dim {
+		t.Fatal("editor.Dim must be off when typewriter is off")
+	}
+}

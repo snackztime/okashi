@@ -131,6 +131,7 @@ type model struct {
 	creatingFolder bool
 	previewing     bool
 	typewriter     bool
+	dimEnabled     bool
 
 	mdStyle         string // glamour theme, detected once at startup
 	colWidth        int
@@ -164,6 +165,8 @@ func initialModel() model {
 	ta.BlurredStyle.Base = lipgloss.NewStyle()
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ta.Typewriter = true // typewriter scrolling on by default; ctrl+t toggles
+	ta.Dim = true
+	ta.DimStyle = lipgloss.NewStyle().Foreground(subtle)
 
 	ti := textinput.New()
 	ti.Prompt = ""
@@ -185,7 +188,8 @@ func initialModel() model {
 		sidebarVisible: true,
 		focus:          focusSidebar,
 		typewriter:     true,
-		status:         "ctrl+b sidebar · esc switch · ctrl+n new · ctrl+p preview · ctrl+t typewriter · ctrl+s save · ctrl+c quit",
+		dimEnabled:     true,
+		status:         "ctrl+b sidebar · esc switch · ctrl+n new · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+c quit",
 		icons:          resolveIcons(),
 	}
 }
@@ -263,6 +267,12 @@ func sidebarRow(mouseY, bannerH, listHeight int) int {
 		return -1
 	}
 	return row
+}
+
+// syncDim keeps the editor's dim state in step with focus mode: dim only when
+// typewriter AND dimEnabled.
+func (m *model) syncDim() {
+	m.editor.Dim = m.typewriter && m.dimEnabled
 }
 
 func (m model) Init() tea.Cmd {
@@ -414,10 +424,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+t":
 			m.typewriter = !m.typewriter
 			m.editor.Typewriter = m.typewriter
+			m.syncDim()
 			if m.typewriter {
 				m.status = "typewriter on"
 			} else {
 				m.status = "typewriter off"
+			}
+			return m, nil
+		case "ctrl+d":
+			m.dimEnabled = !m.dimEnabled
+			m.syncDim()
+			if m.editor.Dim {
+				m.status = "dim on"
+			} else {
+				m.status = "dim off"
 			}
 			return m, nil
 		case "ctrl+b":
