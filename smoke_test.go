@@ -221,8 +221,8 @@ func TestMouseClickSelectsAndDoubleClickOpens(t *testing.T) {
 	m.files.SetDir(dir)
 
 	// entries: ["..", "draft.md"] → draft.md is visible row 1.
-	// No banner in writing mode: the file list starts at screen row 0.
-	click := tea.MouseMsg{X: 2, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+	// Breadcrumb occupies row 0; the file list starts at screen row 1, so ".."=Y1, draft.md=Y2.
+	click := tea.MouseMsg{X: 2, Y: 2, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 
 	// Single click selects but does NOT open.
 	nm, _ = m.Update(click)
@@ -582,6 +582,28 @@ func TestEnterEndsEmptyListItem(t *testing.T) {
 	m = nm.(model)
 	if m.editor.Value() != "" {
 		t.Fatalf("Enter on an empty bullet should clear it with no extra newline, got %q", m.editor.Value())
+	}
+}
+
+func TestSidebarClickRowAccountsForBreadcrumb(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "draft.md")
+	if err := os.WriteFile(path, []byte("hi words"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.files.root = dir
+	m.files.SetDir(dir) // entries: ["draft.md"] (no ".." at root)
+
+	// Row 0 of the list is at screen Y=1 (breadcrumb is Y=0). Click it.
+	click := tea.MouseMsg{X: 2, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+	nm, _ = m.Update(click)
+	m = nm.(model)
+	if m.files.entries[m.files.selected].name != "draft.md" {
+		t.Fatalf("click at Y=1 should select the first list row, got %q", m.files.entries[m.files.selected].name)
 	}
 }
 

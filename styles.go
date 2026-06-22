@@ -28,6 +28,10 @@ var selectedStyle = lipgloss.NewStyle().
 	Foreground(lipgloss.Color("#FFFFFF")).
 	Background(accent)
 
+var breadcrumbStyle = lipgloss.NewStyle().
+	Foreground(accent).
+	Bold(true)
+
 // bannerArt is figlet's "small" font. Regenerate for your app's real name:
 //
 //	figlet -f small YOURNAME

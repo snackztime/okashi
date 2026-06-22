@@ -173,6 +173,18 @@ func (f *filelist) activate() (string, bool) {
 	return filepath.Join(f.dir, e.name), true
 }
 
+// breadcrumb is the current path relative to the workspace root, e.g.
+// "okashi" at the root or "okashi / Book Name" inside a project.
+func (f filelist) breadcrumb() string {
+	base := filepath.Base(f.root)
+	rel, err := filepath.Rel(f.root, f.dir)
+	if err != nil || rel == "." || rel == "" {
+		return base
+	}
+	parts := strings.Split(rel, string(filepath.Separator))
+	return base + " / " + strings.Join(parts, " / ")
+}
+
 // has reports whether an entry with the given name is currently listed.
 func (f filelist) has(name string) bool {
 	for _, e := range f.entries {

@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 	"okashi/internal/textarea"
 )
@@ -352,8 +353,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 			return m, nil
 		}
-		// No banner in writing mode: the file list starts at screen row 0.
-		row := sidebarRow(msg.Y, 0, m.files.height)
+		// Breadcrumb header occupies row 0; the file list starts at row 1.
+		row := sidebarRow(msg.Y, 1, m.files.height)
 		if row < 0 {
 			return m, nil
 		}
@@ -527,10 +528,15 @@ func (m model) View() string {
 
 	var body string
 	if m.sidebarVisible {
+		sideInner := lipgloss.JoinVertical(
+			lipgloss.Left,
+			breadcrumbStyle.Render(ansi.Truncate(m.files.breadcrumb(), sidebarWidth-2, "…")),
+			m.files.View(),
+		)
 		side := sidebarStyle.
 			Width(sidebarWidth - 2).
 			Height(bodyH - 2).
-			Render(m.files.View())
+			Render(sideInner)
 
 		// Center the 80-col column inside the space left of the sidebar.
 		editorArea := m.width - sidebarWidth
@@ -560,7 +566,7 @@ func (m *model) layout() {
 
 	cw := min(m.colWidth, m.width-2)
 	if m.sidebarVisible {
-		m.files.height = bodyH - 2
+		m.files.height = bodyH - 3 // sidebar content height (bodyH-2) minus the breadcrumb row
 		m.files.width = sidebarWidth - 2
 		cw = min(m.colWidth, m.width-sidebarWidth-2)
 	}

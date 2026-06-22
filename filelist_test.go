@@ -140,6 +140,24 @@ func TestFilelistViewShowsIconsNoSlash(t *testing.T) {
 	}
 }
 
+func TestBreadcrumb(t *testing.T) {
+	root := "/home/me/okashi"
+	cases := []struct {
+		dir  string
+		want string
+	}{
+		{"/home/me/okashi", "okashi"},
+		{"/home/me/okashi/Book Name", "okashi / Book Name"},
+		{"/home/me/okashi/Essays/Drafts", "okashi / Essays / Drafts"},
+	}
+	for _, c := range cases {
+		f := filelist{root: root, dir: c.dir}
+		if got := f.breadcrumb(); got != c.want {
+			t.Fatalf("breadcrumb(%q) = %q, want %q", c.dir, got, c.want)
+		}
+	}
+}
+
 func TestFilelistConfinedToRoot(t *testing.T) {
 	root := t.TempDir()
 	sub := filepath.Join(root, "novel")
