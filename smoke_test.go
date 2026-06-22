@@ -9,7 +9,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 func TestPreviewToggle(t *testing.T) {
@@ -185,7 +184,9 @@ func TestWheelOverEditorMovesCaret(t *testing.T) {
 func TestWheelOverPreviewScrolls(t *testing.T) {
 	m := initialModel()
 	m.screen = screenWriting
-	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 20})
+	// Use a small height so the viewport is shorter than the rendered content
+	// (no banner in writing mode, so bodyH = height-1 = 9; glamour renders ~16 lines).
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 10})
 	m = nm.(model)
 	var sb strings.Builder
 	for i := 0; i < 100; i++ {
@@ -216,9 +217,9 @@ func TestMouseClickSelectsAndDoubleClickOpens(t *testing.T) {
 	m = nm.(model)
 	m.files.SetDir(dir)
 
-	bannerH := lipgloss.Height(bannerView(m.width))
 	// entries: ["..", "draft.md"] → draft.md is visible row 1.
-	click := tea.MouseMsg{X: 2, Y: bannerH + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+	// No banner in writing mode: the file list starts at screen row 0.
+	click := tea.MouseMsg{X: 2, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 
 	// Single click selects but does NOT open.
 	nm, _ = m.Update(click)
@@ -289,6 +290,52 @@ func TestAutosaveTickWritesWhenDue(t *testing.T) {
 	}
 	if m.dirty {
 		t.Fatal("dirty should clear after a successful autosave")
+	}
+}
+
+func TestHomeOpenProjectAndCtrlOReturns(t *testing.T) {
+	dir := t.TempDir()
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.homeItems = []homeItem{{kind: homeProject, label: "p", path: dir}}
+	m.homeSelected = 0
+
+	// Enter on a project → writing mode, sidebar rooted at the project.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.screen != screenWriting {
+		t.Fatal("opening a project should switch to writing")
+	}
+	if m.files.dir != dir {
+		t.Fatalf("sidebar should be rooted at the project, got %q", m.files.dir)
+	}
+
+	// ctrl+o returns to home.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	m = nm.(model)
+	if m.screen != screenHome {
+		t.Fatal("ctrl+o should return to the home screen")
+	}
+}
+
+func TestWritingViewHasNoBanner(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	// bannerArt's first line is part of the logo; it must not appear while writing.
+	first := strings.SplitN(bannerArt, "\n", 2)[0]
+	if strings.TrimSpace(first) != "" && strings.Contains(m.View(), first) {
+		t.Fatal("writing view should not render the banner")
+	}
+}
+
+func TestAutosaveTickSurvivesHomeScreen(t *testing.T) {
+	m := initialModel() // starts on the home screen
+	_, cmd := m.Update(autosaveTickMsg(time.Now()))
+	if cmd == nil {
+		t.Fatal("autosave tick must reschedule even on the home screen")
 	}
 }
 

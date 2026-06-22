@@ -98,9 +98,7 @@ func (m model) homeView() string {
 		}
 
 		icon := m.icons.file
-		if it.kind == homeProject {
-			icon = m.icons.folder
-		} else if it.kind == homeOpenOther {
+		if it.kind == homeProject || it.kind == homeOpenOther {
 			icon = m.icons.folder
 		}
 		line := "  " + icon + it.label
@@ -115,11 +113,27 @@ func (m model) homeView() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 }
 
-// openHomeSelection acts on the highlighted launch item. (Completed in the
-// transitions task.)
+// openHomeSelection acts on the highlighted launch item and enters writing mode.
 func (m *model) openHomeSelection() {
 	if len(m.homeItems) == 0 {
 		return
 	}
+	it := m.homeItems[m.homeSelected]
+	switch it.kind {
+	case homeRecentFile:
+		m.files.SetDir(filepath.Dir(it.path))
+		m.loadFile(it.path)
+		m.focus = focusEditor
+		m.editor.Focus()
+	case homeProject:
+		m.files.SetDir(it.path)
+		m.focus = focusSidebar
+		m.editor.Blur()
+	case homeOpenOther:
+		m.files.SetDir(writingDir())
+		m.focus = focusSidebar
+		m.editor.Blur()
+	}
 	m.screen = screenWriting
+	m.layout()
 }

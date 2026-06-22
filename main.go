@@ -203,6 +203,13 @@ func (m model) Init() tea.Cmd {
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	if t, ok := msg.(autosaveTickMsg); ok {
+		if m.autosaveDue(time.Time(t)) {
+			m.save()
+		}
+		return m, autosaveTick()
+	}
+
 	if m.screen == screenHome {
 		return m.updateHome(msg)
 	}
@@ -229,12 +236,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-	case autosaveTickMsg:
-		if m.autosaveDue(time.Time(msg)) {
-			m.save()
-		}
-		return m, autosaveTick()
-
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -283,8 +284,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 			return m, nil
 		}
-		bannerH := lipgloss.Height(bannerView(m.width))
-		row := sidebarRow(msg.Y, bannerH, m.files.height)
+		// No banner in writing mode: the file list starts at screen row 0.
+		row := sidebarRow(msg.Y, 0, m.files.height)
 		if row < 0 {
 			return m, nil
 		}
@@ -309,6 +310,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
+		case "ctrl+o":
+			m.previewing = false
+			m.screen = screenHome
+			m.homeItems = buildHomeItems(loadRecents(recentPath()), writingDir())
+			m.homeSelected = 0
+			return m, nil
 		case "ctrl+n":
 			m.previewing = false
 			m.creatingFile = true
@@ -400,8 +407,7 @@ func (m model) View() string {
 		return m.homeView()
 	}
 
-	banner := bannerView(m.width)
-	bodyH := m.height - lipgloss.Height(banner) - 1 // 1 row for status
+	bodyH := m.height - 1 // status only; no banner in the writing zone
 	if bodyH < 1 {
 		bodyH = 1
 	}
@@ -430,7 +436,7 @@ func (m model) View() string {
 	}
 
 	status := statusStyle.Width(m.width).Render(m.statusBar())
-	return lipgloss.JoinVertical(lipgloss.Left, banner, body, status)
+	return lipgloss.JoinVertical(lipgloss.Left, body, status)
 }
 
 // layout recomputes pane sizes whenever the window resizes or the sidebar
@@ -440,7 +446,7 @@ func (m *model) layout() {
 	if m.width == 0 || m.height == 0 {
 		return
 	}
-	bodyH := m.height - lipgloss.Height(bannerView(m.width)) - 1
+	bodyH := m.height - 1 // no banner in the writing zone
 	if bodyH < 1 {
 		bodyH = 1
 	}
@@ -468,6 +474,7 @@ func (m *model) loadFile(path string) {
 	m.sessionBaseline = wordCount(string(data))
 	m.previewing = false
 	m.status = "opened " + filepath.Base(path)
+	addRecent(recentPath(), path)
 }
 
 // confirmNewFile turns the typed name into a fresh, unsaved buffer pointed at
@@ -602,6 +609,7 @@ func (m *model) save() {
 		return // dirty stays true → retried next tick
 	}
 	m.dirty = false
+	addRecent(recentPath(), m.currentFile)
 	m.status = "saved " + filepath.Base(m.currentFile)
 
 	// Surface a newly-created file in the sidebar if we're browsing its folder.
