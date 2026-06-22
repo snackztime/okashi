@@ -414,3 +414,38 @@ func TestLaunchStartsOnHomeAndNavigates(t *testing.T) {
 		t.Fatalf("home view should list the project; view=%q", view)
 	}
 }
+
+func TestEscTogglesFocusAndTabIndents(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.editor.SetValue("hi")
+	m.editor.SetCursor(2)
+
+	// Tab indents the editor.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = nm.(model)
+	if m.editor.Value() != "  hi" {
+		t.Fatalf("tab should indent, got %q", m.editor.Value())
+	}
+	if !m.dirty {
+		t.Fatal("indent should mark dirty")
+	}
+
+	// Shift+Tab outdents.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+	m = nm.(model)
+	if m.editor.Value() != "hi" {
+		t.Fatalf("shift+tab should outdent, got %q", m.editor.Value())
+	}
+
+	// esc moves focus to the sidebar.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(model)
+	if m.focus != focusSidebar {
+		t.Fatal("esc should toggle focus to the sidebar")
+	}
+}

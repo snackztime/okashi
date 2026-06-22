@@ -357,7 +357,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.layout()
 			return m, nil
-		case "tab":
+		case "esc":
+			if m.previewing {
+				m.togglePreview() // exit preview
+				return m, nil
+			}
 			if m.sidebarVisible {
 				if m.focus == focusSidebar {
 					m.focus = focusEditor
@@ -366,6 +370,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focus = focusSidebar
 					m.editor.Blur()
 				}
+			}
+			return m, nil
+		case "tab":
+			if m.focus == focusEditor {
+				m.editor.Indent()
+				m.dirty = true
+				m.lastEditAt = time.Now()
+			}
+			return m, nil
+		case "shift+tab":
+			if m.focus == focusEditor {
+				m.editor.Outdent()
+				m.dirty = true
+				m.lastEditAt = time.Now()
 			}
 			return m, nil
 		case "ctrl+s":
