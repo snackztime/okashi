@@ -297,6 +297,7 @@ func TestAutosaveTickWritesWhenDue(t *testing.T) {
 }
 
 func TestHomeOpenProjectAndCtrlOReturns(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
 	m := initialModel()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
@@ -608,6 +609,7 @@ func TestSidebarClickRowAccountsForBreadcrumb(t *testing.T) {
 }
 
 func TestOpenProjectKeepsWorkspaceRoot(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
 	m := initialModel()
 	want := m.files.root // writingDir(), the workspace
 	if want == "" {
