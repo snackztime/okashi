@@ -83,6 +83,10 @@ file to jump straight in, or a project to browse it in the sidebar. Once you're
 in a file the logo disappears — a full minimal writing zone. `ctrl+o` returns
 to the launch screen.
 
+From the launch screen you can open a recent file or project, **create a new
+document or project**, or browse all files — by keyboard or mouse (click to
+select, double-click to open). Type a name ending in `/` to make a folder.
+
 The file pane is confined to your okashi workspace folder — a breadcrumb at the
 top of the pane (`okashi / Book Name`) shows where you are, and you can't browse
 above the workspace. "Browse all files" on the launch screen returns to the
