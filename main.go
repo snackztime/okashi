@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -75,6 +76,27 @@ func smartQuote(prev rune, hasPrev bool, q rune) rune {
 		return rune(0x201D) // U+201D right double quote
 	}
 	return q
+}
+
+var listItemRe = regexp.MustCompile(`^(\s*)([-*+]|\d+\.)\s+(.*)$`)
+
+// listContinuation inspects a list line for Enter handling. ok=false means it's
+// not a list item (normal Enter). clear=true means the item is empty → end the
+// list. Otherwise prefix is inserted after a newline to continue the list.
+func listContinuation(line string) (prefix string, clear bool, ok bool) {
+	mtch := listItemRe.FindStringSubmatch(line)
+	if mtch == nil {
+		return "", false, false
+	}
+	indent, marker, content := mtch[1], mtch[2], mtch[3]
+	if strings.TrimSpace(content) == "" {
+		return "", true, true
+	}
+	next := marker
+	if n, err := strconv.Atoi(strings.TrimSuffix(marker, ".")); err == nil {
+		next = strconv.Itoa(n+1) + "."
+	}
+	return indent + next + " ", false, true
 }
 
 type focus int
@@ -449,6 +471,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	} else {
+		if km, ok := msg.(tea.KeyMsg); ok && km.Type == tea.KeyEnter && m.editor.AtLineEnd() {
+			if prefix, clear, ok := listContinuation(m.editor.CurrentLine()); ok {
+				if clear {
+					m.editor.ClearLine()
+				} else {
+					m.editor.InsertString("\n" + prefix)
+				}
+				m.dirty = true
+				m.lastEditAt = time.Now()
+				return m, nil
+			}
+		}
 		if km, ok := msg.(tea.KeyMsg); ok && m.smartQuotes &&
 			km.Type == tea.KeyRunes && len(km.Runes) == 1 &&
 			(km.Runes[0] == '\'' || km.Runes[0] == '"') {

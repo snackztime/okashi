@@ -498,3 +498,43 @@ func TestEditorSmartQuoteInsert(t *testing.T) {
 		t.Fatalf("typing \" at start should insert a left double curly quote, got %q", m.editor.Value())
 	}
 }
+
+func TestListContinuation(t *testing.T) {
+	cases := []struct {
+		line   string
+		prefix string
+		clear  bool
+		ok     bool
+	}{
+		{"- item", "- ", false, true},
+		{"  - nested", "  - ", false, true},
+		{"3. third", "4. ", false, true},
+		{"- ", "", true, true},  // empty bullet → end list
+		{"1. ", "", true, true}, // empty number → end list
+		{"plain text", "", false, false},
+	}
+	for _, c := range cases {
+		p, cl, ok := listContinuation(c.line)
+		if p != c.prefix || cl != c.clear || ok != c.ok {
+			t.Fatalf("listContinuation(%q) = (%q,%v,%v), want (%q,%v,%v)",
+				c.line, p, cl, ok, c.prefix, c.clear, c.ok)
+		}
+	}
+}
+
+func TestEnterContinuesList(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.editor.SetValue("- one")
+	m.editor.SetCursor(5) // end of line
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.editor.Value() != "- one\n- " {
+		t.Fatalf("Enter should continue the list, got %q", m.editor.Value())
+	}
+}
