@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 func TestWordCount(t *testing.T) {
@@ -96,8 +95,9 @@ func TestSessionBaselineResetsOnOpen(t *testing.T) {
 	}
 }
 
-func TestStatusBarRightAlignsStats(t *testing.T) {
+func TestStatusBarShowsStatusAndStats(t *testing.T) {
 	m := initialModel()
+	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m = nm.(model)
 	m.status = "ready"
@@ -108,11 +108,10 @@ func TestStatusBarRightAlignsStats(t *testing.T) {
 	if !strings.HasPrefix(bar, "ready") {
 		t.Fatalf("bar should start with the status message: %q", bar)
 	}
-	if !strings.HasSuffix(bar, m.statsText()) {
-		t.Fatalf("bar should end with the stats readout: %q", bar)
-	}
-	if w := lipgloss.Width(bar); w != m.width-2 {
-		t.Fatalf("bar width = %d, want %d (fills the bar minus padding)", w, m.width-2)
+	// Stats are centered over the editor pane (precise centering is covered by
+	// TestStatsCenteredOnEditorPane); here just confirm they're present.
+	if !strings.Contains(bar, m.statsText()) {
+		t.Fatalf("bar should contain the stats readout: %q", bar)
 	}
 }
 

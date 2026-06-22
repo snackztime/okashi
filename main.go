@@ -35,7 +35,7 @@ Files open in $OKASHI_DIR, else iCloud Drive's okashi folder, else
 
 // defaultColumnWidth is the target writing measure (the readable "ideal
 // measure" is ~66). Override with OKASHI_WIDTH.
-const defaultColumnWidth = 65
+const defaultColumnWidth = 72
 
 // resolveColumnWidth reads OKASHI_WIDTH (a column count in [20,200]); otherwise
 // defaultColumnWidth.
@@ -558,7 +558,12 @@ func (m model) View() string {
 	// The writing pane shows either the live editor or the rendered preview.
 	pane := m.editor.View()
 	if m.previewing {
-		pane = m.preview.View()
+		name := filepath.Base(m.currentFile)
+		if m.currentFile == "" {
+			name = "untitled"
+		}
+		header := breadcrumbStyle.Render("▌ PREVIEW · " + name)
+		pane = lipgloss.JoinVertical(lipgloss.Left, header, m.preview.View())
 	}
 
 	var body string
@@ -608,7 +613,7 @@ func (m *model) layout() {
 	m.editor.SetWidth(cw)
 	m.editor.SetHeight(bodyH)
 	m.preview.Width = cw
-	m.preview.Height = bodyH
+	m.preview.Height = bodyH - 1 // reserve one row for the PREVIEW header
 }
 
 func (m *model) loadFile(path string) {
@@ -786,11 +791,36 @@ func (m model) statusBar() string {
 		mark = "●"
 	}
 	stats := mark + " " + m.statsText()
-	gap := (m.width - 2) - lipgloss.Width(m.status) - lipgloss.Width(stats)
-	if gap < 1 {
-		return m.status
+	return m.composeStatus(m.status, stats)
+}
+
+// composeStatus lays out the bottom bar: the status message at the far left and
+// the stats centered over the editor pane (the area right of the sidebar).
+func (m model) composeStatus(status, stats string) string {
+	w := m.width - 2 // statusStyle adds one column of padding on each side
+	sw := lipgloss.Width(stats)
+	if w < 1 || sw >= w {
+		return status
 	}
-	return m.status + strings.Repeat(" ", gap) + stats
+	editorStart := 0
+	if m.sidebarVisible && sidebarWidth < m.width {
+		editorStart = sidebarWidth
+	}
+	// Center of the editor pane, in status content columns (content starts one
+	// column in because of the style's left padding, hence the -1).
+	center := editorStart + (m.width-editorStart)/2 - 1
+	left := center - sw/2
+	if left+sw > w {
+		left = w - sw
+	}
+	statusW := lipgloss.Width(status)
+	if left < statusW+1 {
+		left = statusW + 1
+	}
+	if left+sw > w {
+		return status // no room for both
+	}
+	return status + strings.Repeat(" ", left-statusW) + stats
 }
 
 func (m *model) save() {

@@ -384,20 +384,20 @@ func TestNewFileDoesNotAutosaveEmpty(t *testing.T) {
 
 func TestResolveColumnWidth(t *testing.T) {
 	t.Setenv("OKASHI_WIDTH", "")
-	if resolveColumnWidth() != 65 {
-		t.Fatalf("default should be 65, got %d", resolveColumnWidth())
-	}
-	t.Setenv("OKASHI_WIDTH", "72")
 	if resolveColumnWidth() != 72 {
-		t.Fatalf("env 72 should win, got %d", resolveColumnWidth())
+		t.Fatalf("default should be 72, got %d", resolveColumnWidth())
+	}
+	t.Setenv("OKASHI_WIDTH", "90")
+	if resolveColumnWidth() != 90 {
+		t.Fatalf("env 90 should win, got %d", resolveColumnWidth())
 	}
 	t.Setenv("OKASHI_WIDTH", "5") // out of range
-	if resolveColumnWidth() != 65 {
-		t.Fatalf("out-of-range should fall back to 65, got %d", resolveColumnWidth())
+	if resolveColumnWidth() != 72 {
+		t.Fatalf("out-of-range should fall back to 72, got %d", resolveColumnWidth())
 	}
 	t.Setenv("OKASHI_WIDTH", "abc")
-	if resolveColumnWidth() != 65 {
-		t.Fatalf("garbage should fall back to 65, got %d", resolveColumnWidth())
+	if resolveColumnWidth() != 72 {
+		t.Fatalf("garbage should fall back to 72, got %d", resolveColumnWidth())
 	}
 }
 
@@ -891,5 +891,37 @@ func TestDimFollowsTypewriterAndToggle(t *testing.T) {
 	m = nm.(model)
 	if m.editor.Dim {
 		t.Fatal("editor.Dim must be off when typewriter is off")
+	}
+}
+
+func TestStatsCenteredOnEditorPane(t *testing.T) {
+	m := initialModel()
+	m.width = 100
+	m.sidebarVisible = true
+	stats := "✓ 1,240 words · +142 session"
+	bar := m.composeStatus("", stats)
+	leading := len(bar) - len(strings.TrimLeft(bar, " "))
+	sw := lipgloss.Width(stats)
+	want := sidebarWidth + (100-sidebarWidth)/2 - 1 - sw/2
+	if leading < want-1 || leading > want+1 {
+		t.Fatalf("stats start col = %d, want ~%d (centered over the editor pane)", leading, want)
+	}
+}
+
+func TestPreviewHeaderShown(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.currentFile = "/x/chapter-01.md"
+	m.editor.SetValue("# Title\n\nbody text")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = nm.(model)
+	view := m.View()
+	if !strings.Contains(view, "PREVIEW") {
+		t.Fatal("preview should show a PREVIEW header")
+	}
+	if !strings.Contains(view, "chapter-01.md") {
+		t.Fatal("preview header should show the filename")
 	}
 }
