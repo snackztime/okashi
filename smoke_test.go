@@ -371,6 +371,25 @@ func TestNewFileDoesNotAutosaveEmpty(t *testing.T) {
 	}
 }
 
+func TestResolveColumnWidth(t *testing.T) {
+	t.Setenv("OKASHI_WIDTH", "")
+	if resolveColumnWidth() != 65 {
+		t.Fatalf("default should be 65, got %d", resolveColumnWidth())
+	}
+	t.Setenv("OKASHI_WIDTH", "72")
+	if resolveColumnWidth() != 72 {
+		t.Fatalf("env 72 should win, got %d", resolveColumnWidth())
+	}
+	t.Setenv("OKASHI_WIDTH", "5") // out of range
+	if resolveColumnWidth() != 65 {
+		t.Fatalf("out-of-range should fall back to 65, got %d", resolveColumnWidth())
+	}
+	t.Setenv("OKASHI_WIDTH", "abc")
+	if resolveColumnWidth() != 65 {
+		t.Fatalf("garbage should fall back to 65, got %d", resolveColumnWidth())
+	}
+}
+
 func TestLaunchStartsOnHomeAndNavigates(t *testing.T) {
 	m := initialModel()
 	if m.screen != screenHome {

@@ -32,9 +32,20 @@ Usage:
 Files open in $OKASHI_DIR, else iCloud Drive's okashi folder, else
 ~/Documents/okashi. Inside the app, ctrl+p toggles a Markdown preview.`
 
-// columnWidth is the target writing measure. 80 chars, left-justified inside
-// the column, with the whole column centered in whatever space is available.
-const columnWidth = 80
+// defaultColumnWidth is the target writing measure (the readable "ideal
+// measure" is ~66). Override with OKASHI_WIDTH.
+const defaultColumnWidth = 65
+
+// resolveColumnWidth reads OKASHI_WIDTH (a column count in [20,200]); otherwise
+// defaultColumnWidth.
+func resolveColumnWidth() int {
+	if v := os.Getenv("OKASHI_WIDTH"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 20 && n <= 200 {
+			return n
+		}
+	}
+	return defaultColumnWidth
+}
 
 type focus int
 
@@ -69,7 +80,8 @@ type model struct {
 	typewriter     bool
 
 	mdStyle         string // glamour theme, detected once at startup
-	sessionBaseline int    // word count when the current file was opened/created
+	colWidth        int
+	sessionBaseline int // word count when the current file was opened/created
 	currentFile     string
 	status          string
 	icons           iconSet
@@ -103,7 +115,7 @@ func initialModel() model {
 	ti.Placeholder = "chapter-01.md"
 	ti.CharLimit = 255
 
-	vp := viewport.New(columnWidth, 1) // real size set in layout()
+	vp := viewport.New(defaultColumnWidth, 1) // real size set in layout()
 
 	return model{
 		files:          fl,
@@ -111,6 +123,7 @@ func initialModel() model {
 		nameInput:      ti,
 		preview:        vp,
 		mdStyle:        previewStyle(),
+		colWidth:       resolveColumnWidth(),
 		screen:         screenHome,
 		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir()),
 		sidebarVisible: true,
@@ -451,15 +464,15 @@ func (m *model) layout() {
 		bodyH = 1
 	}
 
-	colWidth := min(columnWidth, m.width-2)
+	cw := min(m.colWidth, m.width-2)
 	if m.sidebarVisible {
 		m.files.height = bodyH - 2
 		m.files.width = sidebarWidth - 2
-		colWidth = min(columnWidth, m.width-sidebarWidth-2)
+		cw = min(m.colWidth, m.width-sidebarWidth-2)
 	}
-	m.editor.SetWidth(colWidth)
+	m.editor.SetWidth(cw)
 	m.editor.SetHeight(bodyH)
-	m.preview.Width = colWidth
+	m.preview.Width = cw
 	m.preview.Height = bodyH
 }
 
@@ -517,7 +530,7 @@ func (m *model) togglePreview() {
 
 	wrap := m.preview.Width
 	if wrap <= 0 {
-		wrap = columnWidth
+		wrap = m.colWidth
 	}
 	r, err := glamour.NewTermRenderer(
 		glamour.WithStandardStyle(m.mdStyle), // theme detected once at startup
