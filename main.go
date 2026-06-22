@@ -183,7 +183,7 @@ func initialModel() model {
 		sidebarVisible: true,
 		focus:          focusSidebar,
 		typewriter:     true,
-		status:         "ctrl+b sidebar · tab switch · ctrl+n new · ctrl+p preview · ctrl+t typewriter · ctrl+s save · ctrl+c quit",
+		status:         "ctrl+b sidebar · esc switch · ctrl+n new · ctrl+p preview · ctrl+t typewriter · ctrl+s save · ctrl+c quit",
 		icons:          resolveIcons(),
 	}
 }
@@ -427,14 +427,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "tab":
-			if m.focus == focusEditor {
+			if m.focus == focusEditor && !m.previewing {
 				m.editor.Indent()
 				m.dirty = true
 				m.lastEditAt = time.Now()
 			}
 			return m, nil
 		case "shift+tab":
-			if m.focus == focusEditor {
+			if m.focus == focusEditor && !m.previewing {
 				m.editor.Outdent()
 				m.dirty = true
 				m.lastEditAt = time.Now()
@@ -546,7 +546,7 @@ func (m model) View() string {
 }
 
 // layout recomputes pane sizes whenever the window resizes or the sidebar
-// toggles. The editor is always clamped to columnWidth; the centering happens
+// toggles. The editor is always clamped to colWidth; the centering happens
 // in View via lipgloss.Place.
 func (m *model) layout() {
 	if m.width == 0 || m.height == 0 {

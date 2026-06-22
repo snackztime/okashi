@@ -538,3 +538,40 @@ func TestEnterContinuesList(t *testing.T) {
 		t.Fatalf("Enter should continue the list, got %q", m.editor.Value())
 	}
 }
+
+func TestTabDoesNotEditDuringPreview(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.editor.SetValue("hello")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlP}) // enter preview from the editor
+	m = nm.(model)
+	if !m.previewing {
+		t.Fatal("expected previewing after ctrl+p")
+	}
+	before := m.editor.Value()
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = nm.(model)
+	if m.editor.Value() != before {
+		t.Fatalf("Tab during preview must not edit the buffer; got %q", m.editor.Value())
+	}
+}
+
+func TestEnterEndsEmptyListItem(t *testing.T) {
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.editor.SetValue("- ")
+	m.editor.SetCursor(2)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.editor.Value() != "" {
+		t.Fatalf("Enter on an empty bullet should clear it with no extra newline, got %q", m.editor.Value())
+	}
+}
