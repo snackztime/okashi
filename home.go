@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -76,7 +77,7 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.homeSelected++
 			}
 		case "enter":
-			m.openHomeSelection()
+			return m, m.openHomeSelection()
 		}
 	}
 	return m, nil
@@ -125,9 +126,9 @@ func (m model) homeView() string {
 }
 
 // openHomeSelection acts on the highlighted launch item and enters writing mode.
-func (m *model) openHomeSelection() {
+func (m *model) openHomeSelection() tea.Cmd {
 	if len(m.homeItems) == 0 {
-		return
+		return nil
 	}
 	it := m.homeItems[m.homeSelected]
 	switch it.kind {
@@ -144,7 +145,27 @@ func (m *model) openHomeSelection() {
 		m.files.SetDir(writingDir())
 		m.focus = focusSidebar
 		m.editor.Blur()
+	case homeNewDocument:
+		m.files.SetDir(writingDir())
+		m.screen = screenWriting
+		return m.startCreate(false)
+	case homeNewProject:
+		m.files.SetDir(writingDir())
+		m.screen = screenWriting
+		return m.startCreate(true)
 	}
 	m.screen = screenWriting
 	m.layout()
+	return nil
+}
+
+// startCreate opens the name prompt in file or folder mode.
+func (m *model) startCreate(folder bool) tea.Cmd {
+	m.creatingFile = true
+	m.creatingFolder = folder
+	m.nameInput.SetValue("")
+	m.nameInput.Focus()
+	m.editor.Blur()
+	m.layout()
+	return textinput.Blink
 }

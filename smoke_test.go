@@ -657,6 +657,36 @@ func TestConfirmCreateFile(t *testing.T) {
 	}
 }
 
+func TestHubNewProjectOpensFolderPrompt(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	m.homeItems = []homeItem{{kind: homeNewProject, label: "New project"}}
+	m.homeSelected = 0
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.screen != screenWriting {
+		t.Fatal("New project should switch to writing")
+	}
+	if !m.creatingFile || !m.creatingFolder {
+		t.Fatal("New project should open the create prompt in folder mode")
+	}
+}
+
+func TestHubNewDocumentOpensFilePrompt(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	m.homeItems = []homeItem{{kind: homeNewDocument, label: "New document"}}
+	m.homeSelected = 0
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if !m.creatingFile || m.creatingFolder {
+		t.Fatal("New document should open the create prompt in file mode")
+	}
+	if m.files.dir != writingDir() {
+		t.Fatalf("New document should root at the workspace, got %q", m.files.dir)
+	}
+}
+
 func TestOpenProjectKeepsWorkspaceRoot(t *testing.T) {
 	t.Setenv("OKASHI_DIR", t.TempDir())
 	m := initialModel()
