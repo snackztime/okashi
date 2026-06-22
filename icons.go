@@ -12,6 +12,7 @@ type iconSet struct {
 	folder string
 	parent string
 	file   string
+	action string
 	byExt  map[string]string
 }
 
@@ -20,12 +21,13 @@ type iconSet struct {
 func resolveIcons() iconSet {
 	switch strings.ToLower(os.Getenv("OKASHI_ICONS")) {
 	case "plain", "ascii":
-		return iconSet{folder: "▸ ", parent: "↑ ", file: "  ", byExt: map[string]string{}}
+		return iconSet{folder: "▸ ", parent: "↑ ", file: "  ", action: "+ ", byExt: map[string]string{}}
 	}
 	return iconSet{
-		folder: " ", // nf-fa-folder
-		parent: " ", // nf-fa-arrow_up
-		file:   " ", // nf-fa-file
+		folder: " ", // nf-fa-folder
+		parent: " ", // nf-fa-arrow_up
+		file:   " ", // nf-fa-file
+		action: " ", // nf-fa-plus (U+F067)
 		byExt: map[string]string{
 			".md":       " ", // nf-fa-file_text_o
 			".markdown": " ",

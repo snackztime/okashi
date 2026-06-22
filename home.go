@@ -15,6 +15,8 @@ type homeKind int
 const (
 	homeRecentFile homeKind = iota
 	homeProject
+	homeNewDocument
+	homeNewProject
 	homeOpenOther
 )
 
@@ -47,7 +49,11 @@ func buildHomeItems(recents []string, projectsDir string) []homeItem {
 		}
 	}
 
-	items = append(items, homeItem{kind: homeOpenOther, label: "Browse all files"})
+	items = append(items,
+		homeItem{kind: homeNewDocument, label: "New document"},
+		homeItem{kind: homeNewProject, label: "New project"},
+		homeItem{kind: homeOpenOther, label: "Browse all files"},
+	)
 	return items
 }
 
@@ -93,14 +99,16 @@ func (m model) homeView() string {
 				b.WriteString("\n" + header.Render("PROJECTS") + "\n")
 				printedProjects = true
 			}
-		case homeOpenOther:
-			b.WriteString("\n")
+		case homeNewDocument:
+			b.WriteString("\n") // blank line before the actions group
 		}
 
 		var icon string
 		switch it.kind {
 		case homeProject, homeOpenOther:
 			icon = m.icons.folder
+		case homeNewDocument, homeNewProject:
+			icon = m.icons.action
 		default:
 			icon = m.icons.icon(fileEntry{name: it.label})
 		}

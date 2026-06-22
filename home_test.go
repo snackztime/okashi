@@ -20,9 +20,9 @@ func TestBuildHomeItems(t *testing.T) {
 
 	items := buildHomeItems(recents, dir)
 
-	// 2 recents + 2 projects (hidden excluded) + 1 open-other = 5
-	if len(items) != 5 {
-		t.Fatalf("want 5 items, got %d: %+v", len(items), items)
+	// 2 recents + 2 projects (hidden excluded) + 3 actions = 7
+	if len(items) != 7 {
+		t.Fatalf("want 7 items, got %d: %+v", len(items), items)
 	}
 	if items[0].kind != homeRecentFile || items[0].path != "/abs/chapter-03.md" {
 		t.Fatalf("first item should be the most-recent file, got %+v", items[0])
@@ -33,16 +33,20 @@ func TestBuildHomeItems(t *testing.T) {
 	if items[2].kind != homeProject || items[2].label != "journal" {
 		t.Fatalf("projects should be alpha-sorted after recents, got %+v", items[2])
 	}
-	if items[4].kind != homeOpenOther {
-		t.Fatalf("last item should be open-other, got %+v", items[4])
+	if items[4].kind != homeNewDocument {
+		t.Fatalf("5th item should be new document action, got %+v", items[4])
+	}
+	if items[6].kind != homeOpenOther {
+		t.Fatalf("last item should be open-other, got %+v", items[6])
 	}
 }
 
 func TestBuildHomeItemsEmpty(t *testing.T) {
 	dir := t.TempDir() // no subdirs
 	items := buildHomeItems(nil, dir)
-	if len(items) != 1 || items[0].kind != homeOpenOther {
-		t.Fatalf("empty state should be just open-other, got %+v", items)
+	// Should have the 3 actions
+	if len(items) != 3 || items[2].kind != homeOpenOther {
+		t.Fatalf("empty state should be the 3 actions, got %+v", items)
 	}
 }
 
@@ -56,5 +60,27 @@ func TestHomeViewUsesPerExtensionIconForRecents(t *testing.T) {
 	want := resolveIcons().icon(fileEntry{name: "chapter.md"})
 	if !strings.Contains(m.homeView(), want) {
 		t.Fatalf("recent row should use the .md glyph %q", want)
+	}
+}
+
+func TestBuildHomeItemsHasActions(t *testing.T) {
+	dir := t.TempDir()
+	items := buildHomeItems(nil, dir) // no recents, no projects
+	// Just the three actions, in order.
+	if len(items) != 3 {
+		t.Fatalf("want 3 action items, got %d: %+v", len(items), items)
+	}
+	want := []struct {
+		kind  homeKind
+		label string
+	}{
+		{homeNewDocument, "New document"},
+		{homeNewProject, "New project"},
+		{homeOpenOther, "Browse all files"},
+	}
+	for i, w := range want {
+		if items[i].kind != w.kind || items[i].label != w.label {
+			t.Fatalf("item %d = %+v, want kind %d label %q", i, items[i], w.kind, w.label)
+		}
 	}
 }

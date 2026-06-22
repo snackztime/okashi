@@ -46,3 +46,10 @@ func TestIconMapping(t *testing.T) {
 		t.Fatal("unknown ext should use the generic file icon")
 	}
 }
+
+func TestIconSetHasAction(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "plain")
+	if resolveIcons().action == "" {
+		t.Fatal("plain icon set should have a non-empty action glyph")
+	}
+}
