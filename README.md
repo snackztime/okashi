@@ -83,6 +83,11 @@ file to jump straight in, or a project to browse it in the sidebar. Once you're
 in a file the logo disappears — a full minimal writing zone. `ctrl+o` returns
 to the launch screen.
 
+The file pane is confined to your okashi workspace folder — a breadcrumb at the
+top of the pane (`okashi / Book Name`) shows where you are, and you can't browse
+above the workspace. "Browse all files" on the launch screen returns to the
+workspace root.
+
 ## Icons
 
 The file pane and launch lists use Nerd Font glyphs. If your terminal isn't
