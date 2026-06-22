@@ -102,14 +102,22 @@ func (f filelist) View() string {
 	var b strings.Builder
 	for i := f.offset; i < end; i++ {
 		e := f.entries[i]
-		label := ansi.Truncate(f.icons.icon(e)+e.name, f.width, "…")
+		head := " " + f.icons.icon(e) // one-column gutter, then the icon
+		full := head + e.name
 		switch {
 		case i == f.selected:
-			b.WriteString(selectedStyle.Width(f.width).Render(label))
+			b.WriteString(selectedStyle.Width(f.width).Render(ansi.Truncate(full, f.width, "…")))
 		case e.isDir:
-			b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(label))
+			b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(ansi.Truncate(full, f.width, "…")))
 		default:
-			b.WriteString(label)
+			// Non-selected file: dim the extension when the whole row fits.
+			ext := filepath.Ext(e.name)
+			if ext != "" && lipgloss.Width(full) <= f.width {
+				stem := head + strings.TrimSuffix(e.name, ext)
+				b.WriteString(stem + lipgloss.NewStyle().Foreground(subtle).Render(ext))
+			} else {
+				b.WriteString(ansi.Truncate(full, f.width, "…"))
+			}
 		}
 		if i < end-1 {
 			b.WriteByte('\n')

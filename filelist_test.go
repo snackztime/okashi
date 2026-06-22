@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func TestFilelistReadsFiltersSorts(t *testing.T) {
@@ -181,5 +183,22 @@ func TestFilelistConfinedToRoot(t *testing.T) {
 	f.SetDir(filepath.Dir(root))
 	if f.dir != root {
 		t.Fatalf("navigating above root should clamp to root, got %q", f.dir)
+	}
+}
+
+func TestFilelistGutterAndDimExtension(t *testing.T) {
+	f := newFilelist()
+	f.width = 29
+	f.height = 5
+	f.selected = -1 // nothing selected → file uses the dim-extension path
+	f.entries = []fileEntry{{name: "chapter.md"}}
+
+	view := f.View()
+	if !strings.HasPrefix(view, " ") {
+		t.Fatal("rows should start with a one-column gutter")
+	}
+	wantExt := lipgloss.NewStyle().Foreground(subtle).Render(".md")
+	if !strings.Contains(view, wantExt) {
+		t.Fatal("a file extension should be dimmed with the subtle style")
 	}
 }
