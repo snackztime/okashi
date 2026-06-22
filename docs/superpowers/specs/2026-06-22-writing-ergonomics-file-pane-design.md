@@ -33,7 +33,7 @@ The editor is the vendored `okashi/internal/textarea`. Indent/outdent become exp
 
 - When the editor is focused, the cursor is at the **end of the current line**, and that line matches `^(\s*)([-*+]|\d+\.)\s+(.*)$`:
   - **Non-empty content** → consume Enter; insert newline + same indent + marker (for `N.`, the next integer).
-  - **Empty content** (marker only) → consume Enter; clear the marker from the current line and insert a plain newline (ends the list).
+  - **Empty content** (marker only) → consume Enter; clear the marker from the current line, leaving the cursor on the now-blank line (ends the list; no extra newline — matches common editors).
 - Otherwise Enter is a normal newline (forwarded to the editor).
 - A pure helper `listContinuation(line string) (prefix string, clear bool, ok bool)` computes the action; the app applies it via the textarea's insert/clear-line API.
 
