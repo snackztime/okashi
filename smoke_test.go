@@ -840,3 +840,30 @@ func TestLayoutFilePaneWidth(t *testing.T) {
 		t.Fatalf("files.width = %d, want %d", m.files.width, sidebarWidth-3)
 	}
 }
+
+func TestBreadcrumbClickNavigates(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	root := m.files.root
+	if err := os.MkdirAll(filepath.Join(root, "Book", "Drafts"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	m.files.SetDir(filepath.Join(root, "Book", "Drafts"))
+
+	// Find the "okashi" (root) segment's column and click it (breadcrumb is at
+	// screen row 0; sidebar left padding is 1 col → screen X = col + 1).
+	_, hits := m.files.breadcrumbBar(sidebarWidth - 3)
+	if len(hits) == 0 {
+		t.Fatal("expected clickable segments")
+	}
+	rootHit := hits[0] // the workspace root
+	clickX := rootHit.start + 1
+	nm, _ = m.Update(tea.MouseMsg{X: clickX, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.files.dir != root {
+		t.Fatalf("clicking the root breadcrumb should navigate to the root, got %q", m.files.dir)
+	}
+}

@@ -354,6 +354,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 			return m, nil
 		}
+		if msg.Y == 0 {
+			_, hits := m.files.breadcrumbBar(sidebarWidth - 3)
+			col := msg.X - 1 // sidebar left padding
+			for _, h := range hits {
+				if col >= h.start && col < h.end {
+					m.files.SetDir(h.path)
+					m.focus = focusSidebar
+					m.editor.Blur()
+					break
+				}
+			}
+			return m, nil
+		}
 		// Breadcrumb header occupies row 0; the file list starts at row 1.
 		row := sidebarRow(msg.Y, 1, m.files.height)
 		if row < 0 {
