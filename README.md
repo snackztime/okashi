@@ -45,6 +45,7 @@ git tag v0.1.0 && git push origin v0.1.0
 | `ctrl+n` | Create a new file (type a name, Enter)  |
 | `ctrl+p` | Toggle a rendered Markdown preview       |
 | `ctrl+t` | Toggle typewriter scrolling (centered caret) |
+| `ctrl+o` | Back to the launch screen (recent files / projects) |
 | `ctrl+s` | Save the open file                      |
 | `ctrl+c` | Quit                                    |
 
@@ -63,6 +64,25 @@ snapshot — `↑`/`↓` scroll, `ctrl+p` flips back to editing. The theme follo
 your terminal's background (dark/light); override with `OKASHI_THEME=light`.
 
 [glamour]: https://github.com/charmbracelet/glamour
+
+## Launch screen
+
+okashi opens on a launch screen: your **recent files** and your **projects**
+(the folders in your okashi dir), plus "Open another folder…". Pick a recent
+file to jump straight in, or a project to browse it in the sidebar. Once you're
+in a file the logo disappears — a full minimal writing zone. `ctrl+o` returns
+to the launch screen.
+
+## Icons
+
+The file pane and launch lists use Nerd Font glyphs. If your terminal isn't
+using a Nerd Font, set `OKASHI_ICONS=plain` for a plain-Unicode set.
+
+## Autosave
+
+Your work saves automatically a couple seconds after you stop typing (for any
+file with a name — `ctrl+n` names it up front). The `●`/`✓` mark by the word
+count shows unsaved vs saved. `ctrl+s` still saves on demand.
 
 ## Where your files live
 
