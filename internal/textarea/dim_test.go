@@ -72,3 +72,29 @@ func TestDimAppliesOutOfSpan(t *testing.T) {
 		t.Fatal("expected the out-of-span text to carry the dim style when Dim is on")
 	}
 }
+
+// TestPieceStartTracksSource guards the dim render's offset invariant: summing
+// wrapped-piece lengths (pieceStart) must index the source line correctly, so
+// dimming boundaries stay aligned on soft-wrapped lines.
+func TestPieceStartTracksSource(t *testing.T) {
+	srcs := []string{
+		"The quick brown fox jumps over the lazy dog and then keeps running onward",
+		"alpha beta gamma delta epsilon zeta eta theta iota kappa lambda",
+		"aaaa bbbb cccc dddd eeee ffff gggg hhhh iiii jjjj kkkk",
+	}
+	for _, s := range srcs {
+		for _, w := range []int{10, 16, 24} {
+			src := []rune(s)
+			pieceStart := 0
+			for k, p := range wrap(src, w) {
+				for j := 0; j < len(p); j++ {
+					if idx := pieceStart + j; idx < len(src) && p[j] != src[idx] {
+						t.Fatalf("offset drift w=%d piece %d char %d: piece=%q src[%d]=%q (src=%q)",
+							w, k, j, string(p[j]), idx, string(src[idx]), s)
+					}
+				}
+				pieceStart += len(p)
+			}
+		}
+	}
+}
