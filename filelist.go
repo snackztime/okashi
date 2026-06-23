@@ -27,6 +27,7 @@ type filelist struct {
 	height   int
 	allowed  map[string]bool
 	icons    iconSet
+	wc       *wordCountCache
 }
 
 func newFilelist() filelist {
@@ -37,6 +38,7 @@ func newFilelist() filelist {
 			".md": true, ".txt": true, ".wg": true, ".markdown": true,
 		},
 		icons: resolveIcons(),
+		wc:    newWordCountCache(),
 	}
 }
 
@@ -86,9 +88,10 @@ func (f *filelist) SetDir(dir string) {
 		}
 	}
 	sort.Slice(dirs, func(i, j int) bool { return dirs[i].name < dirs[j].name })
-	sort.Slice(files, func(i, j int) bool { return files[i].name < files[j].name })
+	sections, loose := orderedSections(files)
 	f.entries = append(f.entries, dirs...)
-	f.entries = append(f.entries, files...)
+	f.entries = append(f.entries, sections...)
+	f.entries = append(f.entries, loose...)
 }
 
 // View renders the visible window of entries, highlighting the selection.
@@ -101,17 +104,26 @@ func (f filelist) View() string {
 		end = len(f.entries)
 	}
 	var b strings.Builder
+	manuscript := isManuscript(f.entries)
 	for i := f.offset; i < end; i++ {
 		e := f.entries[i]
 		head := " " + f.icons.icon(e) // one-column gutter, then the icon
 		full := head + e.name
+		_, ord := sectionOrder(e.name)
+		section := manuscript && !e.isDir && ord
 		switch {
 		case i == f.selected:
-			b.WriteString(selectedStyle.Width(f.width).Render(ansi.Truncate(full, f.width, "…")))
+			content := full
+			if section {
+				content = f.sectionRow(e, false)
+			}
+			b.WriteString(selectedStyle.Width(f.width).Render(ansi.Truncate(content, f.width, "…")))
 		case e.isDir:
 			b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(ansi.Truncate(full, f.width, "…")))
+		case section:
+			b.WriteString(f.sectionRow(e, true))
 		default:
-			// Non-selected file: dim the extension when the whole row fits.
+			// Loose file (or non-manuscript dir): filename with dim extension.
 			ext := filepath.Ext(e.name)
 			if ext != "" && lipgloss.Width(full) <= f.width {
 				stem := head + strings.TrimSuffix(e.name, ext)
@@ -125,6 +137,32 @@ func (f filelist) View() string {
 		}
 	}
 	return b.String()
+}
+
+// sectionRow builds a width-f.width row for a manuscript section: gutter+icon+
+// title on the left, the word count right-aligned. dimCount styles the count
+// subtle (used for non-selected rows; the selected bar keeps it plain).
+func (f filelist) sectionRow(e fileEntry, dimCount bool) string {
+	n := 0
+	if f.wc != nil {
+		n = f.wc.count(filepath.Join(f.dir, e.name))
+	}
+	count := commafy(n) + "w"
+	left := " " + f.icons.icon(e) + sectionTitle(e.name)
+	maxLeft := f.width - lipgloss.Width(count) - 1
+	if maxLeft < 1 {
+		maxLeft = 1
+	}
+	left = ansi.Truncate(left, maxLeft, "…")
+	gap := f.width - lipgloss.Width(left) - lipgloss.Width(count)
+	if gap < 1 {
+		gap = 1
+	}
+	rendered := count
+	if dimCount {
+		rendered = lipgloss.NewStyle().Foreground(subtle).Render(count)
+	}
+	return left + strings.Repeat(" ", gap) + rendered
 }
 
 func (f *filelist) moveBy(n int) {

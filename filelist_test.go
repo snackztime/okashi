@@ -255,3 +255,43 @@ func TestBreadcrumbBarNeverOverflows(t *testing.T) {
 		t.Fatalf("breadcrumb row width %d exceeds budget 29: %q", lipgloss.Width(row), row)
 	}
 }
+
+func TestSidebarShowsTitlesAndCounts(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-opening.md"), []byte("one two three"), 0o644)
+	os.WriteFile(filepath.Join(dir, "02-the-letter.md"), []byte("a b"), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width = 29
+	f.height = 10
+	f.SetDir(dir)
+
+	view := f.View()
+	if !strings.Contains(view, "opening") || strings.Contains(view, "01-opening") {
+		t.Fatalf("manuscript pane should show stripped title 'opening', not raw filename:\n%s", view)
+	}
+	if !strings.Contains(view, "3w") {
+		t.Fatalf("manuscript pane should show the section word count '3w':\n%s", view)
+	}
+}
+
+func TestSidebarOrdersSectionsNumerically(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "10-ten.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "2-two.md"), []byte("x"), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width = 29
+	f.height = 10
+	f.SetDir(dir)
+
+	var names []string
+	for _, e := range f.entries {
+		if !e.isDir {
+			names = append(names, e.name)
+		}
+	}
+	if strings.Join(names, ",") != "2-two.md,10-ten.md" {
+		t.Fatalf("sections should sort numerically (2 before 10): %v", names)
+	}
+}
