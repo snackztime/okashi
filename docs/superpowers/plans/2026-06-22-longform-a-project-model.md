@@ -1,4 +1,4 @@
-> **RESUME NOTE (saved before a cache clear) — 2026-06-22**
+> **RESUME NOTE — Plan A DONE; paused 2026-06-22, resume 2026-06-23+**
 >
 > **TOOL-CALL WORKAROUND (critical):** a recurring generation bug emits a stray
 > `court` token and/or drops the `antml:` namespace, silently no-op'ing tool
@@ -7,15 +7,48 @@
 > AFTER the tool result. The opening tag MUST be `<invoke name="...">` with
 > `<parameter name="...">` children. (See memory `tool-call-syntax-court-bug`.)
 >
-> **STATUS:** This is **Plan A of 4** for the long-form project system.
-> - Spec (approved): `docs/superpowers/specs/2026-06-22-long-form-projects-design.md`
-> - **Plan A (this file): NOT YET EXECUTED.** Ready for subagent-driven-development.
->   `main @ 9927708`; no feature branch yet.
-> - Plans **B** (outline view), **C** (manuscript pager), **D** (RTF+PDF export)
->   are not yet written — write each against the real code after the prior merges.
-> - Queued after long-form: **Tufte preview** brainstorm, then **project rename**
->   (okashi → TBD: sweeps module path, `OKASHI_*` env, workspace folder, repo, formula).
+> **STATUS: Plan A COMPLETE — merged + pushed to `main` @ `b104314`** (was 4 plans).
+> Executed via subagent-driven-development on 2026-06-22 (branch
+> `feat/longform-project-model`, ff-merged; branch left for cleanup). Build,
+> `go vet`, full `go test ./...` clean on main. Spec:
+> `docs/superpowers/specs/2026-06-22-long-form-projects-design.md`.
+>
+> **Commits (all 4 tasks + 1 final-review fix):**
+> - `18a4d1f` Task 1 — `project.go`: `sectionOrder`/`sectionTitle`/`orderedSections`/`isManuscript`
+> - `dc32468` Task 2 — `project.go`: modtime-keyed `wordCountCache` + `projectWordCount`
+> - `bddd4bf` Task 3 — `filelist.go`: manuscript-aware sidebar (numeric order, stripped
+>   titles, right-aligned per-chapter `Nw`, loose after sections, NO separator row)
+> - `8db79b1` Task 4 — `backup.go`: `backupStamp` + `backupFiles` → `.backup/<stamp>/`
+> - `b104314` final-review fix — `sectionTitle` strips ext BEFORE separators so
+>   `01.md` → `""` not `"md"` (+2 test cases)
+>
+> **Review outcome:** per-task reviews + a whole-branch opus review. NO Critical /
+> NO Important survived. Two per-task "Important" flags downgraded (verbatim plan
+> code, no real-world impact) and confirmed by final review: (a) double
+> `sectionOrder` parse in the sort comparator; (b) `sectionRow` count clip at
+> `f.width < ~5` (cannot occur; pane = `sidebarWidth-2`; guards prevent panic).
+> Final review verified 3 invariants: row↔index nav mapping, `.backup`/dotfile
+> exclusion, cross-`SetDir` cache persistence.
+>
+> **Deferred Minors → fold into Plan B:**
+> - `count()` runs `os.Stat` per visible section each render (read cached, stat not) — negligible, bounded by height.
+> - `wordCountCache` has no eviction (session-lifetime growth) — flip side of correct cross-`SetDir` persistence.
+> - `projectWordCount` has NO caller yet — intentional Plan B groundwork (sidebar uses per-section `count`, not the rollup).
+> - `backupFiles` flat-by-basename silently overwrites same-basename-different-dir — by design, add a doc-comment note.
+> - stale comment "or non-manuscript dir" on the `default:` case at `filelist.go:131`.
+> - test gaps: narrow-width `sectionRow`; loose-after-sections in rendered `View`; `backupFiles` empty-list/error paths; `TestSectionTitle` uses a map (non-deterministic msg order); some unchecked `os.WriteFile` returns (verbatim from plan).
+> - heuristic to note: a category folder containing e.g. `1984-notes.md` reads as a manuscript (matches spec's "≥1 numerically-prefixed file" definition).
+>
+> **NEXT (paused at user request — resume tomorrow):** write **Plan B (outline
+> view)** against this merged code. Open design Qs to brainstorm first: reorder
+> UX, where word counts surface, how/when backups trigger. Plan B is expected to
+> add `readSections(dir)` (path-based; outline needs sections without a loaded
+> `filelist`) and to be the first consumer of `projectWordCount` + `backupFiles`
+> (wired into reorder/delete). Then **Plan C** (manuscript pager), **Plan D**
+> (RTF+PDF export), then **Tufte preview** brainstorm, then **project rename**
+> (okashi → TBD: sweeps module path, `OKASHI_*` env, workspace folder, repo, formula).
 > - Build/test via `/opt/homebrew/bin/go` (not on PATH).
+> - Full per-task ledger was at `.superpowers/sdd/progress.md` (git-ignored scratch — may not survive; this note is the durable record).
 
 # Long-form Plan A — Project Model Implementation Plan
 
