@@ -1,8 +1,11 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSectionOrder(t *testing.T) {
@@ -71,5 +74,42 @@ func TestIsManuscript(t *testing.T) {
 	}
 	if isManuscript([]fileEntry{{name: "Sub", isDir: true}}) {
 		t.Fatal("a subdir alone is not a manuscript")
+	}
+}
+
+func TestWordCountCacheRecountsOnChange(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "a.md")
+	if err := os.WriteFile(p, []byte("one two three"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	c := newWordCountCache()
+	if got := c.count(p); got != 3 {
+		t.Fatalf("count = %d, want 3", got)
+	}
+	if err := os.WriteFile(p, []byte("one two three four five"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Force a later modtime so the cache invalidates deterministically.
+	later := time.Now().Add(2 * time.Second)
+	if err := os.Chtimes(p, later, later); err != nil {
+		t.Fatal(err)
+	}
+	if got := c.count(p); got != 5 {
+		t.Fatalf("recount = %d, want 5", got)
+	}
+}
+
+func TestProjectWordCountSumsSections(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("a b c"), 0o644)    // 3
+	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("d e"), 0o644)      // 2
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("x y z q"), 0o644) // loose, excluded
+	sections, _ := orderedSections([]fileEntry{
+		{name: "01-a.md"}, {name: "02-b.md"}, {name: "notes.md"},
+	})
+	c := newWordCountCache()
+	if got := projectWordCount(dir, sections, c); got != 5 {
+		t.Fatalf("project total = %d, want 5 (loose excluded)", got)
 	}
 }

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // sectionOrder parses the leading run of digits in name as an integer. ok is
@@ -73,4 +75,47 @@ func isManuscript(entries []fileEntry) bool {
 		}
 	}
 	return false
+}
+
+// wordCountCache memoizes per-file word counts keyed by path + modtime so the
+// sidebar and rollups don't re-read unchanged files every render.
+type wordCountCache struct {
+	entries map[string]wcEntry
+}
+
+type wcEntry struct {
+	mod   time.Time
+	words int
+}
+
+func newWordCountCache() *wordCountCache {
+	return &wordCountCache{entries: map[string]wcEntry{}}
+}
+
+// count returns the word count of the file at path, reading it only when its
+// modtime has changed since the last read. Missing/unreadable files count 0.
+func (c *wordCountCache) count(path string) int {
+	info, err := os.Stat(path)
+	if err != nil {
+		return 0
+	}
+	if e, ok := c.entries[path]; ok && e.mod.Equal(info.ModTime()) {
+		return e.words
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return 0
+	}
+	w := wordCount(string(data))
+	c.entries[path] = wcEntry{mod: info.ModTime(), words: w}
+	return w
+}
+
+// projectWordCount sums the word counts of the ordered sections in dir.
+func projectWordCount(dir string, sections []fileEntry, c *wordCountCache) int {
+	total := 0
+	for _, s := range sections {
+		total += c.count(filepath.Join(dir, s.name))
+	}
+	return total
 }
