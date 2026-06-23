@@ -35,8 +35,9 @@ func sectionTitle(name string) string {
 	for i < len(name) && name[i] >= '0' && name[i] <= '9' {
 		i++
 	}
-	s := strings.TrimLeft(name[i:], "-_. ")
+	s := name[i:]
 	s = strings.TrimSuffix(s, filepath.Ext(s))
+	s = strings.TrimLeft(s, "-_. ")
 	s = strings.ReplaceAll(s, "-", " ")
 	s = strings.ReplaceAll(s, "_", " ")
 	return strings.TrimSpace(s)

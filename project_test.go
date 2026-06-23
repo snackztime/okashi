@@ -36,6 +36,8 @@ func TestSectionTitle(t *testing.T) {
 		"01-opening.md":    "opening",
 		"10_two_words.md":  "two words",
 		"notes.md":         "notes",
+		"01.md":            "",
+		"01--foo.md":       "foo",
 	}
 	for in, want := range cases {
 		if got := sectionTitle(in); got != want {
