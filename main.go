@@ -111,6 +111,7 @@ type screen int
 const (
 	screenHome screen = iota
 	screenWriting
+	screenOutline
 )
 
 type model struct {
@@ -140,6 +141,7 @@ type model struct {
 	currentFile     string
 	status          string
 	icons           iconSet
+	outline         outlineModel
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -293,6 +295,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateHome(msg)
 	}
 
+	if m.screen == screenOutline {
+		return m.updateOutline(msg)
+	}
+
 	// While naming a new file, the prompt captures all input.
 	if m.creatingFile {
 		if key, ok := msg.(tea.KeyMsg); ok {
@@ -431,6 +437,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.status = "typewriter off"
 			}
 			return m, nil
+		case "ctrl+l":
+			if isManuscript(m.files.entries) {
+				m.enterOutline()
+			} else {
+				m.status = "not a manuscript folder (no numbered sections)"
+			}
+			return m, nil
 		case "ctrl+d":
 			m.dimEnabled = !m.dimEnabled
 			m.syncDim()
@@ -550,6 +563,10 @@ func (m model) View() string {
 		return m.homeView()
 	}
 
+	if m.screen == screenOutline {
+		return m.outlineView()
+	}
+
 	bodyH := m.height - 1 // status only; no banner in the writing zone
 	if bodyH < 1 {
 		bodyH = 1
@@ -614,6 +631,55 @@ func (m *model) layout() {
 	m.editor.SetHeight(bodyH)
 	m.preview.Width = cw
 	m.preview.Height = bodyH - 1 // reserve one row for the PREVIEW header
+}
+
+// updateOutline handles input on the outline screen: select, open, back.
+// (Reorder and new-section are layered on in later tasks.)
+func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "up", "k":
+		m.outline.moveSelection(-1)
+	case "down", "j":
+		m.outline.moveSelection(1)
+	case "enter":
+		if row, ok := m.outline.selectedRow(); ok {
+			m.loadFile(filepath.Join(m.outline.dir, row.entry.name))
+			m.screen = screenWriting
+			m.focus = focusEditor
+			m.editor.Focus()
+		}
+	case "m":
+		m.status = "manuscript view — Plan C"
+	case "esc":
+		m.screen = screenWriting
+		m.focus = focusEditor
+		m.editor.Focus()
+	}
+	return m, nil
+}
+
+// outlineView renders the outline screen with the status bar.
+func (m model) outlineView() string {
+	body := m.outline.View()
+	status := statusStyle.Width(m.width).Render(m.statusBar())
+	return lipgloss.JoinVertical(lipgloss.Left, body, status)
+}
+
+// enterOutline opens the manuscript outline for the current pane dir. Caller
+// must have verified isManuscript(m.files.entries).
+func (m *model) enterOutline() {
+	m.outline.width = m.width
+	m.outline.height = m.height - 1 // status bar
+	m.outline.load(m.files.dir, m.files.wc)
+	m.screen = screenOutline
+	m.previewing = false
+	m.status = "outline · ↑↓ select · J/K reorder · enter open · n new · esc back"
 }
 
 func (m *model) loadFile(path string) {
