@@ -30,15 +30,20 @@ type filelist struct {
 	wc       *wordCountCache
 }
 
+// allowedDocExts is the single source of truth for which files count as editable
+// documents — used by both the sidebar listing and the outline's readEntries so
+// the two views of a folder never diverge. Never mutated.
+var allowedDocExts = map[string]bool{
+	".md": true, ".txt": true, ".wg": true, ".markdown": true,
+}
+
 func newFilelist() filelist {
 	return filelist{
-		width:  sidebarWidth - 2,
-		height: 1,
-		allowed: map[string]bool{
-			".md": true, ".txt": true, ".wg": true, ".markdown": true,
-		},
-		icons: resolveIcons(),
-		wc:    newWordCountCache(),
+		width:   sidebarWidth - 2,
+		height:  1,
+		allowed: allowedDocExts,
+		icons:   resolveIcons(),
+		wc:      newWordCountCache(),
 	}
 }
 

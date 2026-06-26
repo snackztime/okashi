@@ -174,8 +174,9 @@ func (o *outlineModel) load(dir string, wc *wordCountCache) {
 	o.confirm = false
 }
 
-// readEntries lists dir's non-hidden .md/.txt files as fileEntry values (dirs
-// excluded — the outline lists section files only).
+// readEntries lists dir's non-hidden document files (allowedDocExts) as fileEntry
+// values (dirs excluded). Same filter as the sidebar, so the outline and the
+// pane show the same files for a folder.
 func readEntries(dir string) []fileEntry {
 	items, err := os.ReadDir(dir)
 	if err != nil {
@@ -185,6 +186,9 @@ func readEntries(dir string) []fileEntry {
 	for _, it := range items {
 		name := it.Name()
 		if strings.HasPrefix(name, ".") || it.IsDir() {
+			continue
+		}
+		if !allowedDocExts[strings.ToLower(filepath.Ext(name))] {
 			continue
 		}
 		out = append(out, fileEntry{name: name})
