@@ -114,6 +114,14 @@ const (
 	screenOutline
 )
 
+// renameTarget is the item a pending rename prompt will rename.
+type renameTarget struct {
+	dir     string // directory containing the item
+	name    string // current base name
+	isDir   bool
+	section bool // a numbered section -> title-only rename
+}
+
 type model struct {
 	width, height int
 
@@ -143,6 +151,9 @@ type model struct {
 	icons           iconSet
 	outline         outlineModel
 	outlineCreating bool
+
+	renaming     bool
+	renameTarget renameTarget
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -314,6 +325,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "enter":
 				m.confirmCreate()
+				return m, nil
+			}
+		}
+		var cmd tea.Cmd
+		m.nameInput, cmd = m.nameInput.Update(msg)
+		return m, cmd
+	}
+
+	if m.renaming {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.renaming = false
+				m.nameInput.Blur()
+				m.status = "rename cancelled"
+				m.refreshAfterRename()
+				return m, nil
+			case "enter":
+				m.confirmRename()
 				return m, nil
 			}
 		}
@@ -519,6 +551,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "left", "h", "backspace":
 				m.files.SetDir(filepath.Dir(m.files.dir))
+			case "r":
+				m.startRename()
 			}
 		}
 	} else {
@@ -900,6 +934,101 @@ func (m *model) confirmCreate() {
 	m.status = "new file: " + name + " — ctrl+s to save"
 }
 
+// beginRename opens the rename prompt for t, pre-filled with prefill.
+func (m *model) beginRename(t renameTarget, prefill string) {
+	m.renameTarget = t
+	m.renaming = true
+	m.creatingFile = false
+	m.nameInput.SetValue(prefill)
+	m.nameInput.CursorEnd()
+	m.nameInput.Focus()
+	m.editor.Blur()
+	m.status = ""
+}
+
+// startRename begins renaming the selected sidebar entry (skips the ".." row).
+func (m *model) startRename() {
+	if len(m.files.entries) == 0 {
+		return
+	}
+	e := m.files.entries[m.files.selected]
+	if e.name == ".." {
+		return
+	}
+	_, numbered := sectionOrder(e.name)
+	section := numbered && !e.isDir && isManuscript(m.files.entries)
+	prefill := e.name
+	if section {
+		prefill = sectionTitle(e.name)
+	}
+	m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir, section: section}, prefill)
+}
+
+// confirmRename applies the pending rename: builds the new name by target kind,
+// refuses a collision, renames on disk, follows the open file, and refreshes.
+func (m *model) confirmRename() {
+	m.renaming = false
+	m.nameInput.Blur()
+	typed := strings.TrimSpace(m.nameInput.Value())
+	t := m.renameTarget
+	if typed == "" {
+		m.status = "rename cancelled (empty)"
+		m.refreshAfterRename()
+		return
+	}
+
+	var newName string
+	if t.section {
+		newName = sectionRetitle(t.name, typed)
+	} else {
+		if strings.Contains(typed, "/") || typed == "." || typed == ".." {
+			m.status = "name can't contain a path separator"
+			m.refreshAfterRename()
+			return
+		}
+		if t.isDir {
+			newName = typed
+		} else {
+			newName = looseRename(t.name, typed)
+		}
+	}
+	if newName == t.name {
+		m.status = "unchanged"
+		m.refreshAfterRename()
+		return
+	}
+
+	oldPath := filepath.Join(t.dir, t.name)
+	newPath := filepath.Join(t.dir, newName)
+	if _, err := os.Stat(newPath); err == nil {
+		m.status = "a file named " + newName + " already exists"
+		m.refreshAfterRename()
+		return
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		m.status = "rename failed: " + err.Error()
+		m.refreshAfterRename()
+		return
+	}
+	if m.currentFile == oldPath {
+		m.currentFile = newPath
+	}
+	m.refreshAfterRename()
+	m.status = "renamed to " + newName
+}
+
+// refreshAfterRename re-reads the sidebar (and the outline, if active) and
+// restores focus to the pane the rename came from.
+func (m *model) refreshAfterRename() {
+	m.files.SetDir(m.files.dir)
+	if m.screen == screenOutline {
+		m.outline.load(m.outline.dir, m.files.wc)
+		return
+	}
+	m.focus = focusSidebar
+	m.editor.Blur()
+}
+
 // confirmNewSection creates a new section after the selected one and renumbers
 // the rest. The new file opens in the editor.
 func (m *model) confirmNewSection() {
@@ -1031,6 +1160,9 @@ func (m model) statusBar() string {
 			return bar
 		}
 		return bar + strings.Repeat(" ", gap) + hint
+	}
+	if m.renaming {
+		return "rename ▸ " + m.nameInput.View()
 	}
 	mark := "✓"
 	if m.dirty {

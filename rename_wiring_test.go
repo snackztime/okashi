@@ -1,0 +1,130 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+// typeInto sends each rune of s to the model as a key message.
+func typeInto(t *testing.T, m model, s string) model {
+	t.Helper()
+	for _, r := range s {
+		nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = nm.(model)
+	}
+	return m
+}
+
+func sidebarModel(t *testing.T, dir string) model {
+	t.Helper()
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.files.SetDir(dir)
+	m.focus = focusSidebar
+	return m
+}
+
+func TestSidebarRenameLooseFileKeepsExt(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "draft.md"), []byte("hi"), 0o644)
+	m := sidebarModel(t, root)
+	m.files.selectName("draft.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming {
+		t.Fatal("r should start a rename")
+	}
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "notes")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(root, "notes.md")); err != nil {
+		t.Fatalf("expected renamed notes.md (ext kept): %v", err)
+	}
+}
+
+func TestSidebarRenameSectionTitleOnly(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "01-a.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(root, "02-the-letter.md"), []byte("x"), 0o644)
+	m := sidebarModel(t, root)
+	m.files.selectName("02-the-letter.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "the telegram")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(root, "02-the-telegram.md")); err != nil {
+		t.Fatalf("section rename should keep the 02- prefix: %v", err)
+	}
+}
+
+func TestSidebarRenameFolder(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.MkdirAll(filepath.Join(root, "oldname"), 0o755)
+	m := sidebarModel(t, root)
+	m.files.selectName("oldname")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "newname")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(root, "newname")); err != nil {
+		t.Fatalf("folder rename should rename the directory: %v", err)
+	}
+}
+
+func TestSidebarRenameRefusesCollision(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "a.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(root, "b.md"), []byte("y"), 0o644)
+	m := sidebarModel(t, root)
+	m.files.selectName("a.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "b")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	// Both originals must still exist — no overwrite.
+	if b, _ := os.ReadFile(filepath.Join(root, "b.md")); string(b) != "y" {
+		t.Fatal("rename onto an existing name must not overwrite it")
+	}
+	if _, err := os.Stat(filepath.Join(root, "a.md")); err != nil {
+		t.Fatal("the source must be left intact when the rename is refused")
+	}
+}
+
+func TestSidebarRenameTracksOpenFile(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "draft.md"), []byte("x"), 0o644)
+	m := sidebarModel(t, root)
+	m.currentFile = filepath.Join(root, "draft.md")
+	m.files.selectName("draft.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "final.md")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.currentFile != filepath.Join(root, "final.md") {
+		t.Fatalf("open file path should follow the rename, got %q", m.currentFile)
+	}
+}
