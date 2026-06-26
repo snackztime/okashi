@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 )
 
@@ -74,4 +76,103 @@ func (p *pagerModel) load(dir string, width int) {
 		}
 	}
 	p.total = running
+}
+
+const pagerHeaderHeight = 2 // the running-count header line + a blank spacer
+
+// moveCursor moves the cursor by d lines (clamped) and scrolls to keep it visible.
+func (p *pagerModel) moveCursor(d int) {
+	if len(p.lines) == 0 {
+		return
+	}
+	p.cursor += d
+	if p.cursor < 0 {
+		p.cursor = 0
+	}
+	if p.cursor >= len(p.lines) {
+		p.cursor = len(p.lines) - 1
+	}
+	p.ensureVisible()
+}
+
+// page moves the cursor by d full screens.
+func (p *pagerModel) page(d int) { p.moveCursor(d * p.height) }
+
+// ensureVisible scrolls offset so the cursor sits within the visible window.
+func (p *pagerModel) ensureVisible() {
+	if p.cursor < p.offset {
+		p.offset = p.cursor
+	}
+	if p.height > 0 && p.cursor >= p.offset+p.height {
+		p.offset = p.cursor - p.height + 1
+	}
+	if p.offset < 0 {
+		p.offset = 0
+	}
+}
+
+// jumpTarget resolves the cursor line to the (file, source line) to open. A header
+// line opens its section at line 0. ok is false when there's nothing to open.
+func (p pagerModel) jumpTarget() (file string, src int, ok bool) {
+	if p.cursor < 0 || p.cursor >= len(p.lines) {
+		return "", 0, false
+	}
+	l := p.lines[p.cursor]
+	if l.file == "" {
+		return "", 0, false
+	}
+	if l.header {
+		return l.file, 0, true
+	}
+	return l.file, l.src, true
+}
+
+// dimMarkdown colours markdown punctuation (#, *, _, `) subtle without changing the
+// line's width, so the prose reads cleaner while the line→source map stays exact.
+func dimMarkdown(line string) string {
+	dim := lipgloss.NewStyle().Foreground(subtle)
+	var b strings.Builder
+	for _, r := range line {
+		switch r {
+		case '#', '*', '_', '`':
+			b.WriteString(dim.Render(string(r)))
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
+}
+
+// View renders the header line plus the visible window of lines (O(height)).
+func (p pagerModel) View() string {
+	cum := 0
+	if p.cursor >= 0 && p.cursor < len(p.lines) {
+		cum = p.lines[p.cursor].cumWords
+	}
+	head := fmt.Sprintf("%s · %s / %sw", projectTitle(filepath.Base(p.dir)), commafy(cum), commafy(p.total))
+	var b strings.Builder
+	b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(ansi.Truncate(head, p.width, "…")))
+	b.WriteString("\n\n") // pagerHeaderHeight = 2
+
+	end := p.offset + p.height
+	if end > len(p.lines) {
+		end = len(p.lines)
+	}
+	for i := p.offset; i < end; i++ {
+		l := p.lines[i]
+		var row string
+		switch {
+		case i == p.cursor:
+			row = selectedStyle.Width(p.width).Render(ansi.Truncate(l.text, p.width, "…"))
+		case l.header:
+			row = lipgloss.NewStyle().Foreground(accent).Render(ansi.Truncate(l.text, p.width, "…"))
+		default:
+			row = dimMarkdown(l.text)
+		}
+		b.WriteString(row)
+		if i < end-1 {
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
 }
