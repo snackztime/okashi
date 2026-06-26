@@ -45,3 +45,14 @@ func TestWriteRTFTufteDiffers(t *testing.T) {
 		t.Fatalf("tufte RTF should use the wider Tufte margins")
 	}
 }
+
+func TestWriteRTFEndnotes(t *testing.T) {
+	doc := ManuscriptDoc{{Title: "ch", Blocks: []Block{
+		Paragraph{Runs: []Run{{Text: "Body [1]."}}},
+		Endnotes{Items: []Endnote{{Num: 1, Runs: []Run{{Text: "the note"}}}}},
+	}}}
+	out := string(writeRTF(doc, StyleManuscript, Meta{Title: "T"}))
+	if !strings.Contains(out, "Notes") || !strings.Contains(out, "1. the note") {
+		t.Fatalf("RTF should render a Notes section with the endnote:\n%s", out)
+	}
+}

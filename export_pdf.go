@@ -145,6 +145,14 @@ func writeBlockPDF(pdf *fpdf.Fpdf, blk Block, st ExportStyle, cfg pdfStyle) {
 		pdf.SetFont(cfg.font, "B", 13)
 		pdf.MultiCell(0, cfg.lineHeight, pdfEnc(st, plainText(v.Runs)), "", "L", false)
 		pdf.SetFont(cfg.font, "", cfg.bodySize)
+	case Endnotes:
+		pdf.Ln(cfg.lineHeight)
+		pdf.SetFont(cfg.font, "B", cfg.bodySize)
+		pdf.MultiCell(0, cfg.lineHeight, pdfEnc(st, "Notes"), "", "L", false)
+		pdf.SetFont(cfg.font, "", cfg.bodySize)
+		for _, e := range v.Items {
+			pdf.MultiCell(0, cfg.lineHeight, pdfEnc(st, fmt.Sprintf("%d. %s", e.Num, plainText(e.Runs))), "", "L", false)
+		}
 	case SceneBreak:
 		pdf.CellFormat(0, cfg.lineHeight, "#", "", 1, "C", false, 0, "")
 	case Blockquote:

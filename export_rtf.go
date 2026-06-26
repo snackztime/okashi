@@ -94,6 +94,11 @@ func writeBlockRTF(b *strings.Builder, blk Block, st ExportStyle) {
 			fs = 20
 		}
 		fmt.Fprintf(b, `{\pard\sb240\sa120\b\fs%d %s\b0\par}`+"\n", fs, runsRTF(v.Runs))
+	case Endnotes:
+		b.WriteString(`{\pard\sb360\sa120\b Notes\b0\par}` + "\n")
+		for _, e := range v.Items {
+			fmt.Fprintf(b, `{\pard\fi-360\li360 %d. %s\par}`+"\n", e.Num, runsRTF(e.Runs))
+		}
 	case SceneBreak:
 		b.WriteString(`{\pard\qc\sb240\sa240 #\par}` + "\n")
 	case Blockquote:

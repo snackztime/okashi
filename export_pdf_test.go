@@ -90,3 +90,19 @@ func TestWritePDFTufteEmbedsFontValid(t *testing.T) {
 		t.Fatalf("an embedded-font PDF should be larger than %d bytes", len(out))
 	}
 }
+
+func TestWritePDFEndnotesBuilds(t *testing.T) {
+	doc := ManuscriptDoc{{Title: "ch", Blocks: []Block{
+		Paragraph{Runs: []Run{{Text: "Body [1]."}}},
+		Endnotes{Items: []Endnote{{Num: 1, Runs: []Run{{Text: "the note"}}}}},
+	}}}
+	for _, st := range []ExportStyle{StyleManuscript, StyleTufte} {
+		out, err := writePDF(doc, st, Meta{Title: "T"})
+		if err != nil {
+			t.Fatalf("style %d: endnotes PDF should build: %v", st, err)
+		}
+		if !bytes.HasPrefix(out, []byte("%PDF")) {
+			t.Fatalf("style %d: not a PDF", st)
+		}
+	}
+}
