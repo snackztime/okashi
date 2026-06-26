@@ -112,10 +112,11 @@ both repos.
 - Flavor = **CommonMark + GFM (tables, task lists, strikethrough, autolinks) + footnotes**,
   via `goldmark` with the matching extensions. **Footnotes must be enabled** to match the
   app's `swift-markdown`/cmark-gfm config.
-- *Status:* the **export** parser (`export_ast.go`) currently uses `goldmark.DefaultParser()`
-  (CommonMark only); the preview uses glamour. A follow-up plan will move the export parser to
-  `goldmark` + GFM + footnotes (and handle/degrade the new AST nodes). The glamour preview
-  should be checked for the same flavor.
+- *Status:* the **export** parser (`export_ast.go`) uses `goldmark` + **GFM + Footnote**
+  extensions (matching the app); footnotes export as per-chapter endnotes; the rarer GFM
+  constructs degrade (tables → pipe rows, strikethrough → plain, task lists → `[ ]`/`[x]`).
+  The `ctrl+p` **preview** uses glamour, which renders GFM but exposes no hook to add the
+  footnote extension — so footnote syntax shows literally in the preview (known limitation).
 - Before changing the supported flavor/extension set: STOP, confirm, implement in BOTH
   codebases together. No proprietary syntax. Pin `goldmark` + extension versions.
 
@@ -152,5 +153,5 @@ both repos.
   it and confirm rather than proceeding.
 - The shared design reference is the app repo's `SPEC.md`; this file is okashi's operational
   rule set.
-- Adopted-but-pending follow-ups: (a) **atomic writes** for `save()` + export; (b) **GFM +
-  footnotes** in the export parser. Plan each separately.
+- Adopted & shipped: **atomic writes** (pending earlier, now in `save()` + export) and **GFM +
+  footnotes** in the export parser (shipped with Tasks 1–3 of the 2026-06-22 export refactor).
