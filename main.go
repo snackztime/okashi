@@ -662,6 +662,34 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if mouse, ok := msg.(tea.MouseMsg); ok {
+		if m.outlineCreating || m.outline.confirm {
+			return m, nil
+		}
+		if mouse.Button != tea.MouseButtonLeft || mouse.Action != tea.MouseActionPress {
+			return m, nil
+		}
+		row := sidebarRow(mouse.Y, outlineHeaderHeight, len(m.outline.rows()))
+		if row < 0 {
+			return m, nil
+		}
+		m.outline.selected = row
+		now := time.Now()
+		if row == m.lastClickRow && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+			if r, ok := m.outline.selectedRow(); ok {
+				m.loadFile(filepath.Join(m.outline.dir, r.entry.name))
+				m.screen = screenWriting
+				m.focus = focusEditor
+				m.editor.Focus()
+			}
+			m.lastClickTime = time.Time{}
+		} else {
+			m.lastClickRow = row
+			m.lastClickTime = now
+		}
+		return m, nil
+	}
+
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return m, nil

@@ -179,6 +179,25 @@ func TestOutlineNewSectionInsertsAfterSelection(t *testing.T) {
 	}
 }
 
+func TestOutlineClickSelectsThenDoubleClickOpens(t *testing.T) {
+	m, proj := setupManuscript(t) // 01-a (row 0), 02-b (row 1)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	// Click row 1 (02-b): mouse Y = header height + 1.
+	clickY := outlineHeaderHeight + 1
+	nm, _ = m.Update(tea.MouseMsg{X: 2, Y: clickY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.outline.selected != 1 {
+		t.Fatalf("click should select row 1, got %d", m.outline.selected)
+	}
+	// Second click on the same row opens it.
+	nm, _ = m.Update(tea.MouseMsg{X: 2, Y: clickY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.screen != screenWriting || m.currentFile != filepath.Join(proj, "02-b.md") {
+		t.Fatalf("double-click should open 02-b.md, screen=%v file=%q", m.screen, m.currentFile)
+	}
+}
+
 func TestOutlineGateEscKeepsEditing(t *testing.T) {
 	m, _ := setupManuscript(t)
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
