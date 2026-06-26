@@ -157,6 +157,28 @@ func TestOutlineReorderTracksOpenFile(t *testing.T) {
 	}
 }
 
+func TestOutlineNewSectionInsertsAfterSelection(t *testing.T) {
+	m, proj := setupManuscript(t) // 01-a, 02-b ; select 01-a
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	// n -> prompt; type a title; enter.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	m = nm.(model)
+	for _, r := range "scene two" {
+		nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+		m = nm.(model)
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	// New section is slot 2; old 02-b shifts to 03-b.
+	if _, err := os.Stat(filepath.Join(proj, "02-scene-two.md")); err != nil {
+		t.Fatalf("expected new 02-scene-two.md after the selection: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(proj, "03-b.md")); err != nil {
+		t.Fatalf("expected 02-b renumbered to 03-b: %v", err)
+	}
+}
+
 func TestOutlineGateEscKeepsEditing(t *testing.T) {
 	m, _ := setupManuscript(t)
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})

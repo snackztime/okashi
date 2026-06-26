@@ -142,6 +142,7 @@ type model struct {
 	status          string
 	icons           iconSet
 	outline         outlineModel
+	outlineCreating bool
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -643,6 +644,24 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, nil
 	}
+	if m.outlineCreating {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "esc":
+				m.outlineCreating = false
+				m.nameInput.Blur()
+				m.status = "new section cancelled"
+				return m, nil
+			case "enter":
+				m.confirmNewSection()
+				return m, nil
+			}
+		}
+		var cmd tea.Cmd
+		m.nameInput, cmd = m.nameInput.Update(msg)
+		return m, cmd
+	}
+
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return m, nil
@@ -685,6 +704,12 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "enter":
 		m.outline.pendingOpen = true
 		return m.outlineLeave()
+	case "n":
+		m.outlineCreating = true
+		m.nameInput.SetValue("")
+		m.nameInput.Focus()
+		m.status = "new section title — enter to create, esc to cancel"
+		return m, textinput.Blink
 	case "m":
 		m.status = "manuscript view — Plan C"
 	case "esc":
@@ -819,6 +844,37 @@ func (m *model) confirmCreate() {
 	m.focus = focusEditor
 	m.editor.Focus()
 	m.status = "new file: " + name + " — ctrl+s to save"
+}
+
+// confirmNewSection creates a new section after the selected one and renumbers
+// the rest. The new file opens in the editor.
+func (m *model) confirmNewSection() {
+	m.outlineCreating = false
+	m.nameInput.Blur()
+	title := strings.TrimSpace(m.nameInput.Value())
+	if title == "" {
+		m.status = "new section cancelled (no title)"
+		return
+	}
+	insertIndex := m.outline.selected + 1
+	if m.outline.selected >= len(m.outline.working) {
+		insertIndex = len(m.outline.working) // a loose row is selected: append
+	}
+	padW := padWidth(len(m.outline.working)+1, existingPrefixWidth(m.outline.working))
+	newName, moved, err := commitInsert(m.outline.dir, slugify(title), m.outline.working, insertIndex, padW, backupStamp(time.Now()))
+	if err != nil {
+		m.status = "new section failed: " + err.Error()
+		return
+	}
+	if newPath, ok := moved[m.currentFile]; ok {
+		m.currentFile = newPath
+	}
+	m.files.SetDir(m.files.dir)
+	m.loadFile(filepath.Join(m.outline.dir, newName))
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.status = "new section: " + newName + " — ctrl+s to save"
 }
 
 // togglePreview flips between editing and a read-only glamour render of the

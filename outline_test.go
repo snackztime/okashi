@@ -204,6 +204,22 @@ func TestOutlineMoveSectionMakesDirty(t *testing.T) {
 	}
 }
 
+func TestPlanInsertRenamesShiftsBelow(t *testing.T) {
+	working := []fileEntry{{name: "01-a.md"}, {name: "02-b.md"}, {name: "03-c.md"}}
+	// Insert after index 0 (new section takes slot 2): b->03, c->04.
+	ops := planInsertRenames(working, 1, 2)
+	got := map[string]string{}
+	for _, o := range ops {
+		got[o.from] = o.to
+	}
+	if got["02-b.md"] != "03-b.md" || got["03-c.md"] != "04-c.md" {
+		t.Fatalf("ops = %v, want b->03 and c->04", got)
+	}
+	if _, ok := got["01-a.md"]; ok {
+		t.Fatalf("01-a.md is above the insert point and must not move")
+	}
+}
+
 func TestOutlineViewShowsTitlesCountsAndTotal(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-opening.md"), []byte("one two three"), 0o644)

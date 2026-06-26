@@ -113,6 +113,76 @@ func applyRenames(dir string, ops []renameOp) error {
 	return nil
 }
 
+// planInsertRenames renumbers the existing sections to open a gap at
+// insertIndex (0-based slot the new section will occupy). Sections at or below
+// insertIndex shift down by one; those above keep their number.
+func planInsertRenames(working []fileEntry, insertIndex, width int) []renameOp {
+	var ops []renameOp
+	for i, e := range working {
+		target := i + 1
+		if i >= insertIndex {
+			target = i + 2 // make room at insertIndex+1
+		}
+		_, rest := splitPrefix(e.name)
+		next := fmt.Sprintf("%0*d", width, target) + rest
+		if next != e.name {
+			ops = append(ops, renameOp{from: e.name, to: next})
+		}
+	}
+	return ops
+}
+
+// commitInsert backs up the sections, renumbers existing files to open a slot at
+// insertIndex, then creates an empty <NN>-<slug>.md there. Returns the new file's
+// base name and the old->new absolute paths of the shifted files.
+func commitInsert(dir, slug string, working []fileEntry, insertIndex, padW int, stamp string) (string, map[string]string, error) {
+	if insertIndex < 0 {
+		insertIndex = 0
+	}
+	if insertIndex > len(working) {
+		insertIndex = len(working)
+	}
+	var paths []string
+	for _, w := range working {
+		paths = append(paths, filepath.Join(dir, w.name))
+	}
+	if err := backupFiles(dir, stamp, paths); err != nil {
+		return "", nil, err
+	}
+	ops := planInsertRenames(working, insertIndex, padW)
+	if err := applyRenames(dir, ops); err != nil {
+		return "", nil, err
+	}
+	newName := fmt.Sprintf("%0*d-%s.md", padW, insertIndex+1, slug)
+	if err := os.WriteFile(filepath.Join(dir, newName), nil, 0o644); err != nil {
+		return "", nil, err
+	}
+	moved := make(map[string]string, len(ops))
+	for _, op := range ops {
+		moved[filepath.Join(dir, op.from)] = filepath.Join(dir, op.to)
+	}
+	return newName, moved, nil
+}
+
+// slugify turns a typed section title into a filename slug: lowercase, spaces and
+// underscores to hyphens, stripped of other punctuation.
+func slugify(title string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(strings.TrimSpace(title)) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == ' ' || r == '_' || r == '-':
+			b.WriteByte('-')
+		}
+	}
+	s := strings.Trim(b.String(), "-")
+	if s == "" {
+		s = "section"
+	}
+	return s
+}
+
 // commitReorder snapshots the section files, then renumbers them on disk to match
 // the working order. Returns old->new absolute paths for moved files (nil if the
 // order was already correct). stamp is supplied by the caller.
