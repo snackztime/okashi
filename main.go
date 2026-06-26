@@ -723,6 +723,7 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.renaming {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
+			// esc cancels with no rename, so there is nothing to refresh.
 			case "esc":
 				m.renaming = false
 				m.nameInput.Blur()

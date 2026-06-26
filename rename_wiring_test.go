@@ -218,3 +218,22 @@ func TestCtrlLNoDocsShowsNothingToConvert(t *testing.T) {
 		t.Fatal("ctrl+l on a folder with no documents should neither prompt nor enter the outline")
 	}
 }
+
+func TestConvertTracksOpenFile(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	book := filepath.Join(root, "book")
+	os.MkdirAll(book, 0o755)
+	os.WriteFile(filepath.Join(book, "Chapter-00.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(book, "Chapter-01.md"), []byte("y"), 0o644)
+	m := sidebarModel(t, book)
+	m.currentFile = filepath.Join(book, "Chapter-00.md") // editing the first chapter
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}}) // confirm convert
+	m = nm.(model)
+	if m.currentFile != filepath.Join(book, "01-Chapter-00.md") {
+		t.Fatalf("convert should follow the open file to 01-Chapter-00.md, got %q", m.currentFile)
+	}
+}
