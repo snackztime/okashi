@@ -908,6 +908,35 @@ func (m model) updateManuscript(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, nil
 	}
+	if mouse, ok := msg.(tea.MouseMsg); ok {
+		if mouse.Button != tea.MouseButtonLeft || mouse.Action != tea.MouseActionPress {
+			return m, nil
+		}
+		row := sidebarRow(mouse.Y, pagerHeaderHeight, m.pager.height)
+		if row < 0 {
+			return m, nil
+		}
+		line := m.pager.offset + row
+		if line >= len(m.pager.lines) {
+			return m, nil
+		}
+		m.pager.cursor = line
+		now := time.Now()
+		if line == m.lastClickRow && now.Sub(m.lastClickTime) < 400*time.Millisecond {
+			if file, src, ok := m.pager.jumpTarget(); ok {
+				m.loadFile(filepath.Join(m.pager.dir, file))
+				m.editor.MoveToLine(src)
+				m.screen = screenWriting
+				m.focus = focusEditor
+				m.editor.Focus()
+			}
+			m.lastClickTime = time.Time{}
+		} else {
+			m.lastClickRow = line
+			m.lastClickTime = now
+		}
+		return m, nil
+	}
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return m, nil

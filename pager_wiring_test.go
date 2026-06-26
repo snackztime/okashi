@@ -78,3 +78,26 @@ func TestPagerOGoesToOutlineEscToEditor(t *testing.T) {
 		t.Fatalf("esc should return to the editor, got %v", m.screen)
 	}
 }
+
+func TestPagerClickThenDoubleClickJumps(t *testing.T) {
+	m, proj := manuscriptModel(t)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	m = nm.(model)
+	// Click the body line at offset 0 + (clickY - pagerHeaderHeight) = line 2 (gamma).
+	clickY := pagerHeaderHeight + 2
+	nm, _ = m.Update(tea.MouseMsg{X: 2, Y: clickY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.pager.cursor != 2 {
+		t.Fatalf("click should move the cursor to line 2, got %d", m.pager.cursor)
+	}
+	nm, _ = m.Update(tea.MouseMsg{X: 2, Y: clickY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.screen != screenWriting || m.currentFile != filepath.Join(proj, "01-a.md") {
+		t.Fatalf("double-click should jump into the editor, screen=%v file=%q", m.screen, m.currentFile)
+	}
+	if m.editor.Line() != 1 {
+		t.Fatalf("double-click jump should land on source line 1 (gamma), got %d", m.editor.Line())
+	}
+}
