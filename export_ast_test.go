@@ -138,3 +138,49 @@ func TestParseSectionFootnoteEndnotes(t *testing.T) {
 		t.Fatalf("endnote body = %q", body)
 	}
 }
+
+func TestParseSectionTaskListAndStrike(t *testing.T) {
+	blocks := parseSection([]byte("- [ ] todo\n- [x] done\n"))
+	lst, ok := blocks[0].(List)
+	if !ok {
+		t.Fatalf("block 0 should be a List, got %T", blocks[0])
+	}
+	first, second := "", ""
+	for _, r := range lst.Items[0].Runs {
+		first += r.Text
+	}
+	for _, r := range lst.Items[1].Runs {
+		second += r.Text
+	}
+	if first != "[ ] todo" || second != "[x] done" {
+		t.Fatalf("task list items = %q / %q, want '[ ] todo' / '[x] done'", first, second)
+	}
+
+	// Strikethrough degrades to plain text (handled by the default recurse).
+	sb := parseSection([]byte("a ~~struck~~ b"))
+	var joined string
+	for _, r := range sb[0].(Paragraph).Runs {
+		joined += r.Text
+	}
+	if joined != "a struck b" {
+		t.Fatalf("strikethrough should degrade to plain text: %q", joined)
+	}
+}
+
+func TestParseSectionTableDegrades(t *testing.T) {
+	src := []byte("| A | B |\n|---|---|\n| 1 | 2 |\n")
+	blocks := parseSection(src)
+	bq, ok := blocks[0].(Blockquote)
+	if !ok {
+		t.Fatalf("a table should degrade to a Blockquote of rows, got %T", blocks[0])
+	}
+	// header row "A | B", body row "1 | 2"
+	row0 := bq.Children[0].(Paragraph)
+	var r0 string
+	for _, r := range row0.Runs {
+		r0 += r.Text
+	}
+	if r0 != "A | B" {
+		t.Fatalf("first table row = %q, want 'A | B'", r0)
+	}
+}

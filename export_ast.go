@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
@@ -142,6 +143,16 @@ func blockFrom(n ast.Node, src []byte, isFirst bool) (Block, bool) {
 			return nil, true
 		}
 		return en, false
+	case *xast.Table:
+		var rows []Block
+		for r := n.FirstChild(); r != nil; r = r.NextSibling() {
+			var cells []string
+			for c := r.FirstChild(); c != nil; c = c.NextSibling() {
+				cells = append(cells, plainText(inlineRuns(c, src, 0)))
+			}
+			rows = append(rows, Paragraph{Runs: []Run{{Text: strings.Join(cells, " | ")}}})
+		}
+		return Blockquote{Children: rows}, false
 	default:
 		runs := inlineRuns(n, src, 0)
 		if len(runs) == 0 {
@@ -173,6 +184,12 @@ func inlineRuns(n ast.Node, src []byte, emph int) []Run {
 			runs = append(runs, inlineRuns(c, src, emph|bit)...)
 		case *xast.FootnoteLink:
 			runs = append(runs, Run{Text: fmt.Sprintf("[%d]", t.Index), Bold: bold, Italic: italic})
+		case *xast.TaskCheckBox:
+			mark := "[ ] "
+			if t.IsChecked {
+				mark = "[x] "
+			}
+			runs = append(runs, Run{Text: mark, Bold: bold, Italic: italic})
 		default:
 			runs = append(runs, inlineRuns(c, src, emph)...)
 		}
