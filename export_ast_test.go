@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -182,5 +183,18 @@ func TestParseSectionTableDegrades(t *testing.T) {
 	}
 	if r0 != "A | B" {
 		t.Fatalf("first table row = %q, want 'A | B'", r0)
+	}
+}
+
+func TestParseSectionAutolinkSurvives(t *testing.T) {
+	for _, src := range []string{"see https://example.com here", "mail me@example.com now"} {
+		blocks := parseSection([]byte(src))
+		var joined string
+		for _, r := range blocks[0].(Paragraph).Runs {
+			joined += r.Text
+		}
+		if !strings.Contains(joined, "example.com") {
+			t.Fatalf("autolink text dropped for %q -> %q", src, joined)
+		}
 	}
 }

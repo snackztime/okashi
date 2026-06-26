@@ -190,6 +190,8 @@ func inlineRuns(n ast.Node, src []byte, emph int) []Run {
 				mark = "[x] "
 			}
 			runs = append(runs, Run{Text: mark, Bold: bold, Italic: italic})
+		case *ast.AutoLink:
+			runs = append(runs, Run{Text: string(t.Label(src)), Bold: bold, Italic: italic})
 		default:
 			runs = append(runs, inlineRuns(c, src, emph)...)
 		}
