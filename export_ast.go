@@ -109,7 +109,7 @@ func blockFrom(n ast.Node, src []byte, isFirst bool) (Block, bool) {
 			lst.Start = t.Start
 		}
 		for li := n.FirstChild(); li != nil; li = li.NextSibling() {
-			lst.Items = append(lst.Items, Paragraph{Runs: inlineRuns(li, src, 0)})
+			lst.Items = append(lst.Items, Paragraph{Runs: itemRuns(li, src)})
 		}
 		return lst, false
 	default:
@@ -144,6 +144,20 @@ func inlineRuns(n ast.Node, src []byte, emph int) []Run {
 		default:
 			runs = append(runs, inlineRuns(c, src, emph)...)
 		}
+	}
+	return runs
+}
+
+// itemRuns gathers a list item's text. A list item wraps one or more block
+// children (TextBlock/Paragraph); join their inline runs with a space so a
+// multi-paragraph item doesn't fuse its words.
+func itemRuns(li ast.Node, src []byte) []Run {
+	var runs []Run
+	for c := li.FirstChild(); c != nil; c = c.NextSibling() {
+		if len(runs) > 0 {
+			runs = append(runs, Run{Text: " "})
+		}
+		runs = append(runs, inlineRuns(c, src, 0)...)
 	}
 	return runs
 }

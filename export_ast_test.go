@@ -54,6 +54,39 @@ func TestParseSectionLoneHashIsSceneBreak(t *testing.T) {
 	}
 }
 
+func TestParseSectionList(t *testing.T) {
+	blocks := parseSection([]byte("- first item\n- second **bold** item\n"))
+	var lst List
+	found := false
+	for _, b := range blocks {
+		if l, ok := b.(List); ok {
+			lst, found = l, true
+		}
+	}
+	if !found {
+		t.Fatal("expected a List block")
+	}
+	if len(lst.Items) != 2 {
+		t.Fatalf("expected 2 list items, got %d", len(lst.Items))
+	}
+	var first string
+	for _, r := range lst.Items[0].Runs {
+		first += r.Text
+	}
+	if first != "first item" {
+		t.Fatalf("item 0 text = %q, want \"first item\"", first)
+	}
+	var bold bool
+	for _, r := range lst.Items[1].Runs {
+		if r.Text == "bold" && r.Bold {
+			bold = true
+		}
+	}
+	if !bold {
+		t.Fatalf("item 1 should have a bold run: %#v", lst.Items[1].Runs)
+	}
+}
+
 func TestManuscriptDocExcludesLooseAndTitlesFromFilename(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-opening.md"), []byte("first"), 0o644)
