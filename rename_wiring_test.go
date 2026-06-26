@@ -158,3 +158,63 @@ func TestOutlineRenameSectionTitle(t *testing.T) {
 		t.Fatalf("after an outline rename we should still be in the outline, got %v", m.screen)
 	}
 }
+
+func TestConvertPromptOnPlainFolder(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	book := filepath.Join(root, "book")
+	os.MkdirAll(book, 0o755)
+	os.WriteFile(filepath.Join(book, "Chapter-00.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(book, "Chapter-01.md"), []byte("y"), 0o644)
+	m := sidebarModel(t, book)
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	if !m.convertPrompt {
+		t.Fatal("ctrl+l on a plain folder with files should raise the convert prompt")
+	}
+	if m.screen == screenOutline {
+		t.Fatal("must not enter the outline before the user confirms")
+	}
+}
+
+func TestConvertNumbersFilesAndOpensOutline(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	book := filepath.Join(root, "book")
+	os.MkdirAll(book, 0o755)
+	os.WriteFile(filepath.Join(book, "Chapter-00.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(book, "Chapter-01.md"), []byte("y"), 0o644)
+	m := sidebarModel(t, book)
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(book, "01-Chapter-00.md")); err != nil {
+		t.Fatalf("convert should number the first file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(book, "02-Chapter-01.md")); err != nil {
+		t.Fatalf("convert should number the second file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(book, ".backup")); err != nil {
+		t.Fatalf("convert should snapshot to .backup/ first: %v", err)
+	}
+	if m.screen != screenOutline {
+		t.Fatalf("convert should open the outline, got screen %v", m.screen)
+	}
+}
+
+func TestCtrlLNoDocsShowsNothingToConvert(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	empty := filepath.Join(root, "empty")
+	os.MkdirAll(empty, 0o755)
+	m := sidebarModel(t, empty)
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	if m.convertPrompt || m.screen == screenOutline {
+		t.Fatal("ctrl+l on a folder with no documents should neither prompt nor enter the outline")
+	}
+}
