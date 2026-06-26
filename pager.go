@@ -152,7 +152,7 @@ func (p pagerModel) View() string {
 	head := fmt.Sprintf("%s · %s / %sw", projectTitle(filepath.Base(p.dir)), commafy(cum), commafy(p.total))
 	var b strings.Builder
 	b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(ansi.Truncate(head, p.width, "…")))
-	b.WriteString("\n\n") // pagerHeaderHeight = 2
+	b.WriteString(strings.Repeat("\n", pagerHeaderHeight)) // header line + spacer rows
 
 	end := p.offset + p.height
 	if end > len(p.lines) {
