@@ -43,12 +43,12 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   per frame.
 
 ### Files & sync — okashi's signature obligation
-- **RULE (ADOPTED — implementation pending): write atomically (temp file + rename**, atomic
-  on the same volume); never write in place. *Status:* `save()` and `export.go` currently
-  use `os.WriteFile` in place — a follow-up plan will make both atomic. okashi runs outside
-  the macOS sandbox and **cannot use `NSFileCoordinator`** (the mechanism the app uses to
-  coordinate with the iCloud daemon), so atomic writes + iCloud `NSFileVersion` are what keep
-  the shared corpus from corrupting.
+- **RULE (ADOPTED): write atomically (temp file + rename**, atomic on the same volume);
+  never write in place. *Status:* `save()`, export, the backup copies, the new-section file,
+  and the recents store all write atomically via `atomicWrite` (`atomicwrite.go`). okashi
+  runs outside the macOS sandbox and **cannot use `NSFileCoordinator`** (the mechanism the app
+  uses to coordinate with the iCloud daemon), so atomic writes + iCloud `NSFileVersion` are
+  what keep the shared corpus from corrupting.
 - Backups: destructive structural ops (outline reorder, new-section insert) snapshot the
   affected files into `<project>/.backup/<timestamp>/` first (`backup.go`). `.backup/` and
   all dotfiles are excluded from the pane and from manuscript detection.
@@ -108,7 +108,7 @@ both repos.
   apps together. Routine data writes — reorder, add/remove a file, rename a title — are normal
   ops and proceed without prompting.
 
-### 2. Markdown flavor — HARD GATE (ADOPTED — export update pending)
+### 2. Markdown flavor — HARD GATE (ADOPTED)
 - Flavor = **CommonMark + GFM (tables, task lists, strikethrough, autolinks) + footnotes**,
   via `goldmark` with the matching extensions. **Footnotes must be enabled** to match the
   app's `swift-markdown`/cmark-gfm config.
