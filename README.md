@@ -80,6 +80,14 @@ Inside a manuscript folder (any folder with numerically-prefixed sections like
 - `n` — new section, inserted after the selection (the rest renumber).
 - `esc` — back to the editor.
 
+### Export (RTF + PDF)
+
+Press **ctrl+e**, then choose a style — **m** Manuscript (Courier, double-spaced, the
+agent/editor submission format) or **t** Tufte (elegant serif, for a printable/readable
+copy). From the editor it exports the current document; from the outline it exports the
+whole manuscript. Both an editable `.rtf` and a printable `.pdf` are written to
+`<project>/export/`. Set `OKASHI_AUTHOR` for the manuscript running header.
+
 ### Manuscript pager (read-through)
 
 From the outline, press **m** for a full-screen read-through of the whole manuscript —

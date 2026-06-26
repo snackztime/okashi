@@ -6,3 +6,6 @@
 
 # SDD scratch
 .superpowers/
+
+# exported manuscripts
+**/export/

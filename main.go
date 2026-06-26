@@ -209,7 +209,7 @@ func initialModel() model {
 		focus:          focusSidebar,
 		typewriter:     true,
 		dimEnabled:     true,
-		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+c quit",
+		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+c quit",
 		icons:          resolveIcons(),
 	}
 }
@@ -1079,7 +1079,7 @@ func (m *model) enterOutline() {
 	m.outline.load(m.files.dir, m.files.wc)
 	m.screen = screenOutline
 	m.previewing = false
-	m.status = "outline · ↑↓ select · J/K reorder · enter open · n new · m read · esc back"
+	m.status = "outline · ↑↓ select · J/K reorder · enter open · n new · m read · ctrl+e export · esc back"
 }
 
 // hasConvertibleFiles reports whether the current pane dir has at least one
