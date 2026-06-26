@@ -655,6 +655,7 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.outline.confirm = false
 			if s := m.commitOutlineOrder(); s != "" {
 				m.status = s
+				return m, nil // commit failed: stay on the outline with the error visible
 			}
 			m.leaveOutlinePending()
 			return m, nil

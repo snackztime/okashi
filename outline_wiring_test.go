@@ -156,3 +156,24 @@ func TestOutlineReorderTracksOpenFile(t *testing.T) {
 		t.Fatalf("the open file path should follow the rename to 02-a.md, got %q", m.currentFile)
 	}
 }
+
+func TestOutlineGateEscKeepsEditing(t *testing.T) {
+	m, _ := setupManuscript(t)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}}) // reorder -> dirty
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // raise the gate
+	m = nm.(model)
+	if !m.outline.confirm {
+		t.Fatal("esc with a pending reorder should raise the confirm gate")
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // esc inside the gate
+	m = nm.(model)
+	if m.outline.confirm {
+		t.Fatal("esc inside the gate should dismiss it")
+	}
+	if m.screen != screenOutline {
+		t.Fatalf("esc inside the gate should keep editing the outline, got screen %v", m.screen)
+	}
+}

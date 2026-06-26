@@ -173,6 +173,7 @@ func (o *outlineModel) load(dir string, wc *wordCountCache) {
 	o.selected = 0
 	o.wc = wc
 	o.confirm = false
+	o.pendingOpen = false
 }
 
 // readEntries lists dir's non-hidden document files (allowedDocExts) as fileEntry
