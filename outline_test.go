@@ -116,6 +116,9 @@ func TestApplyRenamesRejectsEscape(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error for a target escaping the project dir")
 	}
+	if _, statErr := os.Stat(filepath.Join(dir, "01-a.md")); statErr != nil {
+		t.Fatalf("preflight rejection must leave the original file untouched: %v", statErr)
+	}
 }
 
 func TestCommitReorderBacksUpAndRenames(t *testing.T) {

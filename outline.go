@@ -75,23 +75,35 @@ func projectTitle(name string) string {
 }
 
 // applyRenames performs ops within dir using a two-phase temp pass so that order
-// swaps (01<->02) don't collide. Every target must stay inside dir.
+// swaps (01<->02) don't collide. All targets are validated to stay inside dir
+// BEFORE any rename happens; on a mid-operation failure it makes a best-effort
+// rollback of files still parked under temp names. (The caller snapshots to
+// .backup/ before calling, so a phase-2 failure remains recoverable.)
 func applyRenames(dir string, ops []renameOp) error {
-	type pend struct{ tmp, final string }
-	var pending []pend
-	for i, op := range ops {
-		final := filepath.Join(dir, op.to)
-		if !withinRoot(final, dir) {
+	// Preflight: validate every target before touching disk.
+	for _, op := range ops {
+		if !withinRoot(filepath.Join(dir, op.to), dir) {
 			return fmt.Errorf("rename target escapes project: %s", op.to)
 		}
+	}
+	type pend struct{ tmp, final, orig string }
+	var pending []pend
+	for i, op := range ops {
+		orig := filepath.Join(dir, op.from)
 		tmp := filepath.Join(dir, fmt.Sprintf(".okashi-renumber-%d.tmp", i))
-		if err := os.Rename(filepath.Join(dir, op.from), tmp); err != nil {
+		if err := os.Rename(orig, tmp); err != nil {
+			for _, p := range pending { // roll back temps to their originals
+				_ = os.Rename(p.tmp, p.orig)
+			}
 			return err
 		}
-		pending = append(pending, pend{tmp: tmp, final: final})
+		pending = append(pending, pend{tmp: tmp, final: filepath.Join(dir, op.to), orig: orig})
 	}
-	for _, p := range pending {
+	for idx, p := range pending {
 		if err := os.Rename(p.tmp, p.final); err != nil {
+			for _, q := range pending[idx:] { // roll back the unfinalized temps
+				_ = os.Rename(q.tmp, q.orig)
+			}
 			return err
 		}
 	}
