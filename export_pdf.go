@@ -83,8 +83,8 @@ func writePDF(doc ManuscriptDoc, st ExportStyle, meta Meta) ([]byte, error) {
 	pdf := fpdf.New("P", "pt", "Letter", "")
 	cfg := pdfStyle{font: "Courier", bodySize: 12, titleSize: 14, lineHeight: 24, indent: "     "}
 	if st == StyleTufte {
-		// Task 4 replaces this with the embedded ET Book serif + Tufte metrics.
-		cfg = pdfStyle{font: "Times", bodySize: 12, titleSize: 14, lineHeight: 17, indent: ""}
+		registerETBook(pdf)
+		cfg = pdfStyle{font: "etbook", bodySize: 12, titleSize: 16, lineHeight: 17, indent: ""}
 		pdf.SetMargins(108, 90, 108)
 	} else {
 		pdf.SetMargins(72, 72, 72)

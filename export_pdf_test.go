@@ -43,3 +43,19 @@ func TestCp1252FallsBackOnUnencodable(t *testing.T) {
 		t.Fatal("cp1252 returned empty")
 	}
 }
+
+func TestWritePDFTufteEmbedsFontValid(t *testing.T) {
+	doc := ManuscriptDoc{{Title: "one", Blocks: []Block{
+		Paragraph{Runs: []Run{{Text: "Elegant "}, {Text: "serif", Italic: true}, {Text: " prose — with an em dash."}}},
+	}}}
+	out, err := writePDF(doc, StyleTufte, Meta{Title: "Tufte"})
+	if err != nil {
+		t.Fatalf("tufte PDF should build with the embedded font: %v", err)
+	}
+	if !bytes.HasPrefix(out, []byte("%PDF")) {
+		t.Fatal("not a PDF")
+	}
+	if len(out) < 5000 {
+		t.Fatalf("an embedded-font PDF should be larger than %d bytes", len(out))
+	}
+}
