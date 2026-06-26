@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -8,6 +9,11 @@ import (
 // runExport builds the export doc for the current scope (whole manuscript on the outline
 // screen, else the current document) and writes <slug>.rtf + <slug>.pdf under <dir>/export/.
 func (m *model) runExport(st ExportStyle) {
+	defer func() {
+		if r := recover(); r != nil {
+			m.status = fmt.Sprintf("export failed: %v", r)
+		}
+	}()
 	dir := m.files.dir
 	var doc ManuscriptDoc
 	var title string

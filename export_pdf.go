@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"html"
 	"strings"
 
 	"codeberg.org/go-pdf/fpdf"
@@ -69,22 +68,6 @@ func hasEmphasis(runs []Run) bool {
 	return false
 }
 
-// runsHTML renders runs as the minimal HTML fpdf's HTMLBasic writer understands.
-func runsHTML(runs []Run) string {
-	var b strings.Builder
-	for _, r := range runs {
-		txt := html.EscapeString(r.Text)
-		if r.Bold {
-			txt = "<b>" + txt + "</b>"
-		}
-		if r.Italic {
-			txt = "<i>" + txt + "</i>"
-		}
-		b.WriteString(txt)
-	}
-	return b.String()
-}
-
 // pdfStyle holds the per-style typography knobs.
 type pdfStyle struct {
 	font       string
@@ -139,10 +122,21 @@ func writeBlockPDF(pdf *fpdf.Fpdf, blk Block, st ExportStyle, cfg pdfStyle) {
 	switch v := blk.(type) {
 	case Paragraph:
 		if hasEmphasis(v.Runs) {
-			// MultiCell can't switch font mid-cell, so emphasis routes through the HTML
-			// writer (which can't carry the first-line indent).
-			h := pdf.HTMLBasicNew()
-			h.Write(cfg.lineHeight, pdfEnc(st, runsHTML(v.Runs)))
+			// MultiCell can't switch font mid-cell, so an emphasized paragraph renders
+			// run-by-run with SetFont + Write (no HTML, so no entity escaping). This
+			// loses the first-line indent, which is acceptable for emphasized paragraphs.
+			for _, r := range v.Runs {
+				style := ""
+				if r.Bold {
+					style += "B"
+				}
+				if r.Italic {
+					style += "I"
+				}
+				pdf.SetFont(cfg.font, style, cfg.bodySize)
+				pdf.Write(cfg.lineHeight, pdfEnc(st, r.Text))
+			}
+			pdf.SetFont(cfg.font, "", cfg.bodySize)
 			pdf.Ln(cfg.lineHeight)
 		} else {
 			pdf.MultiCell(0, cfg.lineHeight, pdfEnc(st, cfg.indent+plainText(v.Runs)), "", "L", false)

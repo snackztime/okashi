@@ -59,6 +59,22 @@ func TestWritePDFTufteAstralRuneSafe(t *testing.T) {
 	}
 }
 
+func TestWritePDFEmphasisSpecialCharsNoEntities(t *testing.T) {
+	// "Tom & Jerry" in bold previously rendered as the literal "Tom &amp; Jerry".
+	doc := ManuscriptDoc{{Title: "t", Blocks: []Block{
+		Paragraph{Runs: []Run{{Text: "Tom & Jerry ", Bold: true}, {Text: "<x> 'q'", Italic: true}}},
+	}}}
+	for _, st := range []ExportStyle{StyleManuscript, StyleTufte} {
+		out, err := writePDF(doc, st, Meta{Title: "T"})
+		if err != nil {
+			t.Fatalf("style %d: emphasis with &/</'/\" must not error: %v", st, err)
+		}
+		if !bytes.HasPrefix(out, []byte("%PDF")) {
+			t.Fatalf("style %d: not a PDF", st)
+		}
+	}
+}
+
 func TestWritePDFTufteEmbedsFontValid(t *testing.T) {
 	doc := ManuscriptDoc{{Title: "one", Blocks: []Block{
 		Paragraph{Runs: []Run{{Text: "Elegant "}, {Text: "serif", Italic: true}, {Text: " prose — with an em dash."}}},
