@@ -154,7 +154,7 @@ func commitInsert(dir, slug string, working []fileEntry, insertIndex, padW int, 
 		return "", nil, err
 	}
 	newName := fmt.Sprintf("%0*d-%s.md", padW, insertIndex+1, slug)
-	if err := os.WriteFile(filepath.Join(dir, newName), nil, 0o644); err != nil {
+	if err := atomicWrite(filepath.Join(dir, newName), nil, 0o644); err != nil {
 		return "", nil, err
 	}
 	moved := make(map[string]string, len(ops))

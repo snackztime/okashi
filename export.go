@@ -50,7 +50,7 @@ func (m *model) runExport(st ExportStyle) {
 	slug := slugify(title)
 	rtfPath := filepath.Join(outDir, slug+".rtf")
 	pdfPath := filepath.Join(outDir, slug+".pdf")
-	if err := os.WriteFile(rtfPath, writeRTF(doc, st, meta), 0o644); err != nil {
+	if err := atomicWrite(rtfPath, writeRTF(doc, st, meta), 0o644); err != nil {
 		m.status = "export failed: " + err.Error()
 		return
 	}
@@ -59,7 +59,7 @@ func (m *model) runExport(st ExportStyle) {
 		m.status = "export failed (pdf): " + err.Error()
 		return
 	}
-	if err := os.WriteFile(pdfPath, pdfBytes, 0o644); err != nil {
+	if err := atomicWrite(pdfPath, pdfBytes, 0o644); err != nil {
 		m.status = "export failed: " + err.Error()
 		return
 	}

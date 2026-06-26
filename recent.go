@@ -68,7 +68,7 @@ func addRecent(path, file string) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return
 	}
-	_ = os.WriteFile(path, data, 0o644)
+	_ = atomicWrite(path, data, 0o644)
 }
 
 // readRecentsRaw reads the stored list without existence-filtering (so adding a

@@ -1490,7 +1490,7 @@ func (m *model) save() {
 		m.status = "no file open — pick one from the sidebar first"
 		return
 	}
-	if err := os.WriteFile(m.currentFile, []byte(m.editor.Value()), 0o644); err != nil {
+	if err := atomicWrite(m.currentFile, []byte(m.editor.Value()), 0o644); err != nil {
 		m.status = "save failed: " + err.Error()
 		return // dirty stays true → retried next tick
 	}

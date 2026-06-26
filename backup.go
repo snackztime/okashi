@@ -23,7 +23,7 @@ func backupFiles(projectDir, stamp string, paths []string) error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(filepath.Join(dest, filepath.Base(p)), data, 0o644); err != nil {
+		if err := atomicWrite(filepath.Join(dest, filepath.Base(p)), data, 0o644); err != nil {
 			return err
 		}
 	}
