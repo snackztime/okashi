@@ -57,6 +57,16 @@ a double-click opens a file or enters a folder.
 `ctrl+n` opens a blank buffer in the folder you're currently browsing — give it
 a name (a bare name gets `.md`) and `ctrl+s` writes it to disk.
 
+### Rename & convert
+
+- In the sidebar (or outline), press **r** to rename the selected item — a loose
+  file (keeps its extension), a folder, or a section *title* (the `NN-` number is
+  kept; only the title changes). Renames refuse to overwrite an existing name.
+- Press **ctrl+l** in a plain folder of chapter files (e.g. `Chapter-00.md`,
+  `Chapter-01.md`) and okashi offers to **make it a manuscript** — it numbers the
+  files (`01-Chapter-00.md`, …) after a `.backup/` snapshot and opens the outline,
+  where you can reorder and retitle.
+
 ### Outline view (manuscripts)
 
 Inside a manuscript folder (any folder with numerically-prefixed sections like
