@@ -128,3 +128,33 @@ func TestSidebarRenameTracksOpenFile(t *testing.T) {
 		t.Fatalf("open file path should follow the rename, got %q", m.currentFile)
 	}
 }
+
+func TestOutlineRenameSectionTitle(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "01-a.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(proj, "02-the-letter.md"), []byte("x"), 0o644)
+	m := sidebarModel(t, proj)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL}) // enter the outline
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // select 02-the-letter
+	m = nm.(model)
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming {
+		t.Fatal("r in the outline should start a rename")
+	}
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "the telegram")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(proj, "02-the-telegram.md")); err != nil {
+		t.Fatalf("outline rename should retitle keeping the prefix: %v", err)
+	}
+	if m.screen != screenOutline {
+		t.Fatalf("after an outline rename we should still be in the outline, got %v", m.screen)
+	}
+}

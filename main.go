@@ -696,6 +696,24 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if m.renaming {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "esc":
+				m.renaming = false
+				m.nameInput.Blur()
+				m.status = "rename cancelled"
+				return m, nil
+			case "enter":
+				m.confirmRename()
+				return m, nil
+			}
+		}
+		var cmd tea.Cmd
+		m.nameInput, cmd = m.nameInput.Update(msg)
+		return m, cmd
+	}
+
 	if mouse, ok := msg.(tea.MouseMsg); ok {
 		if m.outlineCreating || m.outline.confirm {
 			return m, nil
@@ -782,6 +800,8 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.nameInput.Focus()
 		m.status = "new section title — enter to create, esc to cancel"
 		return m, textinput.Blink
+	case "r":
+		m.startRenameOutline()
 	case "m":
 		m.status = "manuscript view — Plan C"
 	case "esc":
@@ -962,6 +982,20 @@ func (m *model) startRename() {
 		prefill = sectionTitle(e.name)
 	}
 	m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir, section: section}, prefill)
+}
+
+// startRenameOutline begins renaming the selected outline row (section title or
+// loose file).
+func (m *model) startRenameOutline() {
+	row, ok := m.outline.selectedRow()
+	if !ok {
+		return
+	}
+	prefill := row.entry.name
+	if row.isSection {
+		prefill = sectionTitle(row.entry.name)
+	}
+	m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, isDir: false, section: row.isSection}, prefill)
 }
 
 // confirmRename applies the pending rename: builds the new name by target kind,
