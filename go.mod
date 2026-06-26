@@ -1,6 +1,6 @@
 module okashi
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/atotto/clipboard v0.1.4
@@ -16,6 +16,7 @@ require (
 )
 
 require (
+	codeberg.org/go-pdf/fpdf v0.12.0 // indirect
 	github.com/alecthomas/chroma/v2 v2.20.0 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
