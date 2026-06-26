@@ -1045,19 +1045,19 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.outline.moveSection(-1)
 	case "enter":
 		m.outline.pendingOpen = true
-		return m.outlineLeave(m)
+		return m.outlineLeave()
 	case "m":
 		m.status = "manuscript view — Plan C"
 	case "esc":
 		m.outline.pendingOpen = false
-		return m.outlineLeave(m)
+		return m.outlineLeave()
 	}
 	return m, nil
 }
 
 // outlineLeave handles an exit/open request: if a reorder is pending, raise the
 // confirm gate; otherwise complete the action immediately.
-func (m model) outlineLeave(_ model) (tea.Model, tea.Cmd) {
+func (m model) outlineLeave() (tea.Model, tea.Cmd) {
 	if m.outline.dirty() {
 		m.outline.confirm = true
 		m.status = "apply reordering?  y apply · n discard · esc keep editing"
@@ -1474,4 +1474,4 @@ git commit -m "docs: outline view keymap + ctrl+l status hint"
 
 **Risk checks baked into tests:** two-phase rename swap without collision (Task 2); path-escape rejected (Task 2); disk untouched until the gate is confirmed + discard leaves disk clean (Task 5); open-file path follows a rename (Task 5); insert shifts only files at/below the point (Task 6); hit-test row math matches the render header height (Task 7).
 
-**Note for the executor:** Task 5 introduces `pendingOpen` on `outlineModel` and replaces the Task-4 `updateOutline` body wholesale — read both tasks together. The `outlineLeave(_ model)` signature takes the receiver by value and returns `(tea.Model, tea.Cmd)` to match Bubble Tea's update style; it reads `m.outline.dirty()` and either raises the gate or calls `leaveOutlinePending` (pointer method on the local copy `m`, which is then returned by the caller).
+**Note for the executor:** Task 5 introduces `pendingOpen` on `outlineModel` and replaces the Task-4 `updateOutline` body wholesale — read both tasks together. `outlineLeave()` is a value-receiver method returning `(tea.Model, tea.Cmd)` to match Bubble Tea's update style; it reads `m.outline.dirty()` and either raises the gate or calls `leaveOutlinePending` (a pointer method on the addressable local copy `m`, which is then returned).
