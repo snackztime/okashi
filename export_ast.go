@@ -1,13 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/yuin/goldmark"
 	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/extension"
+	xast "github.com/yuin/goldmark/extension/ast"
 	"github.com/yuin/goldmark/text"
 )
+
+// exportParser parses with GFM + footnotes so the export matches the shared corpus flavor
+// (CLAUDE.md shared-contract §2). Built once.
+var exportParser = goldmark.New(goldmark.WithExtensions(extension.GFM, extension.Footnote)).Parser()
 
 // ExportStyle selects the render-time typography; the AST is style-agnostic.
 type ExportStyle int
@@ -46,11 +53,21 @@ type List struct {
 }
 type SceneBreak struct{}
 
+// Endnote is one footnote, collected into a chapter's Endnotes.
+type Endnote struct {
+	Num  int
+	Runs []Run
+}
+
+// Endnotes is the chapter's footnote bodies, rendered as a "Notes" section at the end.
+type Endnotes struct{ Items []Endnote }
+
 func (Paragraph) isBlock()  {}
 func (Heading) isBlock()    {}
 func (Blockquote) isBlock() {}
 func (List) isBlock()       {}
 func (SceneBreak) isBlock() {}
+func (Endnotes) isBlock()   {}
 
 // Section is one chapter; Title comes from the FILENAME, never the content.
 type Section struct {
@@ -64,7 +81,7 @@ type ManuscriptDoc []Section
 
 // parseSection parses a section's markdown into our block subset.
 func parseSection(src []byte) []Block {
-	root := goldmark.DefaultParser().Parse(text.NewReader(src))
+	root := exportParser.Parse(text.NewReader(src))
 	var blocks []Block
 	first := true
 	for n := root.FirstChild(); n != nil; n = n.NextSibling() {
@@ -112,6 +129,19 @@ func blockFrom(n ast.Node, src []byte, isFirst bool) (Block, bool) {
 			lst.Items = append(lst.Items, Paragraph{Runs: itemRuns(li, src)})
 		}
 		return lst, false
+	case *xast.FootnoteList:
+		var en Endnotes
+		for f := n.FirstChild(); f != nil; f = f.NextSibling() {
+			fn, ok := f.(*xast.Footnote)
+			if !ok {
+				continue
+			}
+			en.Items = append(en.Items, Endnote{Num: fn.Index, Runs: itemRuns(f, src)})
+		}
+		if len(en.Items) == 0 {
+			return nil, true
+		}
+		return en, false
 	default:
 		runs := inlineRuns(n, src, 0)
 		if len(runs) == 0 {
@@ -141,6 +171,8 @@ func inlineRuns(n ast.Node, src []byte, emph int) []Run {
 				bit = 2
 			}
 			runs = append(runs, inlineRuns(c, src, emph|bit)...)
+		case *xast.FootnoteLink:
+			runs = append(runs, Run{Text: fmt.Sprintf("[%d]", t.Index), Bold: bold, Italic: italic})
 		default:
 			runs = append(runs, inlineRuns(c, src, emph)...)
 		}

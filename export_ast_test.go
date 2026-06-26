@@ -103,3 +103,38 @@ func TestManuscriptDocExcludesLooseAndTitlesFromFilename(t *testing.T) {
 		t.Fatalf("titles should come from the filename: %q, %q", doc[0].Title, doc[1].Title)
 	}
 }
+
+func TestParseSectionFootnoteEndnotes(t *testing.T) {
+	src := []byte("She paused[^a] there.\n\n[^a]: A note about pausing.\n")
+	blocks := parseSection(src)
+	// The body paragraph carries a [1] marker run.
+	p, ok := blocks[0].(Paragraph)
+	if !ok {
+		t.Fatalf("block 0 should be a Paragraph, got %T", blocks[0])
+	}
+	var marker bool
+	for _, r := range p.Runs {
+		if r.Text == "[1]" {
+			marker = true
+		}
+	}
+	if !marker {
+		t.Fatalf("footnote ref should render a [1] marker run: %#v", p.Runs)
+	}
+	// The last block is the chapter's Endnotes.
+	last := blocks[len(blocks)-1]
+	en, ok := last.(Endnotes)
+	if !ok {
+		t.Fatalf("last block should be Endnotes, got %T", last)
+	}
+	if len(en.Items) != 1 || en.Items[0].Num != 1 {
+		t.Fatalf("expected 1 endnote numbered 1, got %#v", en.Items)
+	}
+	var body string
+	for _, r := range en.Items[0].Runs {
+		body += r.Text
+	}
+	if body != "A note about pausing." {
+		t.Fatalf("endnote body = %q", body)
+	}
+}
