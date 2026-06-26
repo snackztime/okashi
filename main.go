@@ -899,12 +899,13 @@ func (m model) updateManuscript(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if sz, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = sz.Width
 		m.height = sz.Height
-		m.pager.width = m.colWidth
+		w := pagerWidth(m.colWidth, sz.Width)
+		m.pager.width = w
 		m.pager.height = sz.Height - 1 - pagerHeaderHeight
 		if m.pager.height < 1 {
 			m.pager.height = 1
 		}
-		m.pager.ensureVisible()
+		m.pager.load(m.pager.dir, w) // re-wrap the line→source map to the new width
 		m.layout()
 		return m, nil
 	}
@@ -996,14 +997,26 @@ func (m *model) commitOutlineOrder() (map[string]string, string) {
 // enterManuscript builds the read-through pager for the current outline's
 // manuscript and shows it. Reached from the outline's `m`.
 func (m *model) enterManuscript() {
-	m.pager.width = m.colWidth
+	w := pagerWidth(m.colWidth, m.width)
+	m.pager.width = w
 	m.pager.height = m.height - 1 - pagerHeaderHeight // status row + header
 	if m.pager.height < 1 {
 		m.pager.height = 1
 	}
-	m.pager.load(m.outline.dir, m.colWidth)
+	m.pager.load(m.outline.dir, w)
+	m.lastClickTime = time.Time{} // don't carry a stale double-click in from another screen
 	m.screen = screenManuscript
 	m.status = "manuscript · ↑↓ scroll · enter edit here · o outline · esc editor"
+}
+
+// pagerWidth is the pager's measure: the configured column width, never wider than
+// the terminal (mirrors the editor's clamp), floored at 1.
+func pagerWidth(colWidth, termWidth int) int {
+	w := min(colWidth, termWidth-2)
+	if w < 1 {
+		w = 1
+	}
+	return w
 }
 
 // enterOutline opens the manuscript outline for the current pane dir. Caller

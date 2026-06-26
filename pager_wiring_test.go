@@ -79,6 +79,36 @@ func TestPagerOGoesToOutlineEscToEditor(t *testing.T) {
 	}
 }
 
+func TestPagerClampsWidthToTerminal(t *testing.T) {
+	m, _ := manuscriptModel(t)
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 20}) // narrow terminal
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	m = nm.(model)
+	if m.pager.width > 30 {
+		t.Fatalf("pager width must clamp to the terminal (<=30), got %d", m.pager.width)
+	}
+}
+
+func TestPagerResizeReclampsWidth(t *testing.T) {
+	m, _ := manuscriptModel(t) // 100-col terminal
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	m = nm.(model)
+	before := m.pager.width
+	nm, _ = m.Update(tea.WindowSizeMsg{Width: 20, Height: 15}) // shrink
+	m = nm.(model)
+	if m.pager.width >= before || m.pager.width > 20 {
+		t.Fatalf("resize should re-clamp the pager width to <=20 (was %d, now %d)", before, m.pager.width)
+	}
+	if len(m.pager.lines) == 0 {
+		t.Fatal("resize should re-wrap the lines, not clear them")
+	}
+}
+
 func TestPagerClickThenDoubleClickJumps(t *testing.T) {
 	m, proj := manuscriptModel(t)
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
