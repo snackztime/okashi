@@ -112,6 +112,7 @@ const (
 	screenHome screen = iota
 	screenWriting
 	screenOutline
+	screenManuscript
 )
 
 // renameTarget is the item a pending rename prompt will rename.
@@ -151,6 +152,8 @@ type model struct {
 	icons           iconSet
 	outline         outlineModel
 	outlineCreating bool
+
+	pager pagerModel
 
 	renaming     bool
 	renameTarget renameTarget
@@ -311,6 +314,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenOutline {
 		return m.updateOutline(msg)
+	}
+
+	if m.screen == screenManuscript {
+		return m.updateManuscript(msg)
 	}
 
 	// While naming a new file, the prompt captures all input.
@@ -626,6 +633,10 @@ func (m model) View() string {
 		return m.outlineView()
 	}
 
+	if m.screen == screenManuscript {
+		return m.pagerView()
+	}
+
 	bodyH := m.height - 1 // status only; no banner in the writing zone
 	if bodyH < 1 {
 		bodyH = 1
@@ -828,7 +839,7 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "r":
 		m.startRenameOutline()
 	case "m":
-		m.status = "manuscript view — Plan C"
+		m.enterManuscript()
 	case "esc":
 		m.outline.pendingOpen = false
 		return m.outlineLeave()
@@ -883,6 +894,60 @@ func (m model) outlineView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, body, status)
 }
 
+// updateManuscript handles input on the pager: scroll, jump-to-edit, and exits.
+func (m model) updateManuscript(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if sz, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = sz.Width
+		m.height = sz.Height
+		m.pager.width = m.colWidth
+		m.pager.height = sz.Height - 1 - pagerHeaderHeight
+		if m.pager.height < 1 {
+			m.pager.height = 1
+		}
+		m.pager.ensureVisible()
+		m.layout()
+		return m, nil
+	}
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "up", "k":
+		m.pager.moveCursor(-1)
+	case "down", "j":
+		m.pager.moveCursor(1)
+	case "pgup":
+		m.pager.page(-1)
+	case "pgdown":
+		m.pager.page(1)
+	case "enter":
+		if file, src, ok := m.pager.jumpTarget(); ok {
+			m.loadFile(filepath.Join(m.pager.dir, file))
+			m.editor.MoveToLine(src)
+			m.screen = screenWriting
+			m.focus = focusEditor
+			m.editor.Focus()
+		}
+	case "o":
+		m.enterOutline()
+	case "esc":
+		m.screen = screenWriting
+		m.focus = focusEditor
+		m.editor.Focus()
+	}
+	return m, nil
+}
+
+// pagerView renders the pager screen with the status bar.
+func (m model) pagerView() string {
+	body := m.pager.View()
+	status := statusStyle.Width(m.width).Render(m.statusBar())
+	return lipgloss.JoinVertical(lipgloss.Left, body, status)
+}
+
 // commitOutlineOrder applies a pending reorder: backup + renumber on disk, then
 // follow the open file's rename and refresh the sidebar + outline. Returns an
 // error string for the status line (empty on success/no-op).
@@ -897,6 +962,19 @@ func (m *model) commitOutlineOrder() (map[string]string, string) {
 	m.files.SetDir(m.files.dir) // re-sort the sidebar to the new names
 	m.outline.load(m.outline.dir, m.files.wc)
 	return moved, ""
+}
+
+// enterManuscript builds the read-through pager for the current outline's
+// manuscript and shows it. Reached from the outline's `m`.
+func (m *model) enterManuscript() {
+	m.pager.width = m.colWidth
+	m.pager.height = m.height - 1 - pagerHeaderHeight // status row + header
+	if m.pager.height < 1 {
+		m.pager.height = 1
+	}
+	m.pager.load(m.outline.dir, m.colWidth)
+	m.screen = screenManuscript
+	m.status = "manuscript · ↑↓ scroll · enter edit here · o outline · esc editor"
 }
 
 // enterOutline opens the manuscript outline for the current pane dir. Caller
