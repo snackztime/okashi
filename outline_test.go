@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -159,5 +160,66 @@ func TestCommitReorderNoopNoBackup(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".backup")); !os.IsNotExist(err) {
 		t.Fatalf("no-op reorder should not create a backup dir")
+	}
+}
+
+func TestOutlineLoadAndRows(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("one two"), 0o644)
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("loose"), 0o644)
+	var o outlineModel
+	o.load(dir, newWordCountCache())
+	rows := o.rows()
+	if len(rows) != 3 {
+		t.Fatalf("rows = %d, want 3 (2 sections + 1 loose)", len(rows))
+	}
+	if rows[0].entry.name != "01-a.md" || !rows[0].isSection {
+		t.Fatalf("row 0 should be section 01-a.md, got %+v", rows[0])
+	}
+	if rows[2].entry.name != "notes.md" || rows[2].isSection {
+		t.Fatalf("row 2 should be loose notes.md, got %+v", rows[2])
+	}
+}
+
+func TestOutlineMoveSectionMakesDirty(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("x"), 0o644)
+	var o outlineModel
+	o.load(dir, newWordCountCache())
+	if o.dirty() {
+		t.Fatal("freshly loaded outline should not be dirty")
+	}
+	o.selected = 0
+	o.moveSection(1) // move section 1 down
+	if !o.dirty() {
+		t.Fatal("after moving a section the outline should be dirty")
+	}
+	if o.working[0].name != "02-b.md" || o.working[1].name != "01-a.md" {
+		t.Fatalf("working order should be swapped, got %v", o.working)
+	}
+	if o.selected != 1 {
+		t.Fatalf("selection should follow the moved section to index 1, got %d", o.selected)
+	}
+}
+
+func TestOutlineViewShowsTitlesCountsAndTotal(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-opening.md"), []byte("one two three"), 0o644)
+	os.WriteFile(filepath.Join(dir, "02-the-letter.md"), []byte("a b"), 0o644)
+	var o outlineModel
+	o.load(dir, newWordCountCache())
+	o.width = 60
+	o.height = 12
+	view := o.View()
+	if !strings.Contains(view, "opening") || strings.Contains(view, "01-opening") {
+		t.Fatalf("outline should show stripped title 'opening', not the raw filename:\n%s", view)
+	}
+	if !strings.Contains(view, "3w") {
+		t.Fatalf("outline should show the per-section count '3w':\n%s", view)
+	}
+	if !strings.Contains(view, "5w") {
+		t.Fatalf("outline header should show the project total '5w':\n%s", view)
 	}
 }

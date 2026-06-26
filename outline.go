@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // renameOp is a single base-name rename within a manuscript dir.
@@ -134,4 +137,168 @@ func commitReorder(dir string, working []fileEntry, stamp string) (map[string]st
 		moved[filepath.Join(dir, op.from)] = filepath.Join(dir, op.to)
 	}
 	return moved, nil
+}
+
+const outlineHeaderHeight = 2 // title line + blank spacer
+
+// outlineRow is one selectable row: a numbered section or a loose file.
+type outlineRow struct {
+	entry     fileEntry
+	isSection bool
+}
+
+// outlineModel is the full-screen manuscript outline. working is the (possibly
+// reordered) section order; disk is the on-disk order, for dirty detection.
+type outlineModel struct {
+	dir      string
+	working  []fileEntry
+	disk     []fileEntry
+	loose    []fileEntry
+	selected int
+	width    int
+	height   int
+	wc       *wordCountCache
+	confirm  bool // apply/discard gate visible
+}
+
+// load reads dir's sections (ordered) and loose files into the outline.
+func (o *outlineModel) load(dir string, wc *wordCountCache) {
+	entries := readEntries(dir)
+	sections, loose := orderedSections(entries)
+	o.dir = dir
+	o.working = sections
+	o.disk = append([]fileEntry(nil), sections...)
+	o.loose = loose
+	o.selected = 0
+	o.wc = wc
+	o.confirm = false
+}
+
+// readEntries lists dir's non-hidden .md/.txt files as fileEntry values (dirs
+// excluded — the outline lists section files only).
+func readEntries(dir string) []fileEntry {
+	items, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var out []fileEntry
+	for _, it := range items {
+		name := it.Name()
+		if strings.HasPrefix(name, ".") || it.IsDir() {
+			continue
+		}
+		out = append(out, fileEntry{name: name})
+	}
+	return out
+}
+
+// rows returns the selectable rows: working sections, then loose files.
+func (o outlineModel) rows() []outlineRow {
+	rows := make([]outlineRow, 0, len(o.working)+len(o.loose))
+	for _, e := range o.working {
+		rows = append(rows, outlineRow{entry: e, isSection: true})
+	}
+	for _, e := range o.loose {
+		rows = append(rows, outlineRow{entry: e, isSection: false})
+	}
+	return rows
+}
+
+// dirty reports whether the working order differs from the on-disk order.
+func (o outlineModel) dirty() bool {
+	if len(o.working) != len(o.disk) {
+		return true
+	}
+	for i := range o.working {
+		if o.working[i].name != o.disk[i].name {
+			return true
+		}
+	}
+	return false
+}
+
+// moveSelection moves the cursor by d, clamped across all rows.
+func (o *outlineModel) moveSelection(d int) {
+	n := len(o.working) + len(o.loose)
+	if n == 0 {
+		return
+	}
+	o.selected += d
+	if o.selected < 0 {
+		o.selected = 0
+	}
+	if o.selected >= n {
+		o.selected = n - 1
+	}
+}
+
+// moveSection moves the selected section by d within the working order (no-op
+// unless the selection is a section). The selection follows the moved section.
+func (o *outlineModel) moveSection(d int) {
+	i := o.selected
+	if i < 0 || i >= len(o.working) {
+		return // selection is a loose row (or empty): not reorderable
+	}
+	j := i + d
+	if j < 0 || j >= len(o.working) {
+		return
+	}
+	o.working[i], o.working[j] = o.working[j], o.working[i]
+	o.selected = j
+}
+
+// selectedRow returns the row under the cursor.
+func (o outlineModel) selectedRow() (outlineRow, bool) {
+	rows := o.rows()
+	if o.selected < 0 || o.selected >= len(rows) {
+		return outlineRow{}, false
+	}
+	return rows[o.selected], true
+}
+
+// View renders the outline: a header line, then one row per section/loose file.
+func (o outlineModel) View() string {
+	title := projectTitle(filepath.Base(o.dir))
+	total := projectWordCount(o.dir, o.working, o.wc)
+	head := fmt.Sprintf("%s · %sw · %d sections", title, commafy(total), len(o.working))
+	if o.dirty() {
+		head += "   ● unsaved order"
+	}
+	var b strings.Builder
+	b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(ansi.Truncate(head, o.width, "…")))
+	b.WriteString("\n\n") // outlineHeaderHeight = 2 rows
+
+	rows := o.rows()
+	for i, r := range rows {
+		var line string
+		if r.isSection {
+			digits, _ := splitPrefix(r.entry.name)
+			count := commafy(o.wc.count(filepath.Join(o.dir, r.entry.name))) + "w"
+			left := " " + digits + "  " + sectionTitle(r.entry.name)
+			maxLeft := o.width - lipgloss.Width(count) - 1
+			if maxLeft < 1 {
+				maxLeft = 1
+			}
+			left = ansi.Truncate(left, maxLeft, "…")
+			gap := o.width - lipgloss.Width(left) - lipgloss.Width(count)
+			if gap < 1 {
+				gap = 1
+			}
+			line = left + strings.Repeat(" ", gap) + count
+		} else {
+			line = ansi.Truncate(" "+r.entry.name, o.width, "…")
+		}
+		switch {
+		case i == o.selected:
+			b.WriteString(selectedStyle.Width(o.width).Render(ansi.Truncate(line, o.width, "…")))
+		case !r.isSection:
+			b.WriteString(lipgloss.NewStyle().Foreground(subtle).Render(line))
+		default:
+			b.WriteString(line)
+		}
+		if i < len(rows)-1 {
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
 }
