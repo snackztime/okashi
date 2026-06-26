@@ -99,10 +99,12 @@ both repos.
 ### 1. Manuscript ordering & membership — HARD GATE + OPEN CROSS-APP ITEM
 - okashi's contract is the **filename convention**: numeric prefix = order, de-slugged
   filename = title, unnumbered = loose/Resources (excluded from order/export). **No manifest.**
-- ⚠️ **OPEN:** if `../inkmere` assumes a *manifest* file (the earlier draft of this doc), the
-  two apps currently **disagree on the shared corpus's ordering contract.** This must be
-  reconciled at the project level (pick ONE: filename-prefix or manifest) and implemented in
-  **both** codebases together. Until then, okashi is authoritative on filename-prefix.
+- ⚠️ **OPEN (deferred to inkmere):** `../inkmere` is **not built yet**. When it is, it will
+  likely introduce a **manifest** at project creation; that ordering decision is **dictated
+  from there** and then brought back here to reconcile. Until inkmere lands and the choice is
+  made, okashi is authoritative on **filename-prefix**. If inkmere adopts a manifest, pick ONE
+  (filename-prefix or manifest) and implement it in **both** codebases together — do not change
+  okashi's convention unilaterally.
 - HARD GATE: before changing the on-disk **ordering/membership convention** (prefix format,
   zero-pad rules, loose-file semantics), STOP, confirm with the user, and implement in both
   apps together. Routine data writes — reorder, add/remove a file, rename a title — are normal
