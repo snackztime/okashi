@@ -159,6 +159,7 @@ type model struct {
 	renameTarget renameTarget
 
 	convertPrompt bool
+	exportPrompt  bool
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -381,6 +382,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.exportPrompt {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "m":
+				m.exportPrompt = false
+				m.runExport(StyleManuscript)
+				return m, nil
+			case "t":
+				m.exportPrompt = false
+				m.runExport(StyleTufte)
+				return m, nil
+			case "esc":
+				m.exportPrompt = false
+				m.status = "export cancelled"
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -507,6 +530,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			default:
 				m.status = "nothing to convert (no documents here)"
 			}
+			return m, nil
+		case "ctrl+e":
+			m.exportPrompt = true
+			m.status = "export: m manuscript · t tufte · esc cancel"
 			return m, nil
 		case "ctrl+d":
 			m.dimEnabled = !m.dimEnabled
@@ -750,6 +777,28 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	if m.exportPrompt {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "m":
+				m.exportPrompt = false
+				m.runExport(StyleManuscript)
+				return m, nil
+			case "t":
+				m.exportPrompt = false
+				m.runExport(StyleTufte)
+				return m, nil
+			case "esc":
+				m.exportPrompt = false
+				m.status = "export cancelled"
+				return m, nil
+			}
+		}
+		return m, nil
+	}
+
 	if mouse, ok := msg.(tea.MouseMsg); ok {
 		if m.outlineCreating || m.outline.confirm {
 			return m, nil
@@ -840,6 +889,9 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.startRenameOutline()
 	case "m":
 		m.enterManuscript()
+	case "ctrl+e":
+		m.exportPrompt = true
+		m.status = "export: m manuscript · t tufte · esc cancel"
 	case "esc":
 		m.outline.pendingOpen = false
 		return m.outlineLeave()
@@ -1392,6 +1444,9 @@ func (m model) statusBar() string {
 	}
 	if m.convertPrompt {
 		return "make this a manuscript? (y / n)"
+	}
+	if m.exportPrompt {
+		return "export: m manuscript · t tufte · esc cancel"
 	}
 	mark := "✓"
 	if m.dirty {
