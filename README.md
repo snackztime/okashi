@@ -57,6 +57,19 @@ a double-click opens a file or enters a folder.
 `ctrl+n` opens a blank buffer in the folder you're currently browsing — give it
 a name (a bare name gets `.md`) and `ctrl+s` writes it to disk.
 
+### Outline view (manuscripts)
+
+Inside a manuscript folder (any folder with numerically-prefixed sections like
+`01-opening.md`), press **ctrl+l** to open the outline:
+
+- `↑ ↓` / `j k` — move the selection; **enter** (or double-click) opens a section.
+- `J K` or `shift+↑ ↓` — reorder the selected section. Reordering is staged; on
+  **esc**/enter you're asked to **apply** (`y`), **discard** (`n`), or keep
+  editing (`esc`). Applying renumbers the files on disk after writing a
+  `.backup/` snapshot.
+- `n` — new section, inserted after the selection (the rest renumber).
+- `esc` — back to the editor.
+
 ## Markdown preview
 
 New files default to `.md`, which is just plain text you edit directly — but
