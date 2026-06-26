@@ -1014,7 +1014,7 @@ func (m *model) enterOutline() {
 	m.outline.load(m.files.dir, m.files.wc)
 	m.screen = screenOutline
 	m.previewing = false
-	m.status = "outline · ↑↓ select · J/K reorder · enter open · n new · esc back"
+	m.status = "outline · ↑↓ select · J/K reorder · enter open · n new · m read · esc back"
 }
 
 // hasConvertibleFiles reports whether the current pane dir has at least one

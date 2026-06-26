@@ -80,6 +80,16 @@ Inside a manuscript folder (any folder with numerically-prefixed sections like
 - `n` — new section, inserted after the selection (the rest renumber).
 - `esc` — back to the editor.
 
+### Manuscript pager (read-through)
+
+From the outline, press **m** for a full-screen read-through of the whole manuscript —
+every chapter concatenated, with `── Title ──` dividers and a `words-so-far / total`
+header so you can see where you are.
+
+- `↑ ↓` / `j k` scroll · `pgup` / `pgdn` page · the cursor line is highlighted.
+- **enter** (or double-click) on any line jumps into the editor at that exact line.
+- `o` back to the outline · `esc` to the editor.
+
 ## Markdown preview
 
 New files default to `.md`, which is just plain text you edit directly — but
