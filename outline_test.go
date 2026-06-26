@@ -1,6 +1,10 @@
 package main
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func TestSplitPrefix(t *testing.T) {
 	cases := []struct{ name, digits, rest string }{
@@ -85,5 +89,72 @@ func TestProjectTitle(t *testing.T) {
 		if got := projectTitle(in); got != want {
 			t.Errorf("projectTitle(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+func TestApplyRenamesSwapNoCollision(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("AAA"), 0o644)
+	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("BBB"), 0o644)
+	// Swap their numbers: 01-a -> 02-a, 02-b -> 01-b.
+	ops := []renameOp{{"01-a.md", "02-a.md"}, {"02-b.md", "01-b.md"}}
+	if err := applyRenames(dir, ops); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "02-a.md")); string(b) != "AAA" {
+		t.Fatalf("02-a.md content = %q, want AAA", b)
+	}
+	if b, _ := os.ReadFile(filepath.Join(dir, "01-b.md")); string(b) != "BBB" {
+		t.Fatalf("01-b.md content = %q, want BBB", b)
+	}
+}
+
+func TestApplyRenamesRejectsEscape(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
+	err := applyRenames(dir, []renameOp{{"01-a.md", "../escaped.md"}})
+	if err == nil {
+		t.Fatal("expected an error for a target escaping the project dir")
+	}
+}
+
+func TestCommitReorderBacksUpAndRenames(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("a"), 0o644)
+	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("b"), 0o644)
+	os.WriteFile(filepath.Join(dir, "03-c.md"), []byte("c"), 0o644)
+	// Working order with #3 moved up one: [01-a, 03-c, 02-b].
+	working := []fileEntry{{name: "01-a.md"}, {name: "03-c.md"}, {name: "02-b.md"}}
+	moved, err := commitReorder(dir, working, "STAMP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// 03-c -> 02-c and 02-b -> 03-b on disk.
+	if _, err := os.Stat(filepath.Join(dir, "02-c.md")); err != nil {
+		t.Fatalf("expected 02-c.md after reorder: %v", err)
+	}
+	if moved[filepath.Join(dir, "03-c.md")] != filepath.Join(dir, "02-c.md") {
+		t.Fatalf("moved map should record 03-c -> 02-c, got %v", moved)
+	}
+	// A backup snapshot of the pre-reorder files exists.
+	if _, err := os.Stat(filepath.Join(dir, ".backup", "STAMP", "01-a.md")); err != nil {
+		t.Fatalf("expected pre-reorder backup: %v", err)
+	}
+}
+
+func TestCommitReorderNoopNoBackup(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("a"), 0o644)
+	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("b"), 0o644)
+	working := []fileEntry{{name: "01-a.md"}, {name: "02-b.md"}}
+	moved, err := commitReorder(dir, working, "STAMP")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(moved) != 0 {
+		t.Fatalf("no-op reorder should move nothing, got %v", moved)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".backup")); !os.IsNotExist(err) {
+		t.Fatalf("no-op reorder should not create a backup dir")
 	}
 }

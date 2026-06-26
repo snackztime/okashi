@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -71,4 +72,54 @@ func projectTitle(name string) string {
 	s = strings.ReplaceAll(s, "-", " ")
 	s = strings.ReplaceAll(s, "_", " ")
 	return strings.TrimSpace(s)
+}
+
+// applyRenames performs ops within dir using a two-phase temp pass so that order
+// swaps (01<->02) don't collide. Every target must stay inside dir.
+func applyRenames(dir string, ops []renameOp) error {
+	type pend struct{ tmp, final string }
+	var pending []pend
+	for i, op := range ops {
+		final := filepath.Join(dir, op.to)
+		if !withinRoot(final, dir) {
+			return fmt.Errorf("rename target escapes project: %s", op.to)
+		}
+		tmp := filepath.Join(dir, fmt.Sprintf(".okashi-renumber-%d.tmp", i))
+		if err := os.Rename(filepath.Join(dir, op.from), tmp); err != nil {
+			return err
+		}
+		pending = append(pending, pend{tmp: tmp, final: final})
+	}
+	for _, p := range pending {
+		if err := os.Rename(p.tmp, p.final); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// commitReorder snapshots the section files, then renumbers them on disk to match
+// the working order. Returns old->new absolute paths for moved files (nil if the
+// order was already correct). stamp is supplied by the caller.
+func commitReorder(dir string, working []fileEntry, stamp string) (map[string]string, error) {
+	width := padWidth(len(working), existingPrefixWidth(working))
+	ops := planRenames(working, width)
+	if len(ops) == 0 {
+		return nil, nil
+	}
+	var paths []string
+	for _, w := range working {
+		paths = append(paths, filepath.Join(dir, w.name))
+	}
+	if err := backupFiles(dir, stamp, paths); err != nil {
+		return nil, err
+	}
+	if err := applyRenames(dir, ops); err != nil {
+		return nil, err
+	}
+	moved := make(map[string]string, len(ops))
+	for _, op := range ops {
+		moved[filepath.Join(dir, op.from)] = filepath.Join(dir, op.to)
+	}
+	return moved, nil
 }
