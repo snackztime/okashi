@@ -633,8 +633,7 @@ func (m *model) layout() {
 	m.preview.Height = bodyH - 1 // reserve one row for the PREVIEW header
 }
 
-// updateOutline handles input on the outline screen: select, open, back.
-// (Reorder and new-section are layered on in later tasks.)
+// updateOutline handles input on the outline screen: select, open, back, reorder.
 func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if sz, ok := msg.(tea.WindowSizeMsg); ok {
 		m.width = sz.Width
@@ -648,6 +647,29 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
+
+	// The apply/discard gate captures input while it is up.
+	if m.outline.confirm {
+		switch key.String() {
+		case "y":
+			m.outline.confirm = false
+			if s := m.commitOutlineOrder(); s != "" {
+				m.status = s
+			}
+			m.leaveOutlinePending()
+			return m, nil
+		case "n":
+			m.outline.confirm = false
+			m.outline.working = append([]fileEntry(nil), m.outline.disk...) // discard moves
+			m.leaveOutlinePending()
+			return m, nil
+		case "esc":
+			m.outline.confirm = false // keep editing the outline
+			return m, nil
+		}
+		return m, nil
+	}
+
 	switch key.String() {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -655,21 +677,44 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.outline.moveSelection(-1)
 	case "down", "j":
 		m.outline.moveSelection(1)
+	case "J", "shift+down":
+		m.outline.moveSection(1)
+	case "K", "shift+up":
+		m.outline.moveSection(-1)
 	case "enter":
-		if row, ok := m.outline.selectedRow(); ok {
-			m.loadFile(filepath.Join(m.outline.dir, row.entry.name))
-			m.screen = screenWriting
-			m.focus = focusEditor
-			m.editor.Focus()
-		}
+		m.outline.pendingOpen = true
+		return m.outlineLeave()
 	case "m":
 		m.status = "manuscript view — Plan C"
 	case "esc":
-		m.screen = screenWriting
-		m.focus = focusEditor
-		m.editor.Focus()
+		m.outline.pendingOpen = false
+		return m.outlineLeave()
 	}
 	return m, nil
+}
+
+// outlineLeave handles an exit/open request: if a reorder is pending, raise the
+// confirm gate; otherwise complete the action immediately.
+func (m model) outlineLeave() (tea.Model, tea.Cmd) {
+	if m.outline.dirty() {
+		m.outline.confirm = true
+		m.status = "apply reordering?  y apply · n discard · esc keep editing"
+		return m, nil
+	}
+	m.leaveOutlinePending()
+	return m, nil
+}
+
+// leaveOutlinePending completes a pending exit or open (set via pendingOpen).
+func (m *model) leaveOutlinePending() {
+	if m.outline.pendingOpen {
+		if row, ok := m.outline.selectedRow(); ok {
+			m.loadFile(filepath.Join(m.outline.dir, row.entry.name))
+		}
+	}
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
 }
 
 // outlineView renders the outline screen with the status bar.
@@ -677,6 +722,22 @@ func (m model) outlineView() string {
 	body := m.outline.View()
 	status := statusStyle.Width(m.width).Render(m.statusBar())
 	return lipgloss.JoinVertical(lipgloss.Left, body, status)
+}
+
+// commitOutlineOrder applies a pending reorder: backup + renumber on disk, then
+// follow the open file's rename and refresh the sidebar + outline. Returns an
+// error string for the status line (empty on success/no-op).
+func (m *model) commitOutlineOrder() string {
+	moved, err := commitReorder(m.outline.dir, m.outline.working, backupStamp(time.Now()))
+	if err != nil {
+		return "reorder failed: " + err.Error()
+	}
+	if newPath, ok := moved[m.currentFile]; ok {
+		m.currentFile = newPath
+	}
+	m.files.SetDir(m.files.dir) // re-sort the sidebar to the new names
+	m.outline.load(m.outline.dir, m.files.wc)
+	return ""
 }
 
 // enterOutline opens the manuscript outline for the current pane dir. Caller

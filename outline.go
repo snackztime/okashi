@@ -150,15 +150,16 @@ type outlineRow struct {
 // outlineModel is the full-screen manuscript outline. working is the (possibly
 // reordered) section order; disk is the on-disk order, for dirty detection.
 type outlineModel struct {
-	dir      string
-	working  []fileEntry
-	disk     []fileEntry
-	loose    []fileEntry
-	selected int
-	width    int
-	height   int
-	wc       *wordCountCache
-	confirm  bool // apply/discard gate visible
+	dir         string
+	working     []fileEntry
+	disk        []fileEntry
+	loose       []fileEntry
+	selected    int
+	width       int
+	height      int
+	wc          *wordCountCache
+	confirm     bool // apply/discard gate visible
+	pendingOpen bool // the pending leave is an open (Enter), not a back (esc)
 }
 
 // load reads dir's sections (ordered) and loose files into the outline.

@@ -89,3 +89,70 @@ func TestOutlineHandlesResize(t *testing.T) {
 		t.Fatalf("resize on the outline should update outline dims to 70x19, got %dx%d", m.outline.width, m.outline.height)
 	}
 }
+
+func TestOutlineReorderCommitsOnEscConfirm(t *testing.T) {
+	m, proj := setupManuscript(t)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	// Move section 1 (01-a) down past 02-b.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = nm.(model)
+	if !m.outline.dirty() {
+		t.Fatal("after J the outline should be dirty")
+	}
+	// esc -> confirm gate appears, no disk change yet.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(model)
+	if !m.outline.confirm {
+		t.Fatal("esc with a pending reorder should raise the confirm gate")
+	}
+	if _, err := os.Stat(filepath.Join(proj, "01-b.md")); !os.IsNotExist(err) {
+		t.Fatal("disk must not change before the gate is confirmed")
+	}
+	// y -> apply: a now becomes section 02, b becomes 01.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(proj, "01-b.md")); err != nil {
+		t.Fatalf("after confirm, 02-b should be renumbered to 01-b: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(proj, "02-a.md")); err != nil {
+		t.Fatalf("after confirm, 01-a should be renumbered to 02-a: %v", err)
+	}
+	if m.screen != screenWriting {
+		t.Fatalf("apply should complete the pending exit, got screen %v", m.screen)
+	}
+}
+
+func TestOutlineReorderDiscard(t *testing.T) {
+	m, proj := setupManuscript(t)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}) // discard
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(proj, "01-a.md")); err != nil {
+		t.Fatalf("discard must leave the disk untouched: %v", err)
+	}
+	if m.screen != screenWriting {
+		t.Fatalf("discard should complete the exit, got %v", m.screen)
+	}
+}
+
+func TestOutlineReorderTracksOpenFile(t *testing.T) {
+	m, proj := setupManuscript(t)
+	m.currentFile = filepath.Join(proj, "01-a.md") // 01-a is open in the editor
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}}) // a moves to slot 2
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = nm.(model)
+	if m.currentFile != filepath.Join(proj, "02-a.md") {
+		t.Fatalf("the open file path should follow the rename to 02-a.md, got %q", m.currentFile)
+	}
+}
