@@ -580,6 +580,16 @@ func (m *Model) CursorStart() {
 	m.SetCursor(0)
 }
 
+// MoveToLine moves the cursor to the start of line n, clamped to the buffer.
+func (m *Model) MoveToLine(n int) {
+	if len(m.value) == 0 {
+		return
+	}
+	m.row = clamp(n, 0, len(m.value)-1)
+	m.col = 0
+	m.lastCharOffset = 0
+}
+
 // CursorEnd moves the cursor to the end of the input field.
 func (m *Model) CursorEnd() {
 	m.SetCursor(len(m.value[m.row]))
