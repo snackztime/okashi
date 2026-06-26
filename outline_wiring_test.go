@@ -78,3 +78,14 @@ func TestOutlineEscReturnsToEditor(t *testing.T) {
 		t.Fatalf("esc from the outline should return to the editor, got %v", m.screen)
 	}
 }
+
+func TestOutlineHandlesResize(t *testing.T) {
+	m, _ := setupManuscript(t)
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.WindowSizeMsg{Width: 70, Height: 20})
+	m = nm.(model)
+	if m.outline.width != 70 || m.outline.height != 19 {
+		t.Fatalf("resize on the outline should update outline dims to 70x19, got %dx%d", m.outline.width, m.outline.height)
+	}
+}

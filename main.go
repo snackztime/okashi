@@ -636,6 +636,14 @@ func (m *model) layout() {
 // updateOutline handles input on the outline screen: select, open, back.
 // (Reorder and new-section are layered on in later tasks.)
 func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if sz, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width = sz.Width
+		m.height = sz.Height
+		m.outline.width = sz.Width
+		m.outline.height = sz.Height - 1 // reserve the status bar row
+		m.layout()
+		return m, nil
+	}
 	key, ok := msg.(tea.KeyMsg)
 	if !ok {
 		return m, nil
