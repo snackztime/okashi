@@ -44,6 +44,21 @@ func TestCp1252FallsBackOnUnencodable(t *testing.T) {
 	}
 }
 
+func TestWritePDFTufteAstralRuneSafe(t *testing.T) {
+	// An astral emoji inside an emphasized paragraph crashed the Tufte path
+	// (embedded ET Book has no astral glyphs; the HTML writer panicked).
+	doc := ManuscriptDoc{{Title: "t", Blocks: []Block{
+		Paragraph{Runs: []Run{{Text: "rocket "}, {Text: "boom", Bold: true}, {Text: " \U0001F680 end"}}},
+	}}}
+	out, err := writePDF(doc, StyleTufte, Meta{Title: "T"})
+	if err != nil {
+		t.Fatalf("astral rune should be sanitized, not error/panic: %v", err)
+	}
+	if !bytes.HasPrefix(out, []byte("%PDF")) {
+		t.Fatal("not a PDF")
+	}
+}
+
 func TestWritePDFTufteEmbedsFontValid(t *testing.T) {
 	doc := ManuscriptDoc{{Title: "one", Blocks: []Block{
 		Paragraph{Runs: []Run{{Text: "Elegant "}, {Text: "serif", Italic: true}, {Text: " prose — with an em dash."}}},

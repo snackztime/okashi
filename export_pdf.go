@@ -29,12 +29,27 @@ func cp1252(s string) string {
 }
 
 // pdfEnc transcodes for the core-font (manuscript Courier) path; the Tufte path (embedded
-// UTF-8 ET Book) passes through unchanged.
+// UTF-8 ET Book) strips astral runes that the font can't render.
 func pdfEnc(st ExportStyle, s string) string {
 	if st == StyleTufte {
-		return s
+		return stripAstral(s)
 	}
 	return cp1252(s)
+}
+
+// stripAstral replaces runes above the BMP with '?'. fpdf's UTF-8 (embedded-font)
+// support is BMP-only, so an astral rune (e.g. an emoji) would otherwise error or
+// panic the Tufte PDF. The manuscript path's cp1252 transcode already drops these.
+func stripAstral(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r > 0xFFFF {
+			b.WriteByte('?')
+		} else {
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func plainText(runs []Run) string {
@@ -79,7 +94,12 @@ type pdfStyle struct {
 	indent     string
 }
 
-func writePDF(doc ManuscriptDoc, st ExportStyle, meta Meta) ([]byte, error) {
+func writePDF(doc ManuscriptDoc, st ExportStyle, meta Meta) (out []byte, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			out, err = nil, fmt.Errorf("pdf render failed: %v", r)
+		}
+	}()
 	pdf := fpdf.New("P", "pt", "Letter", "")
 	cfg := pdfStyle{font: "Courier", bodySize: 12, titleSize: 14, lineHeight: 24, indent: "     "}
 	if st == StyleTufte {
