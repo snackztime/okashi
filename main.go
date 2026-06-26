@@ -697,19 +697,29 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// The apply/discard gate captures input while it is up.
 	if m.outline.confirm {
+		// Capture the pending-open target BEFORE apply/discard mutate (and reload)
+		// the outline: load() resets selected/pendingOpen, so they can't be read after.
+		wantOpen := m.outline.pendingOpen
+		openName := ""
+		if wantOpen {
+			if row, ok := m.outline.selectedRow(); ok {
+				openName = row.entry.name
+			}
+		}
 		switch key.String() {
 		case "y":
 			m.outline.confirm = false
-			if s := m.commitOutlineOrder(); s != "" {
-				m.status = s
+			moved, errStr := m.commitOutlineOrder()
+			if errStr != "" {
+				m.status = errStr
 				return m, nil // commit failed: stay on the outline with the error visible
 			}
-			m.leaveOutlinePending()
+			m.finishOutlineOpen(wantOpen, openName, moved)
 			return m, nil
 		case "n":
 			m.outline.confirm = false
 			m.outline.working = append([]fileEntry(nil), m.outline.disk...) // discard moves
-			m.leaveOutlinePending()
+			m.finishOutlineOpen(wantOpen, openName, nil)
 			return m, nil
 		case "esc":
 			m.outline.confirm = false // keep editing the outline
@@ -771,6 +781,22 @@ func (m *model) leaveOutlinePending() {
 	m.editor.Focus()
 }
 
+// finishOutlineOpen returns to the editor, opening the captured section (mapped
+// through any rename in moved) when the pending action was an Enter-open. Used by
+// the confirm gate, where load() has already cleared the outline's pendingOpen.
+func (m *model) finishOutlineOpen(wantOpen bool, openName string, moved map[string]string) {
+	if wantOpen && openName != "" {
+		path := filepath.Join(m.outline.dir, openName)
+		if np, ok := moved[path]; ok {
+			path = np
+		}
+		m.loadFile(path)
+	}
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+}
+
 // outlineView renders the outline screen with the status bar.
 func (m model) outlineView() string {
 	body := m.outline.View()
@@ -781,17 +807,17 @@ func (m model) outlineView() string {
 // commitOutlineOrder applies a pending reorder: backup + renumber on disk, then
 // follow the open file's rename and refresh the sidebar + outline. Returns an
 // error string for the status line (empty on success/no-op).
-func (m *model) commitOutlineOrder() string {
+func (m *model) commitOutlineOrder() (map[string]string, string) {
 	moved, err := commitReorder(m.outline.dir, m.outline.working, backupStamp(time.Now()))
 	if err != nil {
-		return "reorder failed: " + err.Error()
+		return nil, "reorder failed: " + err.Error()
 	}
 	if newPath, ok := moved[m.currentFile]; ok {
 		m.currentFile = newPath
 	}
 	m.files.SetDir(m.files.dir) // re-sort the sidebar to the new names
 	m.outline.load(m.outline.dir, m.files.wc)
-	return ""
+	return moved, ""
 }
 
 // enterOutline opens the manuscript outline for the current pane dir. Caller

@@ -218,3 +218,41 @@ func TestOutlineGateEscKeepsEditing(t *testing.T) {
 		t.Fatalf("esc inside the gate should keep editing the outline, got screen %v", m.screen)
 	}
 }
+
+func TestOutlineReorderApplyOpensSelectedSection(t *testing.T) {
+	m, proj := setupManuscript(t) // 01-a, 02-b
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	// Move 01-a down: working becomes [02-b, 01-a]; selection follows the moved 'a' to row 1.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = nm.(model)
+	// Enter raises the gate; y applies AND must open the selected section at its new name.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if !m.outline.confirm {
+		t.Fatal("enter with a pending reorder should raise the confirm gate")
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = nm.(model)
+	if m.screen != screenWriting {
+		t.Fatalf("apply should return to the editor, got screen %v", m.screen)
+	}
+	if m.currentFile != filepath.Join(proj, "02-a.md") {
+		t.Fatalf("apply+open should open the selected section at its renamed path 02-a.md, got %q", m.currentFile)
+	}
+}
+
+func TestOutlineReorderDiscardOpensSelectedSection(t *testing.T) {
+	m, proj := setupManuscript(t) // 01-a, 02-b
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}}) // selection follows 'a' to row 1
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // gate
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}) // discard + open
+	m = nm.(model)
+	if m.currentFile != filepath.Join(proj, "01-a.md") {
+		t.Fatalf("discard+open should open the selected section 'a' at its unchanged name 01-a.md, got %q", m.currentFile)
+	}
+}
