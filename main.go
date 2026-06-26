@@ -954,7 +954,6 @@ func (m *model) convertToManuscript() {
 	}
 	m.files.SetDir(dir)
 	m.enterOutline()
-	m.status = "converted to manuscript"
 }
 
 func (m *model) loadFile(path string) {
