@@ -66,7 +66,7 @@ The manifest (inkmere spec §2.1), which okashi treats as **read-only**:
 | Chapter **display title** | de-slugged filename | `items[].title` (read-only) |
 | Manuscript **title** | de-slugged folder name | `manifest.title` (read-only) |
 | **Reorder / insert / convert** | okashi `J/K`, `n`, `ctrl+l`-convert | **dropped** — inkmere owns structure |
-| Chapter-title **rename** | okashi `r` (renumber-retitle the file) | **dropped** — title is manifest-owned |
+| Chapter-title **rename** | okashi `r` (renumber-retitle the file) | **dropped for manifest chapters** (title is manifest-owned); **retained for legacy folders** (resolved O1) |
 | **Prose** in existing chapters | okashi writes (atomic) | **unchanged** — okashi still writes |
 | **Loose / new** standalone files | okashi creates / renames | **unchanged** — okashi still does |
 | `manifest.json` itself | did not exist | **never written by okashi** |
@@ -150,12 +150,12 @@ non-goal (§7), not a bug.
 | `existingPrefixWidth`, `padWidth` | `outline.go` | zero-pad width helpers for renumbering |
 | `splitPrefix` | `outline.go` | digit/rest split — used only by renumber + retitle + digit display, all removed |
 | `commitInsert` | `outline.go` | `n` new-section-into-order |
+| `backupFiles` + `backup_test.go` | `backup.go` | snapshot files before reorder/insert renumber — dead once those ops are removed (resolved O3: **delete the file**) |
 | `outlineModel` reorder state: `working` vs `disk`, `dirty()`, `confirm`, `pendingOpen`, `moveSection` | `outline.go` | exists only to stage/commit a reorder |
 | `commitOutlineOrder`, `outlineLeave` dirty-gate, `leaveOutlinePending`/`finishOutlineOpen` moved-map plumbing | `main.go` | apply/discard gate + open-through-rename |
 | `outlineCreating`, `confirmNewSection`, the outline `n` key, the `J/K` keys, the confirm gate | `main.go` | new-section + reorder UI |
 | `convertPrompt` field + handler; `hasConvertibleFiles`; `convertToManuscript`; the `ctrl+l` convert branch | `main.go` | "number this plain folder into a manuscript" |
 | `planConvert` | `rename.go` | convert renumber plan |
-| `sectionRetitle` | `rename.go` | `r` chapter-title rename via filename renumber |
 
 **The outline survives as a read-only navigator:** select/open a chapter, `m` → pager, `ctrl+e`
 → export, `esc`/`enter` to leave/open. It loses all reorder/insert/gate machinery.
@@ -168,9 +168,12 @@ non-goal (§7), not a bug.
 - `slugify` (`outline.go`) — still used by export to build the output filename.
 - The pager's read-through and jump-to-edit; preview (`ctrl+p`); the markdown **flavor**
   (goldmark GFM + Footnote in `export_ast.go`) — **explicitly unchanged** (§7).
-- `backup.go` / `backupFiles` — the only callers were the removed structural ops; the helper may
-  be left in place (dead but harmless) or removed in a later cleanup. The plan leaves it in
-  place to keep this change focused on the contract. *(Open question O3.)*
+- `sectionRetitle` (`rename.go`) — **RETAINED, but scoped to legacy (manifest-less) numbered
+  folders only** (resolved O1). It preserves okashi's pre-manifest prefix-preserving `r` retitle
+  for un-migrated corpora; it is **not** offered in manifest manuscripts (titles are
+  manifest-owned there). The membership guard (§6) routes `r` to it only when the file is a
+  chapter of a *legacy* manuscript view.
+- (`backup.go` is **deleted** — see §5.2, resolved O3.)
 
 ## 6. Rename behavior decision (the `r` key)
 
@@ -181,10 +184,13 @@ are birth-stable (inkmere §2.2). Therefore:
   sidebar or the outline) does nothing but show a one-line status note pointing at inkmere
   (e.g. "chapter titles are managed by inkmere"). okashi neither renames the file (would break
   the manifest's `file` reference) nor edits the title (can't write the manifest).
-- **Numbered file in a *legacy* (manifest-less) folder → rename also NOT offered as a retitle.**
-  Renaming it would mutate the legacy ordering/title, which is **structure** okashi no longer
-  authors. This is the conservative, consistent choice; it is the one case the inkmere spec is
-  silent on, and it is flagged as **Open question O1** for the human to relax if desired.
+- **Numbered file in a *legacy* (manifest-less) folder → retitle REMAINS offered** (resolved O1).
+  okashi retains its pre-manifest prefix-preserving retitle (`sectionRetitle`) for **legacy
+  folders only**, so un-migrated corpora keep their familiar `r` ergonomics. The moment inkmere
+  writes a manifest for that folder it becomes a manifest manuscript (state 1) and retitle is no
+  longer offered there. (The human chose to preserve legacy ergonomics over strict consistency;
+  legacy folders are not yet manifest-owned, so okashi retaining their pre-existing behavior is
+  safe.)
 - **Loose files, category documents, top-level loose files, Resources inside a manuscript, and
   folders → plain rename REMAINS** via `looseRename` (and the existing directory-rename path).
   These are not structure; renaming a loose `.md` is ordinary file management.
@@ -207,20 +213,33 @@ folder's manuscript view?* If yes → rename blocked; otherwise → plain rename
 - **okashi does not model iCloud download state** (§4.2). It reads materialized files only.
 - **No new dependencies.** The manifest reader uses the standard-library `encoding/json` only.
 
-## 8. Open questions for the human
+## 8. Resolved decisions (human-confirmed 2026-06-26)
 
-- **O1 — Legacy-folder rename.** §6 disallows retitling a numbered file in a *manifest-less*
-  folder (treating legacy order as read-only structure). The inkmere spec is silent here. Relax
-  to "plain rename allowed in legacy folders" if you'd rather keep the pre-manifest ergonomics
-  during the transition. *(Recommendation: keep it disallowed — consistent and safe.)*
-- **O2 — Unreadable-manifest display.** §4.1 shows a version-mismatched manifest's files as flat
-  loose docs with a status note. Alternative: hide the folder's contents entirely behind the
-  warning. *(Recommendation: show-as-loose — never hide a user's prose.)*
-- **O3 — `backup.go` disposition.** After the structural ops are removed, `backupFiles` has no
-  callers. Leave it dead-but-present (plan's default) or delete it for tidiness?
-- **O4 — CLAUDE.md "Project model" prose.** That section still describes the filename-prefix
-  model as "the shipped reality." The plan updates §1 of SHARED CONTRACTS to RESOLVED; confirm
-  it should also rewrite the "Project model" narrative to lead with the manifest (legacy as
-  fallback). *(Recommendation: yes — update both.)*
-</content>
-</invoke>
+All four open questions were decided by the user. The spec above already reflects them; recorded
+here for provenance.
+
+- **O1 — Legacy-folder rename → ALLOWED (deviation from the plan's default).** okashi **retains**
+  its pre-manifest prefix-preserving retitle (`sectionRetitle`) for **legacy (manifest-less)
+  numbered folders only**, preserving familiar `r` ergonomics for un-migrated corpora. Retitle is
+  still **dropped** inside manifest manuscripts. (§3, §5.3, §6.)
+- **O2 — Unreadable / unsupported manifest → SHOW-AS-LOOSE.** Files are shown flat as loose
+  documents (prose stays fully editable) with a one-line status note; the folder's contents are
+  never hidden. (§4.1.)
+- **O3 — `backup.go` → DELETE.** `backupFiles` (and `backup_test.go`) are removed; their only
+  callers were the deleted structural ops. (§5.2.)
+- **O4 — CLAUDE.md → REWRITE BOTH.** The reconciliation updates SHARED CONTRACTS §1 to RESOLVED
+  **and** rewrites the "Project model" narrative to lead with the manifest (filename-prefix as the
+  legacy read-only fallback). The mirrored SHARED CONTRACTS §1 in `../inkmere/CLAUDE.md` flips in
+  lockstep, landing in the **same coherent change** when this okashi work is implemented and
+  merged (never before — both move together per the hard gate).
+
+## 9. Plan sync note
+
+This design doc is now final. The implementation plan
+(`docs/superpowers/plans/2026-06-26-manifest-reconciliation.md`) must be reconciled to these
+decisions before/while it is executed:
+- Keep `sectionRetitle` (gated to legacy folders) instead of removing it; route `r` via the
+  membership guard (O1).
+- Add a task to delete `backup.go` + `backup_test.go` (O3).
+- The CLAUDE.md task rewrites the "Project model" narrative too, and includes the lockstep
+  `../inkmere/CLAUDE.md` SHARED CONTRACTS §1 flip (O4).
