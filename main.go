@@ -158,8 +158,7 @@ type model struct {
 	renaming     bool
 	renameTarget renameTarget
 
-	convertPrompt bool
-	exportPrompt  bool
+	exportPrompt bool
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -364,24 +363,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	if m.convertPrompt {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			switch key.String() {
-			case "ctrl+c":
-				return m, tea.Quit
-			case "y":
-				m.convertPrompt = false
-				m.convertToManuscript()
-				return m, nil
-			case "n", "esc":
-				m.convertPrompt = false
-				m.status = "convert cancelled"
-				return m, nil
-			}
-		}
-		return m, nil
-	}
-
 	if m.exportPrompt {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
@@ -521,14 +502,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+l":
-			switch {
-			case isManuscript(m.files.entries):
+			if isManuscript(m.files.entries) {
 				m.enterOutline()
-			case m.hasConvertibleFiles():
-				m.convertPrompt = true
-				m.status = "make this a manuscript? (y / n)"
-			default:
-				m.status = "nothing to convert (no documents here)"
+			} else {
+				m.status = "not a manuscript"
 			}
 			return m, nil
 		case "ctrl+e":
@@ -1082,53 +1059,6 @@ func (m *model) enterOutline() {
 	m.status = "outline · ↑↓ select · J/K reorder · enter open · n new · m read · ctrl+e export · esc back"
 }
 
-// hasConvertibleFiles reports whether the current pane dir has at least one
-// document file (non-dir entry) that a convert could number.
-func (m model) hasConvertibleFiles() bool {
-	for _, e := range m.files.entries {
-		if !e.isDir {
-			return true
-		}
-	}
-	return false
-}
-
-// convertToManuscript numbers the current folder's document files contiguously
-// (backup first), follows the open file, and opens the outline.
-func (m *model) convertToManuscript() {
-	dir := m.files.dir
-	var files []fileEntry
-	for _, e := range m.files.entries {
-		if !e.isDir {
-			files = append(files, e)
-		}
-	}
-	if len(files) == 0 {
-		m.status = "nothing to convert"
-		return
-	}
-	ops := planConvert(files, padWidth(len(files), 0))
-	var paths []string
-	for _, f := range files {
-		paths = append(paths, filepath.Join(dir, f.name))
-	}
-	if err := backupFiles(dir, backupStamp(time.Now()), paths); err != nil {
-		m.status = "convert failed: " + err.Error()
-		return
-	}
-	if err := applyRenames(dir, ops); err != nil {
-		m.status = "convert failed: " + err.Error()
-		return
-	}
-	for _, op := range ops {
-		if m.currentFile == filepath.Join(dir, op.from) {
-			m.currentFile = filepath.Join(dir, op.to)
-		}
-	}
-	m.files.SetDir(dir)
-	m.enterOutline()
-}
-
 func (m *model) loadFile(path string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -1441,9 +1371,6 @@ func (m model) statusBar() string {
 	}
 	if m.renaming {
 		return "rename ▸ " + m.nameInput.View()
-	}
-	if m.convertPrompt {
-		return "make this a manuscript? (y / n)"
 	}
 	if m.exportPrompt {
 		return "export: m manuscript · t tufte · esc cancel"
