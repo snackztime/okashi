@@ -21,6 +21,7 @@ type filelist struct {
 	dir      string
 	root     string
 	entries  []fileEntry
+	view     manuscriptView // resolved structure of dir (chapters, loose, source)
 	selected int
 	offset   int // index of the top visible row
 	width    int
@@ -93,10 +94,17 @@ func (f *filelist) SetDir(dir string) {
 		}
 	}
 	sort.Slice(dirs, func(i, j int) bool { return dirs[i].name < dirs[j].name })
-	sections, loose := orderedSections(files)
+
+	// Resolve the manuscript view once per SetDir; it becomes the single source
+	// of chapter order/titles/membership for View(), sectionRow(), and callers.
+	f.view = resolveManuscript(dir, files)
+
+	// Build the ordered entry list: dirs first, then chapters in view order, then loose.
 	f.entries = append(f.entries, dirs...)
-	f.entries = append(f.entries, sections...)
-	f.entries = append(f.entries, loose...)
+	for _, ch := range f.view.chapters {
+		f.entries = append(f.entries, fileEntry{name: ch.file})
+	}
+	f.entries = append(f.entries, f.view.loose...)
 }
 
 // View renders the visible window of entries, highlighting the selection.
@@ -108,14 +116,18 @@ func (f filelist) View() string {
 	if end > len(f.entries) {
 		end = len(f.entries)
 	}
+	// Build a set of chapter filenames for O(1) lookup during rendering.
+	chapterSet := make(map[string]bool, len(f.view.chapters))
+	for _, ch := range f.view.chapters {
+		chapterSet[ch.file] = true
+	}
+
 	var b strings.Builder
-	manuscript := isManuscript(f.entries)
 	for i := f.offset; i < end; i++ {
 		e := f.entries[i]
 		head := " " + f.icons.icon(e) // one-column gutter, then the icon
 		full := head + e.name
-		_, ord := sectionOrder(e.name)
-		section := manuscript && !e.isDir && ord
+		section := !e.isDir && chapterSet[e.name]
 		switch {
 		case i == f.selected:
 			content := full
@@ -153,7 +165,7 @@ func (f filelist) sectionRow(e fileEntry, dimCount bool) string {
 		n = f.wc.count(filepath.Join(f.dir, e.name))
 	}
 	count := commafy(n) + "w"
-	left := " " + f.icons.icon(e) + sectionTitle(e.name)
+	left := " " + f.icons.icon(e) + f.chapterTitle(e.name)
 	maxLeft := f.width - lipgloss.Width(count) - 1
 	if maxLeft < 1 {
 		maxLeft = 1
@@ -168,6 +180,17 @@ func (f filelist) sectionRow(e fileEntry, dimCount bool) string {
 		rendered = lipgloss.NewStyle().Foreground(subtle).Render(count)
 	}
 	return left + strings.Repeat(" ", gap) + rendered
+}
+
+// chapterTitle returns the display title for a chapter file, looking it up from
+// the resolved view. Falls back to sectionTitle (for zero-view or legacy entries).
+func (f filelist) chapterTitle(name string) string {
+	for _, ch := range f.view.chapters {
+		if ch.file == name {
+			return ch.title
+		}
+	}
+	return sectionTitle(name)
 }
 
 func (f *filelist) moveBy(n int) {

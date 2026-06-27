@@ -501,7 +501,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+l":
-			if isManuscript(m.files.entries) {
+			if m.files.view.ordered() {
 				m.enterOutline()
 			} else {
 				m.status = "not a manuscript"
@@ -1036,7 +1036,7 @@ func (m *model) startRename() {
 		return
 	}
 	_, numbered := sectionOrder(e.name)
-	section := numbered && !e.isDir && isManuscript(m.files.entries)
+	section := numbered && !e.isDir && hasNumberedSections(m.files.entries)
 	prefill := e.name
 	if section {
 		prefill = sectionTitle(e.name)

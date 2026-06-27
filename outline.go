@@ -60,26 +60,43 @@ type outlineRow struct {
 }
 
 // outlineModel is the full-screen manuscript outline. working is the read-only
-// section order loaded from disk.
+// section order loaded from disk (as fileEntry for backward compat). titles maps
+// each chapter filename to its display title (from the manifest, or de-slugged).
 type outlineModel struct {
 	dir      string
 	working  []fileEntry
 	loose    []fileEntry
+	titles   map[string]string // chapter file -> display title
 	selected int
 	width    int
 	height   int
 	wc       *wordCountCache
 }
 
-// load reads dir's sections (ordered) and loose files into the outline.
+// load reads dir's chapters (ordered) and loose files into the outline via the
+// resolver, so the outline and sidebar never disagree about membership or order.
 func (o *outlineModel) load(dir string, wc *wordCountCache) {
 	entries := readEntries(dir)
-	sections, loose := orderedSections(entries)
+	v := resolveManuscript(dir, entries)
 	o.dir = dir
-	o.working = sections
-	o.loose = loose
+	o.working = make([]fileEntry, 0, len(v.chapters))
+	o.titles = make(map[string]string, len(v.chapters))
+	for _, ch := range v.chapters {
+		o.working = append(o.working, fileEntry{name: ch.file})
+		o.titles[ch.file] = ch.title
+	}
+	o.loose = v.loose
 	o.selected = 0
 	o.wc = wc
+}
+
+// chapterTitle returns the display title for a chapter filename, looking it up from
+// the resolved titles map. Falls back to sectionTitle (for zero-view or legacy).
+func (o outlineModel) chapterTitle(name string) string {
+	if t, ok := o.titles[name]; ok {
+		return t
+	}
+	return sectionTitle(name)
 }
 
 // readEntries lists dir's non-hidden document files (allowedDocExts) as fileEntry
@@ -154,7 +171,7 @@ func (o outlineModel) View() string {
 		var line string
 		if r.isSection {
 			count := commafy(o.wc.count(filepath.Join(o.dir, r.entry.name))) + "w"
-			left := fmt.Sprintf(" %d  %s", i+1, sectionTitle(r.entry.name))
+			left := fmt.Sprintf(" %d  %s", i+1, o.chapterTitle(r.entry.name))
 			maxLeft := o.width - lipgloss.Width(count) - 1
 			if maxLeft < 1 {
 				maxLeft = 1

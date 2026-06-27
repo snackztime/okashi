@@ -64,6 +64,34 @@ func TestExportWholeManuscriptFromOutline(t *testing.T) {
 	}
 }
 
+func TestExportManifestManuscriptUsesManifestOrder(t *testing.T) {
+	dir := t.TempDir()
+	// Write sections in reverse alpha order; manifest orders them the-letter first.
+	os.WriteFile(filepath.Join(dir, "opening.md"), []byte("chapter one text"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter.md"), []byte("chapter two text"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":1,"title":"Windermere","items":[`+
+			`{"file":"the-letter.md","title":"The Letter"},`+
+			`{"file":"opening.md","title":"Chapter One"}]}`), 0o644)
+	entries := readEntries(dir)
+	v := resolveManuscript(dir, entries)
+	doc := manuscriptDocFromChapters(dir, v.chapters)
+	if len(doc) != 2 {
+		t.Fatalf("expected 2 sections, got %d", len(doc))
+	}
+	// Manifest order: The Letter first, Chapter One second.
+	if doc[0].Title != "The Letter" {
+		t.Fatalf("first section title = %q, want 'The Letter'", doc[0].Title)
+	}
+	if doc[1].Title != "Chapter One" {
+		t.Fatalf("second section title = %q, want 'Chapter One'", doc[1].Title)
+	}
+	// Titles come from the manifest, not from filename slugs.
+	if doc[0].Title == "the letter" || doc[1].Title == "opening" {
+		t.Fatal("export must use manifest titles, not de-slugged filenames")
+	}
+}
+
 func TestExportCancel(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)

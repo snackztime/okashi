@@ -18,9 +18,10 @@ func (m *model) runExport(st ExportStyle) {
 	var doc ManuscriptDoc
 	var title string
 	if m.screen == screenOutline {
-		sections, _ := orderedSections(m.files.entries)
-		doc = manuscriptDoc(dir, sections)
-		title = projectTitle(filepath.Base(dir))
+		entries := readEntries(dir)
+		v := resolveManuscript(dir, entries)
+		doc = manuscriptDocFromChapters(dir, v.chapters)
+		title = v.title
 	} else {
 		if m.currentFile == "" {
 			m.status = "nothing to export"

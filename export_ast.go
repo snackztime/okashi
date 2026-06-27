@@ -226,3 +226,18 @@ func manuscriptDoc(dir string, sections []fileEntry) ManuscriptDoc {
 	}
 	return doc
 }
+
+// manuscriptDocFromChapters builds the export doc from a resolved chapter list.
+// Title comes from chapterRef.title (manifest title or de-slugged filename),
+// so manifest and legacy folders both produce correct section headings.
+func manuscriptDocFromChapters(dir string, chapters []chapterRef) ManuscriptDoc {
+	var doc ManuscriptDoc
+	for _, ch := range chapters {
+		data, err := os.ReadFile(filepath.Join(dir, ch.file))
+		if err != nil {
+			continue
+		}
+		doc = append(doc, Section{Title: ch.title, Blocks: parseSection(data)})
+	}
+	return doc
+}

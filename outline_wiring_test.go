@@ -3,10 +3,42 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+func TestOutlineManifestTitleAndOrder(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "opening.md"), []byte("one two"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter.md"), []byte("a b"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":1,"title":"Windermere","items":[`+
+			`{"file":"the-letter.md","title":"The Letter"},`+
+			`{"file":"opening.md","title":"Chapter One"}]}`), 0o644)
+	var o outlineModel
+	o.wc = newWordCountCache()
+	o.width = 60
+	o.height = 10
+	o.load(dir, o.wc)
+	// Manifest order: the-letter before opening despite filename alpha.
+	if len(o.working) != 2 || o.working[0].name != "the-letter.md" || o.working[1].name != "opening.md" {
+		t.Fatalf("outline should follow manifest order; working = %+v", o.working)
+	}
+	// Titles come from the manifest.
+	if o.chapterTitle("the-letter.md") != "The Letter" {
+		t.Fatalf("title for the-letter.md should be 'The Letter', got %q", o.chapterTitle("the-letter.md"))
+	}
+	if o.chapterTitle("opening.md") != "Chapter One" {
+		t.Fatalf("title for opening.md should be 'Chapter One', got %q", o.chapterTitle("opening.md"))
+	}
+	// View contains manifest titles, not filename slugs.
+	view := o.View()
+	if !strings.Contains(view, "The Letter") || !strings.Contains(view, "Chapter One") {
+		t.Fatalf("outline View should show manifest titles:\n%s", view)
+	}
+}
 
 func setupManuscript(t *testing.T) (model, string) {
 	t.Helper()
