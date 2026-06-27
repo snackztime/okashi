@@ -1035,27 +1035,42 @@ func (m *model) startRename() {
 	if e.name == ".." {
 		return
 	}
-	_, numbered := sectionOrder(e.name)
-	section := numbered && !e.isDir && hasNumberedSections(m.files.entries)
-	prefill := e.name
-	if section {
-		prefill = sectionTitle(e.name)
+	v := m.files.view
+	if isChapterOf(v, e.name) {
+		if v.source == sourceManifest {
+			// manifest manuscript: titles are manifest-owned; okashi can't write them.
+			m.status = "chapter titles are managed by inkmere"
+			return
+		}
+		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
+		m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir, section: true},
+			sectionTitle(e.name))
+		return
 	}
-	m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir, section: section}, prefill)
+	m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir}, e.name)
 }
 
 // startRenameOutline begins renaming the selected outline row (section title or
-// loose file).
+// loose file). Mirrors startRename: manifest chapters are refused; legacy chapters
+// get a prefix-preserving retitle; loose files get a plain rename.
 func (m *model) startRenameOutline() {
 	row, ok := m.outline.selectedRow()
 	if !ok {
 		return
 	}
-	prefill := row.entry.name
 	if row.isSection {
-		prefill = sectionTitle(row.entry.name)
+		v := resolveManuscript(m.outline.dir, readEntries(m.outline.dir))
+		if v.source == sourceManifest {
+			// manifest manuscript: titles are manifest-owned; okashi can't write them.
+			m.status = "chapter titles are managed by inkmere"
+			return
+		}
+		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
+		m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, isDir: false, section: true},
+			sectionTitle(row.entry.name))
+		return
 	}
-	m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, isDir: false, section: row.isSection}, prefill)
+	m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, isDir: false, section: false}, row.entry.name)
 }
 
 // confirmRename applies the pending rename: builds the new name by target kind,

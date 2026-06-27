@@ -50,22 +50,73 @@ func TestSidebarRenameLooseFileKeepsExt(t *testing.T) {
 	}
 }
 
-func TestSidebarRenameSectionTitleOnly(t *testing.T) {
+func TestRenameRefusedForManifestChapter(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
-	os.WriteFile(filepath.Join(root, "01-a.md"), []byte("x"), 0o644)
-	os.WriteFile(filepath.Join(root, "02-the-letter.md"), []byte("x"), 0o644)
-	m := sidebarModel(t, root)
-	m.files.selectName("02-the-letter.md")
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "the-letter.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(proj, manifestName), []byte(
+		`{"schemaVersion":1,"title":"N","items":[{"file":"the-letter.md","title":"The Letter"}]}`), 0o644)
+	m := sidebarModel(t, proj)
+	m.files.selectName("the-letter.md")
 
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 	m = nm.(model)
+	if m.renaming {
+		t.Fatal("r on a manifest chapter must NOT start a rename (title is manifest-owned)")
+	}
+	if _, err := os.Stat(filepath.Join(proj, "the-letter.md")); err != nil {
+		t.Fatalf("the chapter file must be untouched: %v", err)
+	}
+}
+
+func TestRenameAllowedForResourceInManuscript(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "a.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(proj, "notes.md"), []byte("y"), 0o644) // unlisted = Resource
+	os.WriteFile(filepath.Join(proj, manifestName), []byte(
+		`{"schemaVersion":1,"title":"N","items":[{"file":"a.md","title":"One"}]}`), 0o644)
+	m := sidebarModel(t, proj)
+	m.files.selectName("notes.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming {
+		t.Fatal("r on a Resource (unlisted file) should start a plain rename")
+	}
 	m.nameInput.SetValue("")
-	m = typeInto(t, m, "the telegram")
+	m = typeInto(t, m, "scratch")
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(model)
-	if _, err := os.Stat(filepath.Join(root, "02-the-telegram.md")); err != nil {
-		t.Fatalf("section rename should keep the 02- prefix: %v", err)
+	if _, err := os.Stat(filepath.Join(proj, "scratch.md")); err != nil {
+		t.Fatalf("Resource rename should work like a loose-file rename: %v", err)
+	}
+}
+
+func TestRenameAllowedForLegacySection(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "legacy")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "01-opening.md"), []byte("x"), 0o644) // numbered, no manifest
+	m := sidebarModel(t, proj)
+	m.files.selectName("01-opening.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming {
+		t.Fatal("r on a legacy numbered section should start a retitle (O1: legacy ergonomics kept)")
+	}
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "the dawn")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(proj, "01-the-dawn.md")); err != nil {
+		t.Fatalf("legacy retitle must preserve the numeric prefix: %v", err)
 	}
 }
 
@@ -126,36 +177,6 @@ func TestSidebarRenameTracksOpenFile(t *testing.T) {
 	m = nm.(model)
 	if m.currentFile != filepath.Join(root, "final.md") {
 		t.Fatalf("open file path should follow the rename, got %q", m.currentFile)
-	}
-}
-
-func TestOutlineRenameSectionTitle(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("OKASHI_DIR", root)
-	proj := filepath.Join(root, "novel")
-	os.MkdirAll(proj, 0o755)
-	os.WriteFile(filepath.Join(proj, "01-a.md"), []byte("x"), 0o644)
-	os.WriteFile(filepath.Join(proj, "02-the-letter.md"), []byte("x"), 0o644)
-	m := sidebarModel(t, proj)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL}) // enter the outline
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // select 02-the-letter
-	m = nm.(model)
-
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
-	m = nm.(model)
-	if !m.renaming {
-		t.Fatal("r in the outline should start a rename")
-	}
-	m.nameInput.SetValue("")
-	m = typeInto(t, m, "the telegram")
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = nm.(model)
-	if _, err := os.Stat(filepath.Join(proj, "02-the-telegram.md")); err != nil {
-		t.Fatalf("outline rename should retitle keeping the prefix: %v", err)
-	}
-	if m.screen != screenOutline {
-		t.Fatalf("after an outline rename we should still be in the outline, got %v", m.screen)
 	}
 }
 

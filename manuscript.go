@@ -97,6 +97,18 @@ func resolveManuscript(dir string, entries []fileEntry) manuscriptView {
 	}
 }
 
+// isChapterOf reports whether name is a chapter of the given manuscript view (a
+// manifest item, or — in a legacy folder — a numbered section). Manifest chapters
+// are not renamable; legacy chapters retitle via sectionRetitle (resolved O1).
+func isChapterOf(v manuscriptView, name string) bool {
+	for _, c := range v.chapters {
+		if c.file == name {
+			return true
+		}
+	}
+	return false
+}
+
 // manifestView projects a readable manifest onto on-disk entries: items in manifest
 // order whose file exists become chapters; every other .md is loose (a Resource).
 func manifestView(dir string, m manifest, entries []fileEntry) manuscriptView {
