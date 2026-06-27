@@ -984,7 +984,7 @@ func (m *model) confirmCreate() {
 	}
 
 	if name == manifestName {
-		m.status = "manifest.json is managed by inkmere"
+		m.status = "manifest.json is managed by wicklight"
 		return
 	}
 
@@ -1042,13 +1042,13 @@ func (m *model) startRename() {
 	}
 	v := m.files.view
 	if v.source == sourceManifest && v.warning != "" {
-		m.status = "manifest unreadable — structure is managed by inkmere"
+		m.status = "manifest unreadable — structure is managed by wicklight"
 		return
 	}
 	if isChapterOf(v, e.name) {
 		if v.source == sourceManifest {
 			// manifest manuscript: titles are manifest-owned; okashi can't write them.
-			m.status = "chapter titles are managed by inkmere"
+			m.status = "chapter titles are managed by wicklight"
 			return
 		}
 		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
@@ -1073,13 +1073,13 @@ func (m *model) startRenameOutline() {
 	// the guard must precede it.
 	v := resolveManuscript(m.outline.dir, readEntries(m.outline.dir))
 	if v.source == sourceManifest && v.warning != "" {
-		m.status = "manifest unreadable — structure is managed by inkmere"
+		m.status = "manifest unreadable — structure is managed by wicklight"
 		return
 	}
 	if row.isSection {
 		if v.source == sourceManifest {
 			// manifest manuscript: titles are manifest-owned; okashi can't write them.
-			m.status = "chapter titles are managed by inkmere"
+			m.status = "chapter titles are managed by wicklight"
 			return
 		}
 		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
@@ -1119,7 +1119,7 @@ func (m *model) confirmRename() {
 		}
 	}
 	if newName == manifestName {
-		m.status = "manifest.json is managed by inkmere"
+		m.status = "manifest.json is managed by wicklight"
 		m.refreshAfterRename()
 		return
 	}

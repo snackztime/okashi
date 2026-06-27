@@ -4,7 +4,7 @@
 > superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`)
 > syntax for tracking.
 
-**Goal:** Reconcile okashi to inkmere's frozen manifest contract. okashi becomes a **reader** of
+**Goal:** Reconcile okashi to wicklight's frozen manifest contract. okashi becomes a **reader** of
 manuscript structure (`manifest.json` = order + membership + titles, read-only) while remaining a
 full **writer of prose**. Drop all structural authority (reorder, insert-into-order, convert,
 chapter-title rename). Keep the legacy filename-prefix model as a **read-only display fallback**
@@ -16,7 +16,7 @@ upstream, `../inkmere/docs/superpowers/specs/2026-06-26-storage-spine-design.md`
 ## Global Constraints
 
 - **No manifest writes — ever.** okashi reads `manifest.json`; it never generates or mutates it
-  (design §3.1, inkmere §6). No code path may write the file.
+  (design §3.1, wicklight §6). No code path may write the file.
 - **`schemaVersion` is a HARD GATE.** `manifestSchemaVersion = 1`. A present manifest whose
   version ≠ 1 (or that won't parse) is **refused**: no legacy fallback, no write, files shown
   flat as loose with a status note (design §4.1).
@@ -26,7 +26,7 @@ upstream, `../inkmere/docs/superpowers/specs/2026-06-26-storage-spine-design.md`
 - **Membership is the manifest, not `sectionOrder`.** A chapter is a file listed in `items`; a
   manifest chapter need not have a numeric prefix (`the-letter.md` is valid). Never infer chapter
   membership from the filename in a manifest folder.
-- **Legacy folders keep read-only outline/pager/export** (design §4, inkmere §6) — do not cut
+- **Legacy folders keep read-only outline/pager/export** (design §4, wicklight §6) — do not cut
   them to sidebar-only.
 - **Markdown flavor unchanged.** goldmark + GFM + Footnote in `export_ast.go` is untouched
   (CLAUDE.md §2).
@@ -147,7 +147,7 @@ type manifestItem struct {
 	Title string `json:"title"`
 }
 
-// manifest is inkmere's per-manuscript order/membership/title file. okashi reads
+// manifest is wicklight's per-manuscript order/membership/title file. okashi reads
 // it and NEVER writes it (see the reconciliation design, §3.1).
 type manifest struct {
 	SchemaVersion int            `json:"schemaVersion"`
@@ -155,7 +155,7 @@ type manifest struct {
 	Items         []manifestItem `json:"items"`
 }
 
-// hasManifest reports whether dir contains a manifest.json — inkmere's manuscript
+// hasManifest reports whether dir contains a manifest.json — wicklight's manuscript
 // marker (design §4: folder with manifest = manuscript).
 func hasManifest(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, manifestName))
@@ -201,7 +201,7 @@ git commit -m "feat(manifest): read-only manifest.json reader with schemaVersion
 
 ### Task 2: Remove `convert` (number-a-plain-folder)
 
-inkmere owns "make this a manuscript" (it writes the manifest). Drop okashi's convert path.
+wicklight owns "make this a manuscript" (it writes the manifest). Drop okashi's convert path.
 
 **Files:** `main.go`, `rename.go`, `rename_wiring_test.go`, `rename_test.go`.
 
@@ -256,7 +256,7 @@ case "ctrl+l":
 /opt/homebrew/bin/gofmt -w main.go rename.go
 /opt/homebrew/bin/go build ./... && /opt/homebrew/bin/go test ./...   # expect: ok
 git add main.go rename.go rename_test.go rename_wiring_test.go
-git commit -m "refactor: drop convert (plain-folder numbering) — inkmere owns structure creation"
+git commit -m "refactor: drop convert (plain-folder numbering) — wicklight owns structure creation"
 ```
 
 > Note `TestCtrlLEntersOutlineInManuscript` / `TestCtrlLRejectedOutsideManuscript`
@@ -799,7 +799,7 @@ func (m *model) startRename() {
 	if isChapterOf(v, e.name) {
 		if v.source == sourceManifest {
 			// manifest manuscript: titles are manifest-owned; okashi can't write them.
-			m.status = "chapter titles are managed by inkmere"
+			m.status = "chapter titles are managed by wicklight"
 			return
 		}
 		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
@@ -867,10 +867,10 @@ git commit -m "feat(manifest): chapters are not renamable (manifest-owned titles
 
 - [ ] **Step 1: Rewrite SHARED CONTRACTS §1** ("Manuscript ordering & membership") from
   "HARD GATE + OPEN CROSS-APP ITEM" to **RESOLVED**: order + membership + display titles live in
-  inkmere's per-manuscript `manifest.json` (cite
+  wicklight's per-manuscript `manifest.json` (cite
   `../inkmere/docs/superpowers/specs/2026-06-26-storage-spine-design.md` §2.1/§6); okashi treats
   structure as **read-only** (reads the manifest; legacy filename-prefix is a read-only display
-  fallback; never writes the manifest); inkmere owns reorder/insert/convert and chapter-title
+  fallback; never writes the manifest); wicklight owns reorder/insert/convert and chapter-title
   rename. Keep the standing rule: any change to the manifest **shape** is a hard gate that moves
   **both** repos together.
 
@@ -882,9 +882,9 @@ git commit -m "feat(manifest): chapters are not renamable (manifest-owned titles
   O4.)
 
 - [ ] **Step 3: Mirror-block reminder.** This `CLAUDE.md` block is mirrored in
-  `../inkmere/CLAUDE.md`. Note in the commit body that inkmere's mirror of §1 must be updated to
+  `../inkmere/CLAUDE.md`. Note in the commit body that wicklight's mirror of §1 must be updated to
   RESOLVED in the same coherent change (it is a HARD-GATE shared-contract edit — both move
-  together). Do not edit the inkmere repo from this okashi branch.
+  together). Do not edit the wicklight repo from this okashi branch.
 
 - [ ] **Step 4: Gate + commit** (doc-only; build/test unaffected but run them to be safe)
 

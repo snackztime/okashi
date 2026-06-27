@@ -66,7 +66,7 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 - **Manuscript** = a folder containing a `manifest.json`. The manifest is the sole source of
   order (`items` array), chapter membership (listed in `items` = chapter; unlisted `.md` =
   Resource), and display titles (`items[].title`, `manifest.title`). okashi reads it;
-  **inkmere owns it** (see Shared Contracts §1).
+  **wicklight owns it** (see Shared Contracts §1).
   - **Legacy fallback:** a folder with **no** manifest but ≥1 numerically-prefixed file is
     treated as a manuscript for display only — order = numeric prefix, titles = de-slugged
     filename. A read-only transitional courtesy for un-migrated corpora.
@@ -78,7 +78,7 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   counts); the **outline** (`ctrl+l`: select/open, `m` → pager — **read-only navigator**;
   no reorder, no insert); the **pager** (`m`: read-through with jump-to-edit); **export**
   (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **rename** (`r`: blocked for manifest
-  chapters — titles are inkmere-owned and filenames are birth-stable; retained for legacy
+  chapters — titles are wicklight-owned and filenames are birth-stable; retained for legacy
   numbered chapters, loose files, Resources, and folders); markdown **preview** (`ctrl+p`,
   glamour).
 - Env knobs: `OKASHI_DIR`, `OKASHI_WIDTH`, `OKASHI_SMARTQUOTES`, `OKASHI_THEME`,
@@ -98,7 +98,7 @@ okashi and the macOS app operate the **same on-disk corpus**. Keep this block al
 both repos.
 
 ### 1. Manuscript ordering & membership — RESOLVED (2026-06-26)
-- **RESOLVED:** order, membership, and display titles live in inkmere's per-manuscript
+- **RESOLVED:** order, membership, and display titles live in wicklight's per-manuscript
   `manifest.json` (see `../inkmere/docs/superpowers/specs/2026-06-26-storage-spine-design.md`
   §2.1 and §6). okashi treats manuscript structure as **read-only**:
   - **Manifest manuscript** (folder with `manifest.json`): `items` order is canonical;
@@ -112,7 +112,7 @@ both repos.
     de-slugged from filenames. A transitional courtesy for un-migrated corpora; no
     structural writes offered here either.
   - **Category** (neither manifest nor numbered files): plain folder of documents.
-- **Authority:** inkmere owns reorder, insert, convert, and chapter-title rename for manifest
+- **Authority:** wicklight owns reorder, insert, convert, and chapter-title rename for manifest
   chapters. okashi retains prose writes and loose-file management. `r` retitle is retained
   for legacy (manifest-less) numbered chapters only (resolved O1); blocked for manifest
   chapters (title is manifest-owned, filename is birth-stable).

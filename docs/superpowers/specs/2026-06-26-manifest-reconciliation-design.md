@@ -16,20 +16,20 @@ since the file was reconciled on 2026-06-26: it recorded the filename-prefix con
 okashi's authority *and* flagged that, once the sibling macOS app (`../inkmere`) landed, the
 ordering decision would be **dictated from there** and brought back to reconcile.
 
-inkmere has now frozen that decision. Per its storage-spine design **§2.1/§6**, manuscript
+wicklight has now frozen that decision. Per its storage-spine design **§2.1/§6**, manuscript
 **structure** — order, membership, and display titles — lives in a per-manuscript
-`manifest.json`, and inkmere is the **sole writer** of it. This is the human-approved
-resolution of the hard gate (the inkmere spec is "approved design"; this okashi track is the
+`manifest.json`, and wicklight is the **sole writer** of it. This is the human-approved
+resolution of the hard gate (the wicklight spec is "approved design"; this okashi track is the
 "independent parallel track" it authorizes in §6). Both repos move together as one coherent
-change, never a broken intermediate (inkmere spec §6, final paragraph).
+change, never a broken intermediate (wicklight spec §6, final paragraph).
 
 This is a **HARD-GATE shared-contract change** under both repos' `CLAUDE.md`. It has been
-confirmed by the user via approval of the inkmere spec; this document records that approval and
+confirmed by the user via approval of the wicklight spec; this document records that approval and
 specifies okashi's half.
 
 ## 2. The frozen contract (restated, not re-decided)
 
-The manifest (inkmere spec §2.1), which okashi treats as **read-only**:
+The manifest (wicklight spec §2.1), which okashi treats as **read-only**:
 
 ```json
 {
@@ -43,17 +43,17 @@ The manifest (inkmere spec §2.1), which okashi treats as **read-only**:
 ```
 
 - `schemaVersion` (int) — okashi **refuses** a version it does not support rather than guess
-  (mirrors inkmere's "refuse to read a mismatched version", §2.1).
+  (mirrors wicklight's "refuse to read a mismatched version", §2.1).
 - `title` — manuscript display title, independent of the folder name.
 - `items` — the **one canonical order**; each `{ file, title }` where `file` is a bare filename
   relative to the folder root (manuscripts are flat in v1) and `title` is free-form, independent
   of the filename and of the file's content.
 - **Type signal:** folder **with** `manifest.json` = manuscript; **without** = category
-  (inkmere §2.1).
-- **Membership is explicit** (inkmere §2.3): a file is a chapter **iff** it is listed in
+  (wicklight §2.1).
+- **Membership is explicit** (wicklight §2.3): a file is a chapter **iff** it is listed in
   `items`. Any unlisted `.md` in a manuscript folder is a **Resource** — shown, never composed,
   never exported.
-- **Filenames are birth-stable** (inkmere §2.2): inkmere assigns a filename once and never
+- **Filenames are birth-stable** (wicklight §2.2): wicklight assigns a filename once and never
   renames it; reorder rewrites `items`, never moves files. okashi must not assume a numeric
   prefix exists on a manifest chapter (`the-letter.md` is a perfectly valid chapter file).
 
@@ -65,7 +65,7 @@ The manifest (inkmere spec §2.1), which okashi treats as **read-only**:
 | Chapter **membership** | "has a numeric prefix" | listed in `items` (read-only) |
 | Chapter **display title** | de-slugged filename | `items[].title` (read-only) |
 | Manuscript **title** | de-slugged folder name | `manifest.title` (read-only) |
-| **Reorder / insert / convert** | okashi `J/K`, `n`, `ctrl+l`-convert | **dropped** — inkmere owns structure |
+| **Reorder / insert / convert** | okashi `J/K`, `n`, `ctrl+l`-convert | **dropped** — wicklight owns structure |
 | Chapter-title **rename** | okashi `r` (renumber-retitle the file) | **dropped for manifest chapters** (title is manifest-owned); **retained for legacy folders** (resolved O1) |
 | **Prose** in existing chapters | okashi writes (atomic) | **unchanged** — okashi still writes |
 | **Loose / new** standalone files | okashi creates / renames | **unchanged** — okashi still does |
@@ -78,10 +78,10 @@ read-write.
 ### 3.1 okashi never writes the manifest — and migration is not okashi's job
 
 okashi performs **no** manifest generation and **no** order/membership/title writes. A
-manifest-less numbered folder is **not** migrated by okashi; inkmere offers that migration on
-first open (inkmere spec §6). The consequence inkmere names in §2.3 is honored from this side:
-any new `.md` okashi creates inside a manuscript folder is, by inkmere's rules, a Resource until
-inkmere promotes it — okashi simply writes the file and leaves `items` untouched.
+manifest-less numbered folder is **not** migrated by okashi; wicklight offers that migration on
+first open (wicklight spec §6). The consequence wicklight names in §2.3 is honored from this side:
+any new `.md` okashi creates inside a manuscript folder is, by wicklight's rules, a Resource until
+wicklight promotes it — okashi simply writes the file and leaves `items` untouched.
 
 ## 4. The read model — three mutually exclusive folder states
 
@@ -94,13 +94,13 @@ the outline, the pager, and export so they never disagree):
 2. **Legacy manuscript** — **no** manifest, but ≥1 numerically-prefixed file. okashi falls back
    to the **filename-prefix convention for ORDERING DISPLAY ONLY** (read-only): order by numeric
    prefix, titles de-slugged from filenames, unnumbered files are loose. This keeps un-migrated
-   corpora visible and navigable during the transition (inkmere spec §6). No structural writes
+   corpora visible and navigable during the transition (wicklight spec §6). No structural writes
    are offered here either.
 3. **Category** — neither a manifest nor numbered files. A plain folder of documents.
 
 States 1 and 2 both render as an ordered manuscript (outline / pager / export work in both);
-they differ only in where order/titles come from and whether inkmere "owns" the folder. State 2
-is a transitional courtesy, not a parallel authority: the moment inkmere writes a manifest, the
+they differ only in where order/titles come from and whether wicklight "owns" the folder. State 2
+is a transitional courtesy, not a parallel authority: the moment wicklight writes a manifest, the
 folder becomes state 1 and the prefixes become cosmetic.
 
 ### 4.1 Unreadable / unsupported manifest — refuse, don't guess
@@ -110,12 +110,12 @@ version okashi supports), okashi **refuses to infer structure**: it does **not**
 legacy prefix ordering, and it **never** writes the file. The folder is still recognized as a
 manuscript (the marker file exists), but its `.md` files are shown flat as loose documents
 (prose remains fully editable) and the status line surfaces a one-line note
-(e.g. "manifest schemaVersion N unsupported — update okashi"). This mirrors inkmere's
+(e.g. "manifest schemaVersion N unsupported — update okashi"). This mirrors wicklight's
 refuse-mismatched-version stance (§2.1): better to show files plainly than to invent an order.
 
 ### 4.2 Known limitation — okashi does not model "not-yet-downloaded"
 
-inkmere distinguishes *missing* from *not-yet-downloaded* via `NSMetadataQuery` (inkmere §3).
+wicklight distinguishes *missing* from *not-yet-downloaded* via `NSMetadataQuery` (wicklight §3).
 okashi has no such signal: it reads what is materialized on disk via `os.ReadDir`. A manifest
 `items` entry whose file is not present on disk (including an iCloud placeholder okashi can't
 see) is simply **omitted from okashi's display** for that session. This is **display-only and
@@ -139,7 +139,7 @@ non-goal (§7), not a bug.
 | `pagerModel.load` | `pager.go` | `orderedSections` + `sectionTitle` | **rewired** to the resolver's ordered chapters + titles. |
 | `runExport` / `manuscriptDoc` | `export.go` / `export_ast.go` | `orderedSections` + `sectionTitle` | **rewired** to the resolver. Export stays read-only (emits RTF/PDF, never structure). |
 
-### 5.2 Removed (structural authority — moves to inkmere)
+### 5.2 Removed (structural authority — moves to wicklight)
 
 | Symbol | File | Role |
 |---|---|---|
@@ -178,15 +178,15 @@ non-goal (§7), not a bug.
 ## 6. Rename behavior decision (the `r` key)
 
 The chapter title now lives in the manifest, which okashi cannot write, and chapter filenames
-are birth-stable (inkmere §2.2). Therefore:
+are birth-stable (wicklight §2.2). Therefore:
 
 - **Chapter in a manifest manuscript → rename is NOT offered.** `r` on a manifest chapter (in the
-  sidebar or the outline) does nothing but show a one-line status note pointing at inkmere
-  (e.g. "chapter titles are managed by inkmere"). okashi neither renames the file (would break
+  sidebar or the outline) does nothing but show a one-line status note pointing at wicklight
+  (e.g. "chapter titles are managed by wicklight"). okashi neither renames the file (would break
   the manifest's `file` reference) nor edits the title (can't write the manifest).
 - **Numbered file in a *legacy* (manifest-less) folder → retitle REMAINS offered** (resolved O1).
   okashi retains its pre-manifest prefix-preserving retitle (`sectionRetitle`) for **legacy
-  folders only**, so un-migrated corpora keep their familiar `r` ergonomics. The moment inkmere
+  folders only**, so un-migrated corpora keep their familiar `r` ergonomics. The moment wicklight
   writes a manifest for that folder it becomes a manifest manuscript (state 1) and retitle is no
   longer offered there. (The human chose to preserve legacy ergonomics over strict consistency;
   legacy folders are not yet manifest-owned, so okashi retaining their pre-existing behavior is
@@ -196,7 +196,7 @@ are birth-stable (inkmere §2.2). Therefore:
   These are not structure; renaming a loose `.md` is ordinary file management.
 
 **Membership is decided by the manifest, not by `sectionOrder`.** The current guard
-(`numbered && isManuscript`, `main.go:1222–1223`) is wrong under the new model: inkmere births
+(`numbered && isManuscript`, `main.go:1222–1223`) is wrong under the new model: wicklight births
 chapters with de-slugged titles and **no** numeric prefix, so `sectionOrder("the-letter.md")` is
 false for a real chapter. The new guard asks the resolver: *is this file a chapter of this
 folder's manuscript view?* If yes → rename blocked; otherwise → plain rename.
@@ -204,7 +204,7 @@ folder's manuscript view?* If yes → rename blocked; otherwise → plain rename
 ## 7. Non-goals (explicit)
 
 - **No manifest writes, ever.** No generation, no order/membership/title writes, no migration.
-  Migration is inkmere's (inkmere §6).
+  Migration is wicklight's (wicklight §6).
 - **No structural editing in okashi.** Reorder, insert-into-order, and convert are gone, not
   merely hidden.
 - **Markdown flavor is unchanged.** goldmark + GFM + Footnote (CLAUDE.md §2) stays exactly as

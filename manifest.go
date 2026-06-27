@@ -16,7 +16,7 @@ type manifestItem struct {
 	Title string `json:"title"`
 }
 
-// manifest is inkmere's per-manuscript order/membership/title file. okashi reads
+// manifest is wicklight's per-manuscript order/membership/title file. okashi reads
 // it and NEVER writes it (see the reconciliation design, §3.1).
 type manifest struct {
 	SchemaVersion int            `json:"schemaVersion"`
@@ -24,7 +24,7 @@ type manifest struct {
 	Items         []manifestItem `json:"items"`
 }
 
-// hasManifest reports whether dir contains a manifest.json — inkmere's manuscript
+// hasManifest reports whether dir contains a manifest.json — wicklight's manuscript
 // marker (design §4: folder with manifest = manuscript).
 func hasManifest(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, manifestName))

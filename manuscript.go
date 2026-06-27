@@ -51,7 +51,7 @@ func docEntries(entries []fileEntry) []fileEntry {
 	return loose
 }
 
-// isManuscript reports whether dir has a manifest.json — inkmere's manuscript
+// isManuscript reports whether dir has a manifest.json — wicklight's manuscript
 // marker (design §4). This is the contract-precise definition; use
 // hasNumberedSections for the legacy-prefix heuristic.
 func isManuscript(dir string) bool {
