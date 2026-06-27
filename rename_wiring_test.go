@@ -180,6 +180,96 @@ func TestSidebarRenameTracksOpenFile(t *testing.T) {
 	}
 }
 
+// --- C1 / I1 corpus-safety guards (see fix-wave spec) ---
+
+// TestCreateRejectsReservedManifestName: typing "manifest.json" as a new-file
+// name must be rejected — currentFile must not change, status must be set.
+func TestCreateRejectsReservedManifestName(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	m := sidebarModel(t, root)
+
+	// Sentinel: detect any unwanted currentFile change.
+	sentinel := filepath.Join(root, "sentinel.md")
+	m.currentFile = sentinel
+
+	// Enter file-creation mode and type the reserved name.
+	m.creatingFile = true
+	m.nameInput.SetValue("")
+	m.nameInput.Focus()
+	m = typeInto(t, m, "manifest.json")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+
+	if m.currentFile != sentinel {
+		t.Fatalf("currentFile must remain unchanged (got %q)", m.currentFile)
+	}
+	if m.status == "" {
+		t.Fatal("status must be set to explain the rejection")
+	}
+}
+
+// TestRenameRejectsReservedManifestName: renaming a loose file to "manifest.json"
+// must be refused — original untouched, no manifest.json created.
+func TestRenameRejectsReservedManifestName(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "draft.md"), []byte("hello"), 0o644)
+	m := sidebarModel(t, root)
+	m.files.selectName("draft.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming {
+		t.Fatal("r should start a rename")
+	}
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "manifest.json")
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+
+	if _, err := os.Stat(filepath.Join(root, "draft.md")); err != nil {
+		t.Fatalf("original file must be untouched: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, manifestName)); err == nil {
+		t.Fatal("manifest.json must not be created by a rename")
+	}
+	if m.status == "" {
+		t.Fatal("status must be set after rejecting manifest.json rename")
+	}
+}
+
+// TestRenameRefusedInRefuseModeManifest: a folder with an unreadable manifest
+// (schemaVersion 2 = unsupported) must block rename entirely — pressing 'r' on
+// a file in that folder must NOT start a rename.
+func TestRenameRefusedInRefuseModeManifest(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "01-opening.md"), []byte("x"), 0o644)
+	// schemaVersion 2 triggers refuse mode (unsupported future version).
+	os.WriteFile(filepath.Join(proj, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[{"file":"01-opening.md","title":"Opening"}]}`), 0o644)
+	m := sidebarModel(t, proj)
+	m.files.selectName("01-opening.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+
+	if m.renaming {
+		t.Fatal("r must NOT start a rename in a refuse-mode manifest folder")
+	}
+	if _, err := os.Stat(filepath.Join(proj, "01-opening.md")); err != nil {
+		t.Fatalf("file must be untouched: %v", err)
+	}
+	if m.status == "" {
+		t.Fatal("status must be set when rename is refused in refuse-mode")
+	}
+}
+
 func TestCtrlLOnNonManuscriptStaysPut(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)

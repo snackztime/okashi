@@ -983,6 +983,11 @@ func (m *model) confirmCreate() {
 		return
 	}
 
+	if name == manifestName {
+		m.status = "manifest.json is managed by inkmere"
+		return
+	}
+
 	if folder {
 		dir := filepath.Join(m.files.dir, name)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -1036,6 +1041,10 @@ func (m *model) startRename() {
 		return
 	}
 	v := m.files.view
+	if v.source == sourceManifest && v.warning != "" {
+		m.status = "manifest unreadable — structure is managed by inkmere"
+		return
+	}
 	if isChapterOf(v, e.name) {
 		if v.source == sourceManifest {
 			// manifest manuscript: titles are manifest-owned; okashi can't write them.
@@ -1058,8 +1067,16 @@ func (m *model) startRenameOutline() {
 	if !ok {
 		return
 	}
+	// Resolve at the top so the refuse-mode guard covers both section and loose rows.
+	// A refuse-mode folder has source==sourceManifest with a non-empty warning;
+	// its files appear as loose (no chapters), so the isSection branch never fires —
+	// the guard must precede it.
+	v := resolveManuscript(m.outline.dir, readEntries(m.outline.dir))
+	if v.source == sourceManifest && v.warning != "" {
+		m.status = "manifest unreadable — structure is managed by inkmere"
+		return
+	}
 	if row.isSection {
-		v := resolveManuscript(m.outline.dir, readEntries(m.outline.dir))
 		if v.source == sourceManifest {
 			// manifest manuscript: titles are manifest-owned; okashi can't write them.
 			m.status = "chapter titles are managed by inkmere"
@@ -1101,6 +1118,12 @@ func (m *model) confirmRename() {
 			newName = looseRename(t.name, typed)
 		}
 	}
+	if newName == manifestName {
+		m.status = "manifest.json is managed by inkmere"
+		m.refreshAfterRename()
+		return
+	}
+
 	if newName == t.name {
 		m.status = "unchanged"
 		m.refreshAfterRename()
