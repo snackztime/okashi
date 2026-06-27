@@ -300,6 +300,9 @@ The outline becomes a **read-only navigator**: select/open, `m` → pager, `ctrl
     column — replace the per-row left label with the 1-based index or just the title (no prefix),
     e.g. `left := fmt.Sprintf(" %d  %s", i+1, sectionTitle(r.entry.name))`. Keep `slugify` (used
     by export).
+  - **Delete `backup.go` + `backup_test.go`** (resolved O3): `backupFiles` was called only by the
+    renumber ops removed above. Confirm with `grep -n backupFiles *.go` (no remaining callers),
+    then `git rm backup.go backup_test.go`.
 
 - [ ] **Step 3: Remove the wiring in `main.go`**
   - Struct fields: delete `outlineCreating`.
@@ -323,9 +326,10 @@ The outline becomes a **read-only navigator**: select/open, `m` → pager, `ctrl
 
 ```bash
 /opt/homebrew/bin/gofmt -w main.go outline.go
+git rm backup.go backup_test.go   # O3: dead after the renumber ops are removed
 /opt/homebrew/bin/go build ./... && /opt/homebrew/bin/go test ./...   # expect: ok
 git add main.go outline.go outline_test.go outline_wiring_test.go
-git commit -m "refactor: drop outline reorder + new-section — outline is now a read-only navigator"
+git commit -m "refactor: drop outline reorder + new-section + dead backup.go — outline is a read-only navigator"
 ```
 
 ---
@@ -691,8 +695,8 @@ Chapter titles live in the manifest okashi can't write, and chapter filenames ar
 **Files:** `rename.go`, `main.go`, `rename_test.go`, `rename_wiring_test.go`.
 
 - [ ] **Step 1: Update the tests to the new contract**
-  - `rename_test.go`: delete `TestSectionRetitleKeepsPrefixAndExt` (the `sectionRetitle`
-    function is removed). **Keep** `TestLooseRenameKeepsExtensionWhenOmitted`.
+  - `rename_test.go`: **KEEP** `TestSectionRetitleKeepsPrefixAndExt` — `sectionRetitle` is
+    **retained** for legacy folders (resolved O1). **Keep** `TestLooseRenameKeepsExtensionWhenOmitted`.
   - `rename_wiring_test.go`: delete `TestSidebarRenameSectionTitleOnly` and
     `TestOutlineRenameSectionTitle`; replace with "rename is refused for a chapter":
 
@@ -745,14 +749,42 @@ func TestRenameAllowedForResourceInManuscript(t *testing.T) {
 }
 ```
 
+  - Add a test proving legacy retitle still works (resolved O1) — a numbered file in a
+    **manifest-less** folder retitles via `sectionRetitle` (prefix preserved):
+
+```go
+func TestRenameAllowedForLegacySection(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "legacy")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "01-opening.md"), []byte("x"), 0o644) // numbered, no manifest
+	m := sidebarModel(t, proj)
+	m.files.selectName("01-opening.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming {
+		t.Fatal("r on a legacy numbered section should start a retitle (O1: legacy ergonomics kept)")
+	}
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "the dawn")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(proj, "01-the-dawn.md")); err != nil {
+		t.Fatalf("legacy retitle must preserve the numeric prefix: %v", err)
+	}
+}
+```
+
   - **Keep** `TestSidebarRenameLooseFileKeepsExt`, `TestSidebarRenameFolder`,
     `TestSidebarRenameRefusesCollision`, `TestSidebarRenameTracksOpenFile`.
 
 - [ ] **Step 2: Implement the behavior change**
-  - `rename.go`: delete `sectionRetitle`. Keep `looseRename`.
-  - `main.go` `renameTarget`: drop the `section bool` field (no more title-only path).
+  - `rename.go`: **KEEP** `sectionRetitle` (retained for legacy folders, O1) and `looseRename`.
+  - `main.go` `renameTarget`: **KEEP** the `section bool` field — it now flags the legacy-retitle path.
   - `main.go` `startRename` (~1214) and `startRenameOutline` (~1233): compute chapter membership
-    from the resolver, not `sectionOrder`:
+    from the resolver (not `sectionOrder`) and branch on the manuscript source:
 
 ```go
 func (m *model) startRename() {
@@ -763,8 +795,16 @@ func (m *model) startRename() {
 	if e.name == ".." {
 		return
 	}
-	if isChapter(m.files.dir, m.files.entries, e.name) {
-		m.status = "chapter titles are managed by inkmere"
+	v := resolveManuscript(m.files.dir, m.files.entries)
+	if isChapterOf(v, e.name) {
+		if v.source == sourceManifest {
+			// manifest manuscript: titles are manifest-owned; okashi can't write them.
+			m.status = "chapter titles are managed by inkmere"
+			return
+		}
+		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
+		m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir, section: true},
+			sectionTitle(e.name))
 		return
 	}
 	m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir}, e.name)
@@ -774,11 +814,10 @@ func (m *model) startRename() {
    where a small helper (in `manuscript.go`) decides membership:
 
 ```go
-// isChapter reports whether name is a chapter of dir's manuscript view (manifest
-// item, or — in a legacy folder — a numbered section). Chapters are not renamable
-// by okashi (design §6).
-func isChapter(dir string, entries []fileEntry, name string) bool {
-	v := resolveManuscript(dir, entries)
+// isChapterOf reports whether name is a chapter of the given manuscript view (a
+// manifest item, or — in a legacy folder — a numbered section). Manifest chapters
+// are not renamable; legacy chapters retitle via sectionRetitle (resolved O1).
+func isChapterOf(v manuscriptView, name string) bool {
 	for _, c := range v.chapters {
 		if c.file == name {
 			return true
@@ -788,10 +827,11 @@ func isChapter(dir string, entries []fileEntry, name string) bool {
 }
 ```
 
-  - `startRenameOutline`: the outline only lists chapters + loose; a selected **chapter** row →
-    show the same status note and do not start a rename; a selected **loose** row → plain rename.
-  - `confirmRename` (~1247): delete the `if t.section { newName = sectionRetitle(...) }` branch;
-    every rename is now the loose/dir path (`looseRename` or directory rename).
+  - `startRenameOutline`: the outline lists chapters + loose; mirror `startRename` — a **manifest**
+    chapter row shows the status note (no rename); a **legacy** chapter row starts a `section:true`
+    retitle; a **loose** row starts a plain rename.
+  - `confirmRename` (~1247): **KEEP** the `if t.section { newName = sectionRetitle(...) }` branch —
+    it serves the legacy retitle path; the non-section path stays `looseRename`/dir rename.
   - Move the Task-2/Task-4 `ctrl+l` gate and any remaining `hasNumberedSections(m.files.entries)`
     pane check to `resolveManuscript(m.files.dir, m.files.entries).ordered()` so a manifest folder
     with no numbered files still enters the outline:
@@ -815,9 +855,9 @@ git add main.go rename.go manuscript.go rename_test.go rename_wiring_test.go
 git commit -m "feat(manifest): chapters are not renamable (manifest-owned titles); loose/Resource rename stays"
 ```
 
-> O1 (design §8): this disallows retitling a numbered file in a *legacy* folder too — `isChapter`
-> returns true for legacy sections. If the human elects to relax O1, scope `isChapter`'s "block
-> rename" to `source == sourceManifest` only.
+> O1 (resolved — ALLOWED): legacy-folder retitle is kept. Rename is blocked only for
+> `sourceManifest` chapters; `sourceLegacy` chapters route to the retained `sectionRetitle`
+> (prefix-preserving), preserving pre-manifest ergonomics. (Design §6/§8.)
 
 ---
 
@@ -860,7 +900,7 @@ git commit -m "docs(claude): mark ordering/membership contract RESOLVED — mani
 
 - **Contract coverage:** manifest schema/version gate → Task 1; three-state read model + legacy
   fallback + unreadable-refusal → Task 4 (`TestResolve*`); membership-is-explicit → Task 4
-  (`TestResolveManifestUnlistedIsLoose`) and Task 5 (`isChapter`); drop reorder/insert/convert →
+  (`TestResolveManifestUnlistedIsLoose`) and Task 5 (`isChapterOf`); drop reorder/insert/convert →
   Tasks 2–3; never-write-manifest → enforced by absence (no writer added) and stated in Global
   Constraints; rename behavior (design §6) → Task 5; flavor unchanged → `export_ast.go` untouched;
   CLAUDE.md RESOLVED → Task 6.
