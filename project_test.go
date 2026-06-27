@@ -67,15 +67,27 @@ func TestOrderedSections(t *testing.T) {
 	}
 }
 
-func TestIsManuscript(t *testing.T) {
-	if !isManuscript([]fileEntry{{name: "notes.md"}, {name: "01-x.md"}}) {
+func TestHasNumberedSections(t *testing.T) {
+	if !hasNumberedSections([]fileEntry{{name: "notes.md"}, {name: "01-x.md"}}) {
 		t.Fatal("a numbered file makes the folder a manuscript")
 	}
-	if isManuscript([]fileEntry{{name: "a.md"}, {name: "b.md"}}) {
+	if hasNumberedSections([]fileEntry{{name: "a.md"}, {name: "b.md"}}) {
 		t.Fatal("no numbered files = not a manuscript")
 	}
-	if isManuscript([]fileEntry{{name: "Sub", isDir: true}}) {
+	if hasNumberedSections([]fileEntry{{name: "Sub", isDir: true}}) {
 		t.Fatal("a subdir alone is not a manuscript")
+	}
+}
+
+func TestIsManuscriptDetectsManifest(t *testing.T) {
+	dir := t.TempDir()
+	if isManuscript(dir) {
+		t.Fatal("no manifest.json -> not a manifest manuscript")
+	}
+	os.WriteFile(filepath.Join(dir, manifestName),
+		[]byte(`{"schemaVersion":1,"title":"N","items":[]}`), 0o644)
+	if !isManuscript(dir) {
+		t.Fatal("manifest.json present -> isManuscript true")
 	}
 }
 

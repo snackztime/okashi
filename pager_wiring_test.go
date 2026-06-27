@@ -8,6 +8,34 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+func TestPagerManifestTitleAndOrder(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "opening.md"), []byte("one two"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter.md"), []byte("a b"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":1,"title":"Windermere","items":[`+
+			`{"file":"the-letter.md","title":"The Letter"},`+
+			`{"file":"opening.md","title":"Chapter One"}]}`), 0o644)
+	var p pagerModel
+	p.load(dir, 60)
+	// First header should use manifest order and manifest title.
+	if len(p.lines) == 0 || p.lines[0].text != "── The Letter ──" {
+		first := ""
+		if len(p.lines) > 0 {
+			first = p.lines[0].text
+		}
+		t.Fatalf("first pager line should be manifest header '── The Letter ──', got %q", first)
+	}
+	// Second header should be "Chapter One" (after header + 1 body line from first section).
+	if len(p.lines) < 3 || p.lines[2].text != "── Chapter One ──" {
+		second := ""
+		if len(p.lines) > 2 {
+			second = p.lines[2].text
+		}
+		t.Fatalf("pager should walk manifest order; expected '── Chapter One ──' at index 2, got %q", second)
+	}
+}
+
 func manuscriptModel(t *testing.T) (model, string) {
 	t.Helper()
 	root := t.TempDir()

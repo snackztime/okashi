@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"path/filepath"
 )
 
@@ -22,15 +21,4 @@ func looseRename(oldName, typed string) string {
 		typed += filepath.Ext(oldName)
 	}
 	return typed
-}
-
-// planConvert numbers a plain folder's files contiguously, keeping each existing
-// name as the title portion: "Chapter-00.md" -> "01-Chapter-00.md". Every file
-// gains a prefix, so there are no no-ops.
-func planConvert(files []fileEntry, width int) []renameOp {
-	ops := make([]renameOp, 0, len(files))
-	for i, e := range files {
-		ops = append(ops, renameOp{from: e.name, to: fmt.Sprintf("%0*d-%s", width, i+1, e.name)})
-	}
-	return ops
 }

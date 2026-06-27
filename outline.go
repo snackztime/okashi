@@ -10,11 +10,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// renameOp is a single base-name rename within a manuscript dir.
-type renameOp struct {
-	from, to string
-}
-
 // splitPrefix splits name into its leading run of digits and the remainder
 // (everything after the digits, verbatim). "02-the-letter.md" -> ("02",
 // "-the-letter.md"); "notes.md" -> ("", "notes.md"). Renumbering keeps rest
@@ -27,46 +22,6 @@ func splitPrefix(name string) (digits, rest string) {
 	return name[:i], name[i:]
 }
 
-// existingPrefixWidth returns the widest leading-digit-run length among the
-// sections (0 if none). Used so renumbering never shrinks the pad width.
-func existingPrefixWidth(sections []fileEntry) int {
-	w := 0
-	for _, s := range sections {
-		if d, _ := splitPrefix(s.name); len(d) > w {
-			w = len(d)
-		}
-	}
-	return w
-}
-
-// padWidth picks the zero-pad width for count sections: at least 2, at least the
-// digits needed for count, and never narrower than the existing width.
-func padWidth(count, existingWidth int) int {
-	w := 2
-	if d := len(fmt.Sprintf("%d", count)); d > w {
-		w = d
-	}
-	if existingWidth > w {
-		w = existingWidth
-	}
-	return w
-}
-
-// planRenames maps an ordered section list onto contiguous, zero-padded prefixes
-// of the given width, keeping everything after the old digit run verbatim. Ops
-// whose name is already correct are omitted.
-func planRenames(ordered []fileEntry, width int) []renameOp {
-	var ops []renameOp
-	for i, e := range ordered {
-		_, rest := splitPrefix(e.name)
-		next := fmt.Sprintf("%0*d", width, i+1) + rest
-		if next != e.name {
-			ops = append(ops, renameOp{from: e.name, to: next})
-		}
-	}
-	return ops
-}
-
 // projectTitle de-slugs a manuscript folder name for display: drop a trailing
 // extension if any, turn -/_ into spaces. Unlike sectionTitle it does NOT strip a
 // leading digit run ("2024-trip-journal" -> "2024 trip journal").
@@ -75,93 +30,6 @@ func projectTitle(name string) string {
 	s = strings.ReplaceAll(s, "-", " ")
 	s = strings.ReplaceAll(s, "_", " ")
 	return strings.TrimSpace(s)
-}
-
-// applyRenames performs ops within dir using a two-phase temp pass so that order
-// swaps (01<->02) don't collide. All targets are validated to stay inside dir
-// BEFORE any rename happens; on a mid-operation failure it makes a best-effort
-// rollback of files still parked under temp names. (The caller snapshots to
-// .backup/ before calling, so a phase-2 failure remains recoverable.)
-func applyRenames(dir string, ops []renameOp) error {
-	// Preflight: validate every target before touching disk.
-	for _, op := range ops {
-		if !withinRoot(filepath.Join(dir, op.to), dir) {
-			return fmt.Errorf("rename target escapes project: %s", op.to)
-		}
-	}
-	type pend struct{ tmp, final, orig string }
-	var pending []pend
-	for i, op := range ops {
-		orig := filepath.Join(dir, op.from)
-		tmp := filepath.Join(dir, fmt.Sprintf(".okashi-renumber-%d.tmp", i))
-		if err := os.Rename(orig, tmp); err != nil {
-			for _, p := range pending { // roll back temps to their originals
-				_ = os.Rename(p.tmp, p.orig)
-			}
-			return err
-		}
-		pending = append(pending, pend{tmp: tmp, final: filepath.Join(dir, op.to), orig: orig})
-	}
-	for idx, p := range pending {
-		if err := os.Rename(p.tmp, p.final); err != nil {
-			for _, q := range pending[idx:] { // roll back the unfinalized temps
-				_ = os.Rename(q.tmp, q.orig)
-			}
-			return err
-		}
-	}
-	return nil
-}
-
-// planInsertRenames renumbers the existing sections to open a gap at
-// insertIndex (0-based slot the new section will occupy). Sections at or below
-// insertIndex shift down by one; those above keep their number.
-func planInsertRenames(working []fileEntry, insertIndex, width int) []renameOp {
-	var ops []renameOp
-	for i, e := range working {
-		target := i + 1
-		if i >= insertIndex {
-			target = i + 2 // make room at insertIndex+1
-		}
-		_, rest := splitPrefix(e.name)
-		next := fmt.Sprintf("%0*d", width, target) + rest
-		if next != e.name {
-			ops = append(ops, renameOp{from: e.name, to: next})
-		}
-	}
-	return ops
-}
-
-// commitInsert backs up the sections, renumbers existing files to open a slot at
-// insertIndex, then creates an empty <NN>-<slug>.md there. Returns the new file's
-// base name and the old->new absolute paths of the shifted files.
-func commitInsert(dir, slug string, working []fileEntry, insertIndex, padW int, stamp string) (string, map[string]string, error) {
-	if insertIndex < 0 {
-		insertIndex = 0
-	}
-	if insertIndex > len(working) {
-		insertIndex = len(working)
-	}
-	var paths []string
-	for _, w := range working {
-		paths = append(paths, filepath.Join(dir, w.name))
-	}
-	if err := backupFiles(dir, stamp, paths); err != nil {
-		return "", nil, err
-	}
-	ops := planInsertRenames(working, insertIndex, padW)
-	if err := applyRenames(dir, ops); err != nil {
-		return "", nil, err
-	}
-	newName := fmt.Sprintf("%0*d-%s.md", padW, insertIndex+1, slug)
-	if err := atomicWrite(filepath.Join(dir, newName), nil, 0o644); err != nil {
-		return "", nil, err
-	}
-	moved := make(map[string]string, len(ops))
-	for _, op := range ops {
-		moved[filepath.Join(dir, op.from)] = filepath.Join(dir, op.to)
-	}
-	return newName, moved, nil
 }
 
 // slugify turns a typed section title into a filename slug: lowercase, spaces and
@@ -183,32 +51,6 @@ func slugify(title string) string {
 	return s
 }
 
-// commitReorder snapshots the section files, then renumbers them on disk to match
-// the working order. Returns old->new absolute paths for moved files (nil if the
-// order was already correct). stamp is supplied by the caller.
-func commitReorder(dir string, working []fileEntry, stamp string) (map[string]string, error) {
-	width := padWidth(len(working), existingPrefixWidth(working))
-	ops := planRenames(working, width)
-	if len(ops) == 0 {
-		return nil, nil
-	}
-	var paths []string
-	for _, w := range working {
-		paths = append(paths, filepath.Join(dir, w.name))
-	}
-	if err := backupFiles(dir, stamp, paths); err != nil {
-		return nil, err
-	}
-	if err := applyRenames(dir, ops); err != nil {
-		return nil, err
-	}
-	moved := make(map[string]string, len(ops))
-	for _, op := range ops {
-		moved[filepath.Join(dir, op.from)] = filepath.Join(dir, op.to)
-	}
-	return moved, nil
-}
-
 const outlineHeaderHeight = 2 // title line + blank spacer
 
 // outlineRow is one selectable row: a numbered section or a loose file.
@@ -217,33 +59,44 @@ type outlineRow struct {
 	isSection bool
 }
 
-// outlineModel is the full-screen manuscript outline. working is the (possibly
-// reordered) section order; disk is the on-disk order, for dirty detection.
+// outlineModel is the full-screen manuscript outline. working is the read-only
+// section order loaded from disk (as fileEntry for backward compat). titles maps
+// each chapter filename to its display title (from the manifest, or de-slugged).
 type outlineModel struct {
-	dir         string
-	working     []fileEntry
-	disk        []fileEntry
-	loose       []fileEntry
-	selected    int
-	width       int
-	height      int
-	wc          *wordCountCache
-	confirm     bool // apply/discard gate visible
-	pendingOpen bool // the pending leave is an open (Enter), not a back (esc)
+	dir      string
+	working  []fileEntry
+	loose    []fileEntry
+	titles   map[string]string // chapter file -> display title
+	selected int
+	width    int
+	height   int
+	wc       *wordCountCache
 }
 
-// load reads dir's sections (ordered) and loose files into the outline.
+// load reads dir's chapters (ordered) and loose files into the outline via the
+// resolver, so the outline and sidebar never disagree about membership or order.
 func (o *outlineModel) load(dir string, wc *wordCountCache) {
 	entries := readEntries(dir)
-	sections, loose := orderedSections(entries)
+	v := resolveManuscript(dir, entries)
 	o.dir = dir
-	o.working = sections
-	o.disk = append([]fileEntry(nil), sections...)
-	o.loose = loose
+	o.working = make([]fileEntry, 0, len(v.chapters))
+	o.titles = make(map[string]string, len(v.chapters))
+	for _, ch := range v.chapters {
+		o.working = append(o.working, fileEntry{name: ch.file})
+		o.titles[ch.file] = ch.title
+	}
+	o.loose = v.loose
 	o.selected = 0
 	o.wc = wc
-	o.confirm = false
-	o.pendingOpen = false
+}
+
+// chapterTitle returns the display title for a chapter filename, looking it up from
+// the resolved titles map. Falls back to sectionTitle (for zero-view or legacy).
+func (o outlineModel) chapterTitle(name string) string {
+	if t, ok := o.titles[name]; ok {
+		return t
+	}
+	return sectionTitle(name)
 }
 
 // readEntries lists dir's non-hidden document files (allowedDocExts) as fileEntry
@@ -280,19 +133,6 @@ func (o outlineModel) rows() []outlineRow {
 	return rows
 }
 
-// dirty reports whether the working order differs from the on-disk order.
-func (o outlineModel) dirty() bool {
-	if len(o.working) != len(o.disk) {
-		return true
-	}
-	for i := range o.working {
-		if o.working[i].name != o.disk[i].name {
-			return true
-		}
-	}
-	return false
-}
-
 // moveSelection moves the cursor by d, clamped across all rows.
 func (o *outlineModel) moveSelection(d int) {
 	n := len(o.working) + len(o.loose)
@@ -306,21 +146,6 @@ func (o *outlineModel) moveSelection(d int) {
 	if o.selected >= n {
 		o.selected = n - 1
 	}
-}
-
-// moveSection moves the selected section by d within the working order (no-op
-// unless the selection is a section). The selection follows the moved section.
-func (o *outlineModel) moveSection(d int) {
-	i := o.selected
-	if i < 0 || i >= len(o.working) {
-		return // selection is a loose row (or empty): not reorderable
-	}
-	j := i + d
-	if j < 0 || j >= len(o.working) {
-		return
-	}
-	o.working[i], o.working[j] = o.working[j], o.working[i]
-	o.selected = j
 }
 
 // selectedRow returns the row under the cursor.
@@ -337,9 +162,6 @@ func (o outlineModel) View() string {
 	title := projectTitle(filepath.Base(o.dir))
 	total := projectWordCount(o.dir, o.working, o.wc)
 	head := fmt.Sprintf("%s · %sw · %d sections", title, commafy(total), len(o.working))
-	if o.dirty() {
-		head += "   ● unsaved order"
-	}
 	var b strings.Builder
 	b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(ansi.Truncate(head, o.width, "…")))
 	b.WriteString("\n\n") // outlineHeaderHeight = 2 rows
@@ -348,9 +170,8 @@ func (o outlineModel) View() string {
 	for i, r := range rows {
 		var line string
 		if r.isSection {
-			digits, _ := splitPrefix(r.entry.name)
 			count := commafy(o.wc.count(filepath.Join(o.dir, r.entry.name))) + "w"
-			left := " " + digits + "  " + sectionTitle(r.entry.name)
+			left := fmt.Sprintf(" %d  %s", i+1, o.chapterTitle(r.entry.name))
 			maxLeft := o.width - lipgloss.Width(count) - 1
 			if maxLeft < 1 {
 				maxLeft = 1

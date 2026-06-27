@@ -151,15 +151,13 @@ type model struct {
 	status          string
 	icons           iconSet
 	outline         outlineModel
-	outlineCreating bool
 
 	pager pagerModel
 
 	renaming     bool
 	renameTarget renameTarget
 
-	convertPrompt bool
-	exportPrompt  bool
+	exportPrompt bool
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -364,24 +362,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	if m.convertPrompt {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			switch key.String() {
-			case "ctrl+c":
-				return m, tea.Quit
-			case "y":
-				m.convertPrompt = false
-				m.convertToManuscript()
-				return m, nil
-			case "n", "esc":
-				m.convertPrompt = false
-				m.status = "convert cancelled"
-				return m, nil
-			}
-		}
-		return m, nil
-	}
-
 	if m.exportPrompt {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
@@ -521,14 +501,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+l":
-			switch {
-			case isManuscript(m.files.entries):
+			if m.files.view.ordered() {
 				m.enterOutline()
-			case m.hasConvertibleFiles():
-				m.convertPrompt = true
-				m.status = "make this a manuscript? (y / n)"
-			default:
-				m.status = "nothing to convert (no documents here)"
+			} else {
+				m.status = "not a manuscript"
 			}
 			return m, nil
 		case "ctrl+e":
@@ -740,24 +716,6 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, nil
 	}
-	if m.outlineCreating {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			switch key.String() {
-			case "esc":
-				m.outlineCreating = false
-				m.nameInput.Blur()
-				m.status = "new section cancelled"
-				return m, nil
-			case "enter":
-				m.confirmNewSection()
-				return m, nil
-			}
-		}
-		var cmd tea.Cmd
-		m.nameInput, cmd = m.nameInput.Update(msg)
-		return m, cmd
-	}
-
 	if m.renaming {
 		if key, ok := msg.(tea.KeyMsg); ok {
 			switch key.String() {
@@ -800,9 +758,6 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if mouse, ok := msg.(tea.MouseMsg); ok {
-		if m.outlineCreating || m.outline.confirm {
-			return m, nil
-		}
 		if mouse.Button != tea.MouseButtonLeft || mouse.Action != tea.MouseActionPress {
 			return m, nil
 		}
@@ -832,39 +787,6 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// The apply/discard gate captures input while it is up.
-	if m.outline.confirm {
-		// Capture the pending-open target BEFORE apply/discard mutate (and reload)
-		// the outline: load() resets selected/pendingOpen, so they can't be read after.
-		wantOpen := m.outline.pendingOpen
-		openName := ""
-		if wantOpen {
-			if row, ok := m.outline.selectedRow(); ok {
-				openName = row.entry.name
-			}
-		}
-		switch key.String() {
-		case "y":
-			m.outline.confirm = false
-			moved, errStr := m.commitOutlineOrder()
-			if errStr != "" {
-				m.status = errStr
-				return m, nil // commit failed: stay on the outline with the error visible
-			}
-			m.finishOutlineOpen(wantOpen, openName, moved)
-			return m, nil
-		case "n":
-			m.outline.confirm = false
-			m.outline.working = append([]fileEntry(nil), m.outline.disk...) // discard moves
-			m.finishOutlineOpen(wantOpen, openName, nil)
-			return m, nil
-		case "esc":
-			m.outline.confirm = false // keep editing the outline
-			return m, nil
-		}
-		return m, nil
-	}
-
 	switch key.String() {
 	case "ctrl+c":
 		return m, tea.Quit
@@ -872,19 +794,14 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.outline.moveSelection(-1)
 	case "down", "j":
 		m.outline.moveSelection(1)
-	case "J", "shift+down":
-		m.outline.moveSection(1)
-	case "K", "shift+up":
-		m.outline.moveSection(-1)
 	case "enter":
-		m.outline.pendingOpen = true
-		return m.outlineLeave()
-	case "n":
-		m.outlineCreating = true
-		m.nameInput.SetValue("")
-		m.nameInput.Focus()
-		m.status = "new section title — enter to create, esc to cancel"
-		return m, textinput.Blink
+		if row, ok := m.outline.selectedRow(); ok {
+			m.loadFile(filepath.Join(m.outline.dir, row.entry.name))
+		}
+		m.screen = screenWriting
+		m.focus = focusEditor
+		m.editor.Focus()
+		return m, nil
 	case "r":
 		m.startRenameOutline()
 	case "m":
@@ -893,50 +810,12 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.exportPrompt = true
 		m.status = "export: m manuscript · t tufte · esc cancel"
 	case "esc":
-		m.outline.pendingOpen = false
-		return m.outlineLeave()
-	}
-	return m, nil
-}
-
-// outlineLeave handles an exit/open request: if a reorder is pending, raise the
-// confirm gate; otherwise complete the action immediately.
-func (m model) outlineLeave() (tea.Model, tea.Cmd) {
-	if m.outline.dirty() {
-		m.outline.confirm = true
-		m.status = "apply reordering?  y apply · n discard · esc keep editing"
+		m.screen = screenWriting
+		m.focus = focusEditor
+		m.editor.Focus()
 		return m, nil
 	}
-	m.leaveOutlinePending()
 	return m, nil
-}
-
-// leaveOutlinePending completes a pending exit or open (set via pendingOpen).
-func (m *model) leaveOutlinePending() {
-	if m.outline.pendingOpen {
-		if row, ok := m.outline.selectedRow(); ok {
-			m.loadFile(filepath.Join(m.outline.dir, row.entry.name))
-		}
-	}
-	m.screen = screenWriting
-	m.focus = focusEditor
-	m.editor.Focus()
-}
-
-// finishOutlineOpen returns to the editor, opening the captured section (mapped
-// through any rename in moved) when the pending action was an Enter-open. Used by
-// the confirm gate, where load() has already cleared the outline's pendingOpen.
-func (m *model) finishOutlineOpen(wantOpen bool, openName string, moved map[string]string) {
-	if wantOpen && openName != "" {
-		path := filepath.Join(m.outline.dir, openName)
-		if np, ok := moved[path]; ok {
-			path = np
-		}
-		m.loadFile(path)
-	}
-	m.screen = screenWriting
-	m.focus = focusEditor
-	m.editor.Focus()
 }
 
 // outlineView renders the outline screen with the status bar.
@@ -1030,22 +909,6 @@ func (m model) pagerView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, body, status)
 }
 
-// commitOutlineOrder applies a pending reorder: backup + renumber on disk, then
-// follow the open file's rename and refresh the sidebar + outline. Returns an
-// error string for the status line (empty on success/no-op).
-func (m *model) commitOutlineOrder() (map[string]string, string) {
-	moved, err := commitReorder(m.outline.dir, m.outline.working, backupStamp(time.Now()))
-	if err != nil {
-		return nil, "reorder failed: " + err.Error()
-	}
-	if newPath, ok := moved[m.currentFile]; ok {
-		m.currentFile = newPath
-	}
-	m.files.SetDir(m.files.dir) // re-sort the sidebar to the new names
-	m.outline.load(m.outline.dir, m.files.wc)
-	return moved, ""
-}
-
 // enterManuscript builds the read-through pager for the current outline's
 // manuscript and shows it. Reached from the outline's `m`.
 func (m *model) enterManuscript() {
@@ -1079,54 +942,7 @@ func (m *model) enterOutline() {
 	m.outline.load(m.files.dir, m.files.wc)
 	m.screen = screenOutline
 	m.previewing = false
-	m.status = "outline · ↑↓ select · J/K reorder · enter open · n new · m read · ctrl+e export · esc back"
-}
-
-// hasConvertibleFiles reports whether the current pane dir has at least one
-// document file (non-dir entry) that a convert could number.
-func (m model) hasConvertibleFiles() bool {
-	for _, e := range m.files.entries {
-		if !e.isDir {
-			return true
-		}
-	}
-	return false
-}
-
-// convertToManuscript numbers the current folder's document files contiguously
-// (backup first), follows the open file, and opens the outline.
-func (m *model) convertToManuscript() {
-	dir := m.files.dir
-	var files []fileEntry
-	for _, e := range m.files.entries {
-		if !e.isDir {
-			files = append(files, e)
-		}
-	}
-	if len(files) == 0 {
-		m.status = "nothing to convert"
-		return
-	}
-	ops := planConvert(files, padWidth(len(files), 0))
-	var paths []string
-	for _, f := range files {
-		paths = append(paths, filepath.Join(dir, f.name))
-	}
-	if err := backupFiles(dir, backupStamp(time.Now()), paths); err != nil {
-		m.status = "convert failed: " + err.Error()
-		return
-	}
-	if err := applyRenames(dir, ops); err != nil {
-		m.status = "convert failed: " + err.Error()
-		return
-	}
-	for _, op := range ops {
-		if m.currentFile == filepath.Join(dir, op.from) {
-			m.currentFile = filepath.Join(dir, op.to)
-		}
-	}
-	m.files.SetDir(dir)
-	m.enterOutline()
+	m.status = "outline · ↑↓ select · enter open · r rename · m read · ctrl+e export · esc back"
 }
 
 func (m *model) loadFile(path string) {
@@ -1164,6 +980,11 @@ func (m *model) confirmCreate() {
 
 	if strings.Contains(name, "/") || name == "." || name == ".." {
 		m.status = "name can't contain a path separator"
+		return
+	}
+
+	if name == manifestName {
+		m.status = "manifest.json is managed by inkmere"
 		return
 	}
 
@@ -1219,27 +1040,54 @@ func (m *model) startRename() {
 	if e.name == ".." {
 		return
 	}
-	_, numbered := sectionOrder(e.name)
-	section := numbered && !e.isDir && isManuscript(m.files.entries)
-	prefill := e.name
-	if section {
-		prefill = sectionTitle(e.name)
+	v := m.files.view
+	if v.source == sourceManifest && v.warning != "" {
+		m.status = "manifest unreadable — structure is managed by inkmere"
+		return
 	}
-	m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir, section: section}, prefill)
+	if isChapterOf(v, e.name) {
+		if v.source == sourceManifest {
+			// manifest manuscript: titles are manifest-owned; okashi can't write them.
+			m.status = "chapter titles are managed by inkmere"
+			return
+		}
+		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
+		m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir, section: true},
+			sectionTitle(e.name))
+		return
+	}
+	m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir}, e.name)
 }
 
 // startRenameOutline begins renaming the selected outline row (section title or
-// loose file).
+// loose file). Mirrors startRename: manifest chapters are refused; legacy chapters
+// get a prefix-preserving retitle; loose files get a plain rename.
 func (m *model) startRenameOutline() {
 	row, ok := m.outline.selectedRow()
 	if !ok {
 		return
 	}
-	prefill := row.entry.name
-	if row.isSection {
-		prefill = sectionTitle(row.entry.name)
+	// Resolve at the top so the refuse-mode guard covers both section and loose rows.
+	// A refuse-mode folder has source==sourceManifest with a non-empty warning;
+	// its files appear as loose (no chapters), so the isSection branch never fires —
+	// the guard must precede it.
+	v := resolveManuscript(m.outline.dir, readEntries(m.outline.dir))
+	if v.source == sourceManifest && v.warning != "" {
+		m.status = "manifest unreadable — structure is managed by inkmere"
+		return
 	}
-	m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, isDir: false, section: row.isSection}, prefill)
+	if row.isSection {
+		if v.source == sourceManifest {
+			// manifest manuscript: titles are manifest-owned; okashi can't write them.
+			m.status = "chapter titles are managed by inkmere"
+			return
+		}
+		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
+		m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, isDir: false, section: true},
+			sectionTitle(row.entry.name))
+		return
+	}
+	m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, isDir: false, section: false}, row.entry.name)
 }
 
 // confirmRename applies the pending rename: builds the new name by target kind,
@@ -1270,6 +1118,12 @@ func (m *model) confirmRename() {
 			newName = looseRename(t.name, typed)
 		}
 	}
+	if newName == manifestName {
+		m.status = "manifest.json is managed by inkmere"
+		m.refreshAfterRename()
+		return
+	}
+
 	if newName == t.name {
 		m.status = "unchanged"
 		m.refreshAfterRename()
@@ -1305,37 +1159,6 @@ func (m *model) refreshAfterRename() {
 	}
 	m.focus = focusSidebar
 	m.editor.Blur()
-}
-
-// confirmNewSection creates a new section after the selected one and renumbers
-// the rest. The new file opens in the editor.
-func (m *model) confirmNewSection() {
-	m.outlineCreating = false
-	m.nameInput.Blur()
-	title := strings.TrimSpace(m.nameInput.Value())
-	if title == "" {
-		m.status = "new section cancelled (no title)"
-		return
-	}
-	insertIndex := m.outline.selected + 1
-	if m.outline.selected >= len(m.outline.working) {
-		insertIndex = len(m.outline.working) // a loose row is selected: append
-	}
-	padW := padWidth(len(m.outline.working)+1, existingPrefixWidth(m.outline.working))
-	newName, moved, err := commitInsert(m.outline.dir, slugify(title), m.outline.working, insertIndex, padW, backupStamp(time.Now()))
-	if err != nil {
-		m.status = "new section failed: " + err.Error()
-		return
-	}
-	if newPath, ok := moved[m.currentFile]; ok {
-		m.currentFile = newPath
-	}
-	m.files.SetDir(m.files.dir)
-	m.loadFile(filepath.Join(m.outline.dir, newName))
-	m.screen = screenWriting
-	m.focus = focusEditor
-	m.editor.Focus()
-	m.status = "new section: " + newName + " — ctrl+s to save"
 }
 
 // togglePreview flips between editing and a read-only glamour render of the
@@ -1441,9 +1264,6 @@ func (m model) statusBar() string {
 	}
 	if m.renaming {
 		return "rename ▸ " + m.nameInput.View()
-	}
-	if m.convertPrompt {
-		return "make this a manuscript? (y / n)"
 	}
 	if m.exportPrompt {
 		return "export: m manuscript · t tufte · esc cancel"

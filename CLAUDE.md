@@ -8,11 +8,10 @@ Model/Update/View) + lipgloss. Two real roles:
    feature set; okashi defines what "lean" means. The shared design + contracts reference
    lives in that repo's `SPEC.md`.
 
-> **Reconciled 2026-06-26** against the shipped okashi. An earlier draft of this file
-> described an aspirational architecture (gap-buffer editor, a manifest ordering file) that
-> the codebase does not use; this version describes what okashi actually is, keeps the
-> genuinely-good invariants, and flags the two adopted-but-not-yet-implemented rules and the
-> one open cross-app contract.
+> **Reconciled 2026-06-26** against the shipped okashi; **updated 2026-06-26** (manifest
+> reconciliation — Tasks 1–6). An earlier draft described an aspirational architecture
+> (gap-buffer editor, a manifest ordering file) that the codebase did not use; this version
+> describes what okashi actually is, with all shared contracts resolved and adopted.
 
 ---
 
@@ -44,14 +43,13 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 
 ### Files & sync — okashi's signature obligation
 - **RULE (ADOPTED): write atomically (temp file + rename**, atomic on the same volume);
-  never write in place. *Status:* `save()`, export, the backup copies, the new-section file,
-  and the recents store all write atomically via `atomicWrite` (`atomicwrite.go`). okashi
-  runs outside the macOS sandbox and **cannot use `NSFileCoordinator`** (the mechanism the app
-  uses to coordinate with the iCloud daemon), so atomic writes + iCloud `NSFileVersion` are
-  what keep the shared corpus from corrupting.
-- Backups: destructive structural ops (outline reorder, new-section insert) snapshot the
-  affected files into `<project>/.backup/<timestamp>/` first (`backup.go`). `.backup/` and
-  all dotfiles are excluded from the pane and from manuscript detection.
+  never write in place. *Status:* `save()`, export, and the recents store all write atomically
+  via `atomicWrite` (`atomicwrite.go`). okashi runs outside the macOS sandbox and **cannot use
+  `NSFileCoordinator`** (the mechanism the app uses to coordinate with the iCloud daemon), so
+  atomic writes + iCloud `NSFileVersion` are what keep the shared corpus from corrupting.
+- Dotfiles (names starting with `.`) are excluded from the pane and from manuscript
+  detection. Atomic-write temp files are dot-prefixed so they never appear as documents while
+  in flight.
 
 ### Theming
 - lipgloss styling; the theme is detected once at startup (override with `OKASHI_THEME`),
@@ -65,21 +63,24 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 ## Project model (the shipped reality)
 
 - **The atom is one `.md` file.**
-- **Manuscript** = a folder containing **≥1 numerically-prefixed file** (`01-opening.md`).
-  Auto-detected (`isManuscript`). Order = the **leading run of digits parsed as an integer**
-  (`1`=`01`=`001`; `2` before `10`); display titles are the filename **de-slugged**
-  (`02-the-letter.md` → "the letter"). Files keep their real names.
-- **Category** = a plain folder of unnumbered docs. **Loose / "Resources"** = unnumbered
-  files (at the root, in a category, or sitting inside a manuscript as notes); inside a
-  manuscript they're shown but **excluded** from the ordered manuscript and from export.
-- **There is no manifest file.** Membership + order + titles come from the filename
-  convention above. (This diverges from the earlier draft — see Shared Contracts §1.)
+- **Manuscript** = a folder containing a `manifest.json`. The manifest is the sole source of
+  order (`items` array), chapter membership (listed in `items` = chapter; unlisted `.md` =
+  Resource), and display titles (`items[].title`, `manifest.title`). okashi reads it;
+  **inkmere owns it** (see Shared Contracts §1).
+  - **Legacy fallback:** a folder with **no** manifest but ≥1 numerically-prefixed file is
+    treated as a manuscript for display only — order = numeric prefix, titles = de-slugged
+    filename. A read-only transitional courtesy for un-migrated corpora.
+- **Category** = a plain folder of unnumbered docs (no manifest, no numbered files).
+- **Loose / "Resources"** = unnumbered files at the root, in a category, or inside a
+  manuscript folder but not listed in `items`; shown, excluded from the ordered view and
+  from export.
 - Shipped features: the launch hub; a manuscript-aware sidebar (titles + per-chapter word
-  counts); the **outline** (`ctrl+l`: select/open, `J/K` reorder with renumber-on-disk +
-  backup, `n` new section, `r` rename, `m` → pager); **convert** (`ctrl+l` on a plain chapter
-  folder offers to number it into a manuscript); the **pager** (`m`: read-through with
-  jump-to-edit); **export** (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **rename**
-  (`r`); markdown **preview** (`ctrl+p`, glamour).
+  counts); the **outline** (`ctrl+l`: select/open, `m` → pager — **read-only navigator**;
+  no reorder, no insert); the **pager** (`m`: read-through with jump-to-edit); **export**
+  (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **rename** (`r`: blocked for manifest
+  chapters — titles are inkmere-owned and filenames are birth-stable; retained for legacy
+  numbered chapters, loose files, Resources, and folders); markdown **preview** (`ctrl+p`,
+  glamour).
 - Env knobs: `OKASHI_DIR`, `OKASHI_WIDTH`, `OKASHI_SMARTQUOTES`, `OKASHI_THEME`,
   `OKASHI_ICONS`, `OKASHI_AUTHOR` (export header).
 
@@ -96,19 +97,28 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 okashi and the macOS app operate the **same on-disk corpus**. Keep this block aligned across
 both repos.
 
-### 1. Manuscript ordering & membership — HARD GATE + OPEN CROSS-APP ITEM
-- okashi's contract is the **filename convention**: numeric prefix = order, de-slugged
-  filename = title, unnumbered = loose/Resources (excluded from order/export). **No manifest.**
-- ⚠️ **OPEN (deferred to inkmere):** `../inkmere` is **not built yet**. When it is, it will
-  likely introduce a **manifest** at project creation; that ordering decision is **dictated
-  from there** and then brought back here to reconcile. Until inkmere lands and the choice is
-  made, okashi is authoritative on **filename-prefix**. If inkmere adopts a manifest, pick ONE
-  (filename-prefix or manifest) and implement it in **both** codebases together — do not change
-  okashi's convention unilaterally.
-- HARD GATE: before changing the on-disk **ordering/membership convention** (prefix format,
-  zero-pad rules, loose-file semantics), STOP, confirm with the user, and implement in both
-  apps together. Routine data writes — reorder, add/remove a file, rename a title — are normal
-  ops and proceed without prompting.
+### 1. Manuscript ordering & membership — RESOLVED (2026-06-26)
+- **RESOLVED:** order, membership, and display titles live in inkmere's per-manuscript
+  `manifest.json` (see `../inkmere/docs/superpowers/specs/2026-06-26-storage-spine-design.md`
+  §2.1 and §6). okashi treats manuscript structure as **read-only**:
+  - **Manifest manuscript** (folder with `manifest.json`): `items` order is canonical;
+    `items[].title` is the chapter display title; `manifest.title` is the manuscript title;
+    a file is a chapter **iff** it is listed in `items`; any unlisted `.md` is a Resource.
+    okashi reads this and **never writes it**. If the manifest is unreadable or its
+    `schemaVersion` is unsupported, okashi refuses to infer structure — it shows files flat
+    as loose documents with a status note; it does **not** fall back to prefix ordering.
+  - **Legacy manuscript** (no manifest, ≥1 numerically-prefixed file): filename-prefix
+    convention is a **read-only display fallback** — order by numeric prefix, titles
+    de-slugged from filenames. A transitional courtesy for un-migrated corpora; no
+    structural writes offered here either.
+  - **Category** (neither manifest nor numbered files): plain folder of documents.
+- **Authority:** inkmere owns reorder, insert, convert, and chapter-title rename for manifest
+  chapters. okashi retains prose writes and loose-file management. `r` retitle is retained
+  for legacy (manifest-less) numbered chapters only (resolved O1); blocked for manifest
+  chapters (title is manifest-owned, filename is birth-stable).
+- **HARD GATE (standing):** any change to the manifest **shape** (schema, field set,
+  serialization) must STOP, confirm with the user, and implement in **both** repos together.
+  okashi performs no manifest writes — the gate is about the shared schema contract only.
 
 ### 2. Markdown flavor — HARD GATE (ADOPTED)
 - Flavor = **CommonMark + GFM (tables, task lists, strikethrough, autolinks) + footnotes**,

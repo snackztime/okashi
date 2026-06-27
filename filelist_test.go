@@ -275,6 +275,28 @@ func TestSidebarShowsTitlesAndCounts(t *testing.T) {
 	}
 }
 
+func TestSidebarRendersManifestTitleAndOrder(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "opening.md"), []byte("one two three"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter.md"), []byte("a b"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":1,"title":"Windermere","items":[`+
+			`{"file":"the-letter.md","title":"The Letter"},`+
+			`{"file":"opening.md","title":"Chapter One"}]}`), 0o644)
+	f := newFilelist()
+	f.root = ""
+	f.width, f.height = 60, 12
+	f.SetDir(dir)
+	view := f.View()
+	if !strings.Contains(view, "The Letter") || !strings.Contains(view, "Chapter One") {
+		t.Fatalf("sidebar should show manifest titles:\n%s", view)
+	}
+	// Manifest order: "The Letter" precedes "Chapter One" despite filename alpha.
+	if strings.Index(view, "The Letter") > strings.Index(view, "Chapter One") {
+		t.Fatalf("sidebar must honor manifest order, not filename order:\n%s", view)
+	}
+}
+
 func TestSidebarOrdersSectionsNumerically(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "10-ten.md"), []byte("x"), 0o644)

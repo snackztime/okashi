@@ -33,15 +33,15 @@ type pagerModel struct {
 	height int
 }
 
-// load concatenates the dir's ordered sections (loose excluded) into wrapped,
-// mapped lines. Each section contributes a "── Title ──" header line then its
-// body, each source line wrapped to width. Reads each file exactly once.
+// load concatenates the dir's chapters (in resolver order, loose excluded) into
+// wrapped, mapped lines. Each chapter contributes a "── Title ──" header line then
+// its body, each source line wrapped to width. Reads each file exactly once.
 func (p *pagerModel) load(dir string, width int) {
 	if width < 1 {
 		width = 1
 	}
 	entries := readEntries(dir) // markdown/text files, dirs excluded (from outline.go)
-	sections, _ := orderedSections(entries)
+	v := resolveManuscript(dir, entries)
 
 	p.dir = dir
 	p.lines = nil
@@ -49,15 +49,15 @@ func (p *pagerModel) load(dir string, width int) {
 	p.offset = 0
 
 	running := 0
-	for _, sec := range sections {
+	for _, ch := range v.chapters {
 		p.lines = append(p.lines, pagerLine{
-			text:     "── " + sectionTitle(sec.name) + " ──",
-			file:     sec.name,
+			text:     "── " + ch.title + " ──",
+			file:     ch.file,
 			src:      -1,
 			header:   true,
 			cumWords: running,
 		})
-		data, err := os.ReadFile(filepath.Join(dir, sec.name))
+		data, err := os.ReadFile(filepath.Join(dir, ch.file))
 		if err != nil {
 			continue
 		}
@@ -67,7 +67,7 @@ func (p *pagerModel) load(dir string, width int) {
 				running += wordCount(row)
 				p.lines = append(p.lines, pagerLine{
 					text:     row,
-					file:     sec.name,
+					file:     ch.file,
 					src:      srcIdx,
 					header:   false,
 					cumWords: running,

@@ -65,8 +65,8 @@ func orderedSections(files []fileEntry) (sections, loose []fileEntry) {
 	return sections, loose
 }
 
-// isManuscript reports whether any non-dir entry is a numbered section.
-func isManuscript(entries []fileEntry) bool {
+// hasNumberedSections reports whether any non-dir entry is a numbered section.
+func hasNumberedSections(entries []fileEntry) bool {
 	for _, e := range entries {
 		if e.isDir {
 			continue

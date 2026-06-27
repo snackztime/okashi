@@ -50,22 +50,73 @@ func TestSidebarRenameLooseFileKeepsExt(t *testing.T) {
 	}
 }
 
-func TestSidebarRenameSectionTitleOnly(t *testing.T) {
+func TestRenameRefusedForManifestChapter(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
-	os.WriteFile(filepath.Join(root, "01-a.md"), []byte("x"), 0o644)
-	os.WriteFile(filepath.Join(root, "02-the-letter.md"), []byte("x"), 0o644)
-	m := sidebarModel(t, root)
-	m.files.selectName("02-the-letter.md")
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "the-letter.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(proj, manifestName), []byte(
+		`{"schemaVersion":1,"title":"N","items":[{"file":"the-letter.md","title":"The Letter"}]}`), 0o644)
+	m := sidebarModel(t, proj)
+	m.files.selectName("the-letter.md")
 
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 	m = nm.(model)
+	if m.renaming {
+		t.Fatal("r on a manifest chapter must NOT start a rename (title is manifest-owned)")
+	}
+	if _, err := os.Stat(filepath.Join(proj, "the-letter.md")); err != nil {
+		t.Fatalf("the chapter file must be untouched: %v", err)
+	}
+}
+
+func TestRenameAllowedForResourceInManuscript(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "a.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(proj, "notes.md"), []byte("y"), 0o644) // unlisted = Resource
+	os.WriteFile(filepath.Join(proj, manifestName), []byte(
+		`{"schemaVersion":1,"title":"N","items":[{"file":"a.md","title":"One"}]}`), 0o644)
+	m := sidebarModel(t, proj)
+	m.files.selectName("notes.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming {
+		t.Fatal("r on a Resource (unlisted file) should start a plain rename")
+	}
 	m.nameInput.SetValue("")
-	m = typeInto(t, m, "the telegram")
+	m = typeInto(t, m, "scratch")
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(model)
-	if _, err := os.Stat(filepath.Join(root, "02-the-telegram.md")); err != nil {
-		t.Fatalf("section rename should keep the 02- prefix: %v", err)
+	if _, err := os.Stat(filepath.Join(proj, "scratch.md")); err != nil {
+		t.Fatalf("Resource rename should work like a loose-file rename: %v", err)
+	}
+}
+
+func TestRenameAllowedForLegacySection(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "legacy")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "01-opening.md"), []byte("x"), 0o644) // numbered, no manifest
+	m := sidebarModel(t, proj)
+	m.files.selectName("01-opening.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming {
+		t.Fatal("r on a legacy numbered section should start a retitle (O1: legacy ergonomics kept)")
+	}
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "the dawn")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(proj, "01-the-dawn.md")); err != nil {
+		t.Fatalf("legacy retitle must preserve the numeric prefix: %v", err)
 	}
 }
 
@@ -129,111 +180,107 @@ func TestSidebarRenameTracksOpenFile(t *testing.T) {
 	}
 }
 
-func TestOutlineRenameSectionTitle(t *testing.T) {
+// --- C1 / I1 corpus-safety guards (see fix-wave spec) ---
+
+// TestCreateRejectsReservedManifestName: typing "manifest.json" as a new-file
+// name must be rejected — currentFile must not change, status must be set.
+func TestCreateRejectsReservedManifestName(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	m := sidebarModel(t, root)
+
+	// Sentinel: detect any unwanted currentFile change.
+	sentinel := filepath.Join(root, "sentinel.md")
+	m.currentFile = sentinel
+
+	// Enter file-creation mode and type the reserved name.
+	m.creatingFile = true
+	m.nameInput.SetValue("")
+	m.nameInput.Focus()
+	m = typeInto(t, m, "manifest.json")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+
+	if m.currentFile != sentinel {
+		t.Fatalf("currentFile must remain unchanged (got %q)", m.currentFile)
+	}
+	if m.status == "" {
+		t.Fatal("status must be set to explain the rejection")
+	}
+}
+
+// TestRenameRejectsReservedManifestName: renaming a loose file to "manifest.json"
+// must be refused — original untouched, no manifest.json created.
+func TestRenameRejectsReservedManifestName(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "draft.md"), []byte("hello"), 0o644)
+	m := sidebarModel(t, root)
+	m.files.selectName("draft.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming {
+		t.Fatal("r should start a rename")
+	}
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "manifest.json")
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+
+	if _, err := os.Stat(filepath.Join(root, "draft.md")); err != nil {
+		t.Fatalf("original file must be untouched: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, manifestName)); err == nil {
+		t.Fatal("manifest.json must not be created by a rename")
+	}
+	if m.status == "" {
+		t.Fatal("status must be set after rejecting manifest.json rename")
+	}
+}
+
+// TestRenameRefusedInRefuseModeManifest: a folder with an unreadable manifest
+// (schemaVersion 2 = unsupported) must block rename entirely — pressing 'r' on
+// a file in that folder must NOT start a rename.
+func TestRenameRefusedInRefuseModeManifest(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
 	proj := filepath.Join(root, "novel")
 	os.MkdirAll(proj, 0o755)
-	os.WriteFile(filepath.Join(proj, "01-a.md"), []byte("x"), 0o644)
-	os.WriteFile(filepath.Join(proj, "02-the-letter.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(proj, "01-opening.md"), []byte("x"), 0o644)
+	// schemaVersion 2 triggers refuse mode (unsupported future version).
+	os.WriteFile(filepath.Join(proj, manifestName), []byte(
+		`{"schemaVersion":2,"title":"N","items":[{"file":"01-opening.md","title":"Opening"}]}`), 0o644)
 	m := sidebarModel(t, proj)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL}) // enter the outline
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // select 02-the-letter
+	m.files.selectName("01-opening.md")
+
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 	m = nm.(model)
 
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
-	m = nm.(model)
-	if !m.renaming {
-		t.Fatal("r in the outline should start a rename")
+	if m.renaming {
+		t.Fatal("r must NOT start a rename in a refuse-mode manifest folder")
 	}
-	m.nameInput.SetValue("")
-	m = typeInto(t, m, "the telegram")
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = nm.(model)
-	if _, err := os.Stat(filepath.Join(proj, "02-the-telegram.md")); err != nil {
-		t.Fatalf("outline rename should retitle keeping the prefix: %v", err)
+	if _, err := os.Stat(filepath.Join(proj, "01-opening.md")); err != nil {
+		t.Fatalf("file must be untouched: %v", err)
 	}
-	if m.screen != screenOutline {
-		t.Fatalf("after an outline rename we should still be in the outline, got %v", m.screen)
+	if m.status == "" {
+		t.Fatal("status must be set when rename is refused in refuse-mode")
 	}
 }
 
-func TestConvertPromptOnPlainFolder(t *testing.T) {
+func TestCtrlLOnNonManuscriptStaysPut(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
-	book := filepath.Join(root, "book")
-	os.MkdirAll(book, 0o755)
-	os.WriteFile(filepath.Join(book, "Chapter-00.md"), []byte("x"), 0o644)
-	os.WriteFile(filepath.Join(book, "Chapter-01.md"), []byte("y"), 0o644)
-	m := sidebarModel(t, book)
+	plain := filepath.Join(root, "plain")
+	os.MkdirAll(plain, 0o755)
+	os.WriteFile(filepath.Join(plain, "a.md"), []byte("x"), 0o644) // unnumbered, no manifest
+	m := sidebarModel(t, plain)
 
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
 	m = nm.(model)
-	if !m.convertPrompt {
-		t.Fatal("ctrl+l on a plain folder with files should raise the convert prompt")
-	}
 	if m.screen == screenOutline {
-		t.Fatal("must not enter the outline before the user confirms")
-	}
-}
-
-func TestConvertNumbersFilesAndOpensOutline(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("OKASHI_DIR", root)
-	book := filepath.Join(root, "book")
-	os.MkdirAll(book, 0o755)
-	os.WriteFile(filepath.Join(book, "Chapter-00.md"), []byte("x"), 0o644)
-	os.WriteFile(filepath.Join(book, "Chapter-01.md"), []byte("y"), 0o644)
-	m := sidebarModel(t, book)
-
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	m = nm.(model)
-	if _, err := os.Stat(filepath.Join(book, "01-Chapter-00.md")); err != nil {
-		t.Fatalf("convert should number the first file: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(book, "02-Chapter-01.md")); err != nil {
-		t.Fatalf("convert should number the second file: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(book, ".backup")); err != nil {
-		t.Fatalf("convert should snapshot to .backup/ first: %v", err)
-	}
-	if m.screen != screenOutline {
-		t.Fatalf("convert should open the outline, got screen %v", m.screen)
-	}
-}
-
-func TestCtrlLNoDocsShowsNothingToConvert(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("OKASHI_DIR", root)
-	empty := filepath.Join(root, "empty")
-	os.MkdirAll(empty, 0o755)
-	m := sidebarModel(t, empty)
-
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	if m.convertPrompt || m.screen == screenOutline {
-		t.Fatal("ctrl+l on a folder with no documents should neither prompt nor enter the outline")
-	}
-}
-
-func TestConvertTracksOpenFile(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("OKASHI_DIR", root)
-	book := filepath.Join(root, "book")
-	os.MkdirAll(book, 0o755)
-	os.WriteFile(filepath.Join(book, "Chapter-00.md"), []byte("x"), 0o644)
-	os.WriteFile(filepath.Join(book, "Chapter-01.md"), []byte("y"), 0o644)
-	m := sidebarModel(t, book)
-	m.currentFile = filepath.Join(book, "Chapter-00.md") // editing the first chapter
-
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}}) // confirm convert
-	m = nm.(model)
-	if m.currentFile != filepath.Join(book, "01-Chapter-00.md") {
-		t.Fatalf("convert should follow the open file to 01-Chapter-00.md, got %q", m.currentFile)
+		t.Fatal("ctrl+l on a non-manuscript folder must not enter the outline")
 	}
 }

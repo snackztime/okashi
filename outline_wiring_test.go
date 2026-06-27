@@ -3,10 +3,42 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+func TestOutlineManifestTitleAndOrder(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "opening.md"), []byte("one two"), 0o644)
+	os.WriteFile(filepath.Join(dir, "the-letter.md"), []byte("a b"), 0o644)
+	os.WriteFile(filepath.Join(dir, manifestName), []byte(
+		`{"schemaVersion":1,"title":"Windermere","items":[`+
+			`{"file":"the-letter.md","title":"The Letter"},`+
+			`{"file":"opening.md","title":"Chapter One"}]}`), 0o644)
+	var o outlineModel
+	o.wc = newWordCountCache()
+	o.width = 60
+	o.height = 10
+	o.load(dir, o.wc)
+	// Manifest order: the-letter before opening despite filename alpha.
+	if len(o.working) != 2 || o.working[0].name != "the-letter.md" || o.working[1].name != "opening.md" {
+		t.Fatalf("outline should follow manifest order; working = %+v", o.working)
+	}
+	// Titles come from the manifest.
+	if o.chapterTitle("the-letter.md") != "The Letter" {
+		t.Fatalf("title for the-letter.md should be 'The Letter', got %q", o.chapterTitle("the-letter.md"))
+	}
+	if o.chapterTitle("opening.md") != "Chapter One" {
+		t.Fatalf("title for opening.md should be 'Chapter One', got %q", o.chapterTitle("opening.md"))
+	}
+	// View contains manifest titles, not filename slugs.
+	view := o.View()
+	if !strings.Contains(view, "The Letter") || !strings.Contains(view, "Chapter One") {
+		t.Fatalf("outline View should show manifest titles:\n%s", view)
+	}
+}
 
 func setupManuscript(t *testing.T) (model, string) {
 	t.Helper()
@@ -90,95 +122,6 @@ func TestOutlineHandlesResize(t *testing.T) {
 	}
 }
 
-func TestOutlineReorderCommitsOnEscConfirm(t *testing.T) {
-	m, proj := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	// Move section 1 (01-a) down past 02-b.
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
-	m = nm.(model)
-	if !m.outline.dirty() {
-		t.Fatal("after J the outline should be dirty")
-	}
-	// esc -> confirm gate appears, no disk change yet.
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	m = nm.(model)
-	if !m.outline.confirm {
-		t.Fatal("esc with a pending reorder should raise the confirm gate")
-	}
-	if _, err := os.Stat(filepath.Join(proj, "01-b.md")); !os.IsNotExist(err) {
-		t.Fatal("disk must not change before the gate is confirmed")
-	}
-	// y -> apply: a now becomes section 02, b becomes 01.
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	m = nm.(model)
-	if _, err := os.Stat(filepath.Join(proj, "01-b.md")); err != nil {
-		t.Fatalf("after confirm, 02-b should be renumbered to 01-b: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(proj, "02-a.md")); err != nil {
-		t.Fatalf("after confirm, 01-a should be renumbered to 02-a: %v", err)
-	}
-	if m.screen != screenWriting {
-		t.Fatalf("apply should complete the pending exit, got screen %v", m.screen)
-	}
-}
-
-func TestOutlineReorderDiscard(t *testing.T) {
-	m, proj := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}) // discard
-	m = nm.(model)
-	if _, err := os.Stat(filepath.Join(proj, "01-a.md")); err != nil {
-		t.Fatalf("discard must leave the disk untouched: %v", err)
-	}
-	if m.screen != screenWriting {
-		t.Fatalf("discard should complete the exit, got %v", m.screen)
-	}
-}
-
-func TestOutlineReorderTracksOpenFile(t *testing.T) {
-	m, proj := setupManuscript(t)
-	m.currentFile = filepath.Join(proj, "01-a.md") // 01-a is open in the editor
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}}) // a moves to slot 2
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	m = nm.(model)
-	if m.currentFile != filepath.Join(proj, "02-a.md") {
-		t.Fatalf("the open file path should follow the rename to 02-a.md, got %q", m.currentFile)
-	}
-}
-
-func TestOutlineNewSectionInsertsAfterSelection(t *testing.T) {
-	m, proj := setupManuscript(t) // 01-a, 02-b ; select 01-a
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	// n -> prompt; type a title; enter.
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
-	m = nm.(model)
-	for _, r := range "scene two" {
-		nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
-		m = nm.(model)
-	}
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = nm.(model)
-	// New section is slot 2; old 02-b shifts to 03-b.
-	if _, err := os.Stat(filepath.Join(proj, "02-scene-two.md")); err != nil {
-		t.Fatalf("expected new 02-scene-two.md after the selection: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(proj, "03-b.md")); err != nil {
-		t.Fatalf("expected 02-b renumbered to 03-b: %v", err)
-	}
-}
-
 func TestOutlineClickSelectsThenDoubleClickOpens(t *testing.T) {
 	m, proj := setupManuscript(t) // 01-a (row 0), 02-b (row 1)
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
@@ -195,64 +138,5 @@ func TestOutlineClickSelectsThenDoubleClickOpens(t *testing.T) {
 	m = nm.(model)
 	if m.screen != screenWriting || m.currentFile != filepath.Join(proj, "02-b.md") {
 		t.Fatalf("double-click should open 02-b.md, screen=%v file=%q", m.screen, m.currentFile)
-	}
-}
-
-func TestOutlineGateEscKeepsEditing(t *testing.T) {
-	m, _ := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}}) // reorder -> dirty
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // raise the gate
-	m = nm.(model)
-	if !m.outline.confirm {
-		t.Fatal("esc with a pending reorder should raise the confirm gate")
-	}
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // esc inside the gate
-	m = nm.(model)
-	if m.outline.confirm {
-		t.Fatal("esc inside the gate should dismiss it")
-	}
-	if m.screen != screenOutline {
-		t.Fatalf("esc inside the gate should keep editing the outline, got screen %v", m.screen)
-	}
-}
-
-func TestOutlineReorderApplyOpensSelectedSection(t *testing.T) {
-	m, proj := setupManuscript(t) // 01-a, 02-b
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	// Move 01-a down: working becomes [02-b, 01-a]; selection follows the moved 'a' to row 1.
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
-	m = nm.(model)
-	// Enter raises the gate; y applies AND must open the selected section at its new name.
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	m = nm.(model)
-	if !m.outline.confirm {
-		t.Fatal("enter with a pending reorder should raise the confirm gate")
-	}
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
-	m = nm.(model)
-	if m.screen != screenWriting {
-		t.Fatalf("apply should return to the editor, got screen %v", m.screen)
-	}
-	if m.currentFile != filepath.Join(proj, "02-a.md") {
-		t.Fatalf("apply+open should open the selected section at its renamed path 02-a.md, got %q", m.currentFile)
-	}
-}
-
-func TestOutlineReorderDiscardOpensSelectedSection(t *testing.T) {
-	m, proj := setupManuscript(t) // 01-a, 02-b
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}}) // selection follows 'a' to row 1
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // gate
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}}) // discard + open
-	m = nm.(model)
-	if m.currentFile != filepath.Join(proj, "01-a.md") {
-		t.Fatalf("discard+open should open the selected section 'a' at its unchanged name 01-a.md, got %q", m.currentFile)
 	}
 }
