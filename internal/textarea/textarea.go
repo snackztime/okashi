@@ -581,6 +581,32 @@ func (m *Model) SetCursor(col int) {
 	m.lastCharOffset = 0
 }
 
+// CursorColumn returns the cursor's rune column on the current logical line.
+func (m *Model) CursorColumn() int { return m.col }
+
+// ReplaceRange replaces runes [start,end) on the current line with s and places
+// the cursor just after the inserted text. Out-of-range args are clamped.
+func (m *Model) ReplaceRange(start, end int, s string) {
+	line := m.value[m.row]
+	if start < 0 {
+		start = 0
+	}
+	if end > len(line) {
+		end = len(line)
+	}
+	if start > end {
+		return
+	}
+	repl := []rune(s)
+	newLine := make([]rune, 0, len(line)-(end-start)+len(repl))
+	newLine = append(newLine, line[:start]...)
+	newLine = append(newLine, repl...)
+	newLine = append(newLine, line[end:]...)
+	m.value[m.row] = newLine
+	m.col = start + len(repl)
+	m.SetCursor(m.col) // re-clamp + refresh cursor/viewport state
+}
+
 // CursorStart moves the cursor to the start of the input field.
 func (m *Model) CursorStart() {
 	m.SetCursor(0)
