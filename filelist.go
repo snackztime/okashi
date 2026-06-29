@@ -11,6 +11,16 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// renderIcon colors a glyph by its type, except on the selected row (where the
+// selection style's foreground must win) or when the glyph carries no color
+// (the plain/ascii set).
+func renderIcon(g glyph, selected bool) string {
+	if selected || g.color == "" {
+		return g.ch
+	}
+	return lipgloss.NewStyle().Foreground(g.color).Render(g.ch)
+}
+
 type fileEntry struct {
 	name  string
 	isDir bool
@@ -125,28 +135,30 @@ func (f filelist) View() string {
 	var b strings.Builder
 	for i := f.offset; i < end; i++ {
 		e := f.entries[i]
-		head := " " + f.icons.icon(e) // one-column gutter, then the icon
-		full := head + e.name
+		g := f.icons.iconFor(e)
 		section := !e.isDir && chapterSet[e.name]
 		switch {
 		case i == f.selected:
-			content := full
+			var content string
 			if section {
-				content = f.sectionRow(e, false)
+				content = f.sectionRow(e, false) // selected: count + icon plain
+			} else {
+				content = " " + renderIcon(g, true) + e.name
 			}
 			b.WriteString(selectedStyle.Width(f.width).Render(ansi.Truncate(content, f.width, "…")))
 		case e.isDir:
-			b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(ansi.Truncate(full, f.width, "…")))
+			row := " " + renderIcon(g, false) + lipgloss.NewStyle().Foreground(accent).Render(e.name)
+			b.WriteString(ansi.Truncate(row, f.width, "…"))
 		case section:
 			b.WriteString(f.sectionRow(e, true))
 		default:
-			// Loose file (or non-manuscript dir): filename with dim extension.
 			ext := filepath.Ext(e.name)
-			if ext != "" && lipgloss.Width(full) <= f.width {
-				stem := head + strings.TrimSuffix(e.name, ext)
+			icon := " " + renderIcon(g, false)
+			if ext != "" && lipgloss.Width(icon+e.name) <= f.width {
+				stem := icon + strings.TrimSuffix(e.name, ext)
 				b.WriteString(stem + lipgloss.NewStyle().Foreground(subtle).Render(ext))
 			} else {
-				b.WriteString(ansi.Truncate(full, f.width, "…"))
+				b.WriteString(ansi.Truncate(icon+e.name, f.width, "…"))
 			}
 		}
 		if i < end-1 {
@@ -165,7 +177,8 @@ func (f filelist) sectionRow(e fileEntry, dimCount bool) string {
 		n = f.wc.count(filepath.Join(f.dir, e.name))
 	}
 	count := commafy(n) + "w"
-	left := " " + f.icons.icon(e) + f.chapterTitle(e.name)
+	g := f.icons.iconFor(e)
+	left := " " + renderIcon(g, !dimCount) + f.chapterTitle(e.name)
 	maxLeft := f.width - lipgloss.Width(count) - 1
 	if maxLeft < 1 {
 		maxLeft = 1

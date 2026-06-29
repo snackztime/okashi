@@ -140,18 +140,19 @@ func homeRows(items []homeItem, sel int, icons iconSet) (lines []string, itemRow
 			lines = append(lines, "")
 		}
 
-		var icon string
+		var g glyph
 		switch it.kind {
 		case homeProject, homeOpenOther:
-			icon = icons.folder.ch
+			g = icons.folder
 		case homeNewDocument, homeNewProject:
-			icon = icons.action.ch
+			g = icons.action
 		default:
-			icon = icons.icon(fileEntry{name: it.label})
+			g = icons.iconFor(fileEntry{name: it.label})
 		}
-		row := "  " + icon + it.label
-		if i == sel {
-			row = selectedStyle.Render(" " + icon + it.label + " ")
+		selected := i == sel
+		row := "  " + renderIcon(g, selected) + it.label
+		if selected {
+			row = selectedStyle.Render(" " + renderIcon(g, true) + it.label + " ")
 		}
 		itemRow[i] = len(lines)
 		lines = append(lines, row)

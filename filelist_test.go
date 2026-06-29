@@ -221,6 +221,25 @@ func TestBreadcrumbSegments(t *testing.T) {
 	}
 }
 
+func TestPaneIconColoredWhenNotSelected(t *testing.T) {
+	old := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(2) // force ANSI256 so styles emit codes in tests
+	defer lipgloss.SetColorProfile(old)
+
+	g := glyph{ch: "X", color: iconPdfColor}
+	if renderIcon(g, false) == "X" {
+		t.Fatal("non-selected icon should be color-wrapped (ANSI), got the bare glyph")
+	}
+	// Selected → plain glyph so the selection bar's white foreground applies.
+	if renderIcon(g, true) != "X" {
+		t.Fatalf("selected icon should be the bare glyph, got %q", renderIcon(g, true))
+	}
+	// No color → bare glyph (plain icon set).
+	if renderIcon(glyph{ch: "Y"}, false) != "Y" {
+		t.Fatalf("uncolored glyph should render bare, got %q", renderIcon(glyph{ch: "Y"}, false))
+	}
+}
+
 func TestBreadcrumbBarFitsWithHits(t *testing.T) {
 	f := filelist{root: "/r/okashi", dir: "/r/okashi/Book", height: 5}
 	f.entries = []fileEntry{{name: "a"}, {name: "b"}} // 2 < height → no indicator
