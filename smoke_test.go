@@ -224,7 +224,7 @@ func TestMouseClickSelectsAndDoubleClickOpens(t *testing.T) {
 	m.files.SetDir(dir)
 
 	// entries: ["..", "draft.md"] → draft.md is visible row 1.
-	// Breadcrumb occupies row 0; the file list starts at screen row 1, so ".."=Y1, draft.md=Y2.
+	// Framed sidebar: top border at row 0; file list starts at row 1: ".."=Y1, draft.md=Y2.
 	click := tea.MouseMsg{X: 2, Y: 2, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 
 	// Single click selects but does NOT open.
@@ -589,7 +589,7 @@ func TestEnterEndsEmptyListItem(t *testing.T) {
 	}
 }
 
-func TestSidebarClickRowAccountsForBreadcrumb(t *testing.T) {
+func TestSidebarClickRowAccountsForTopBorder(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "draft.md")
 	if err := os.WriteFile(path, []byte("hi words"), 0o644); err != nil {
@@ -602,7 +602,7 @@ func TestSidebarClickRowAccountsForBreadcrumb(t *testing.T) {
 	m.files.root = dir
 	m.files.SetDir(dir) // entries: ["draft.md"] (no ".." at root)
 
-	// Row 0 of the list is at screen Y=1 (breadcrumb is Y=0). Click it.
+	// Framed sidebar: top border at row 0; row 0 of the list is at screen Y=1.
 	click := tea.MouseMsg{X: 2, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 	nm, _ = m.Update(click)
 	m = nm.(model)
@@ -823,13 +823,14 @@ func TestCtrlNResetsFolderMode(t *testing.T) {
 }
 
 func TestSidebarFrameFitsAndAligns(t *testing.T) {
-	line := strings.Repeat("x", sidebarWidth-3) // the file-pane content budget
-	out := sidebarStyle.Width(sidebarWidth - 1).Render(line)
-	if lipgloss.Height(out) != 1 {
-		t.Fatalf("a %d-char line wrapped in the sidebar frame (height %d)", sidebarWidth-3, lipgloss.Height(out))
-	}
+	// framedPanel: 2 borders + 2 padding cols = 4; inner width = sidebarWidth-4.
+	inner := strings.Repeat("x", sidebarWidth-4)
+	out := framedPanel("Files", inner, sidebarWidth, 4)
 	if w := lipgloss.Width(out); w != sidebarWidth {
-		t.Fatalf("sidebar frame total width = %d, want %d", w, sidebarWidth)
+		t.Fatalf("sidebar framedPanel total width = %d, want %d", w, sidebarWidth)
+	}
+	if h := lipgloss.Height(out); h != 4 {
+		t.Fatalf("sidebar framedPanel total height = %d, want 4", h)
 	}
 }
 
@@ -838,35 +839,8 @@ func TestLayoutFilePaneWidth(t *testing.T) {
 	m.screen = screenWriting
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = nm.(model)
-	if m.files.width != sidebarWidth-3 {
-		t.Fatalf("files.width = %d, want %d", m.files.width, sidebarWidth-3)
-	}
-}
-
-func TestBreadcrumbClickNavigates(t *testing.T) {
-	t.Setenv("OKASHI_DIR", t.TempDir())
-	m := initialModel()
-	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = nm.(model)
-	m.screen = screenWriting
-	root := m.files.root
-	if err := os.MkdirAll(filepath.Join(root, "Book", "Drafts"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	m.files.SetDir(filepath.Join(root, "Book", "Drafts"))
-
-	// Find the "okashi" (root) segment's column and click it (breadcrumb is at
-	// screen row 0; sidebar left padding is 1 col → screen X = col + 1).
-	_, hits := m.files.breadcrumbBar(sidebarWidth - 3)
-	if len(hits) == 0 {
-		t.Fatal("expected clickable segments")
-	}
-	rootHit := hits[0] // the workspace root
-	clickX := rootHit.start + 1
-	nm, _ = m.Update(tea.MouseMsg{X: clickX, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
-	m = nm.(model)
-	if m.files.dir != root {
-		t.Fatalf("clicking the root breadcrumb should navigate to the root, got %q", m.files.dir)
+	if m.files.width != sidebarWidth-4 {
+		t.Fatalf("files.width = %d, want %d", m.files.width, sidebarWidth-4)
 	}
 }
 
@@ -927,7 +901,7 @@ func TestEffectivePanels(t *testing.T) {
 	}
 
 	// Narrow: inspector open squeezes the editor → sidebar suppressed, editor keeps >= min.
-	m.width = 90 // 90-32-32 = 26 < 50
+	m.width = 90 // 90-34-32 = 24 < 50
 	ss, si, area = m.effectivePanels()
 	if ss {
 		t.Fatal("narrow: sidebar should be suppressed while the inspector is open")
@@ -1330,5 +1304,36 @@ func TestTabClickColumnAlignment(t *testing.T) {
 		if got := nm.(model).inspector.tab; got != tc.want {
 			t.Errorf("click %q at col %d → tab %d, want %d", tc.label, col, got, tc.want)
 		}
+	}
+}
+
+func TestSidebarFramedClickAlignment(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-alpha.md"), []byte("a"), 0o644)
+	os.WriteFile(filepath.Join(dir, "02-bravo.md"), []byte("b"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 170, Height: 40})
+	m = nm.(model)
+	m.sidebarVisible = true
+	m.inspector.visible = false
+	m.layout()
+	// Find a file entry's on-screen row and click it; it must become selected.
+	lines := strings.Split(ansi.Strip(m.View()), "\n")
+	target, wantRow := "bravo", -1
+	for y, ln := range lines {
+		if strings.Contains(ln, target) {
+			wantRow = y
+			break
+		}
+	}
+	if wantRow < 0 {
+		t.Fatalf("file %q not on screen:\n%s", target, strings.Join(lines, "\n"))
+	}
+	nm, _ = m.Update(tea.MouseMsg{X: 3, Y: wantRow, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if sel := m.files.entries[m.files.selected].name; !strings.Contains(sel, target) {
+		t.Fatalf("clicking the on-screen %q row (y=%d) selected %q instead — geometry misaligned", target, wantRow, sel)
 	}
 }

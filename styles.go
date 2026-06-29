@@ -3,7 +3,7 @@ package main
 import "github.com/charmbracelet/lipgloss"
 
 // sidebarWidth is the fixed width of the file pane (including its border).
-const sidebarWidth = 32
+const sidebarWidth = 34
 
 // The Crush-ish palette. Tweak freely — this is where the "vibe" lives.
 var (
@@ -25,11 +25,6 @@ var (
 var bannerStyle = lipgloss.NewStyle().
 	Foreground(accent).
 	Bold(true)
-
-var sidebarStyle = lipgloss.NewStyle().
-	Border(lipgloss.RoundedBorder(), false, true, false, false).
-	BorderForeground(subtle).
-	Padding(0, 1)
 
 var inspectorStyle = lipgloss.NewStyle().
 	Border(lipgloss.RoundedBorder(), false, false, false, true).

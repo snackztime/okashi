@@ -668,20 +668,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 			return m, nil
 		}
-		if msg.Y == 0 {
-			_, hits := m.files.breadcrumbBar(sidebarWidth - 3)
-			col := msg.X - 1 // sidebar left padding
-			for _, h := range hits {
-				if col >= h.start && col < h.end {
-					m.files.SetDir(h.path)
-					m.focus = focusSidebar
-					m.editor.Blur()
-					break
-				}
-			}
-			return m, nil
-		}
-		// Breadcrumb header occupies row 0; the file list starts at row 1.
+		// Framed sidebar: top border occupies row 0; the file list starts at row 1.
 		row := sidebarRow(msg.Y, 1, m.files.height)
 		if row < 0 {
 			return m, nil
@@ -950,12 +937,11 @@ func (m model) View() string {
 
 	cols := []string{}
 	if showSidebar {
-		sideInner := lipgloss.JoinVertical(
-			lipgloss.Left,
-			func() string { row, _ := m.files.breadcrumbBar(sidebarWidth - 3); return breadcrumbStyle.Render(row) }(),
-			m.files.View(),
-		)
-		cols = append(cols, sidebarStyle.Width(sidebarWidth-1).Height(bodyH-2).Render(sideInner))
+		title := filepath.Base(m.files.dir)
+		if m.files.dir == "" {
+			title = "Files"
+		}
+		cols = append(cols, framedPanel(title, m.files.View(), sidebarWidth, bodyH-2))
 	}
 	cols = append(cols, lipgloss.Place(editorArea, bodyH, lipgloss.Center, lipgloss.Top, pane))
 	if showInspector {
@@ -1008,8 +994,8 @@ func (m *model) layout() {
 	showSidebar, _, editorArea := m.effectivePanels()
 	cw := min(m.colWidth, editorArea-2)
 	if showSidebar {
-		m.files.height = bodyH - 3 // sidebar content height (bodyH-2) minus the breadcrumb row
-		m.files.width = sidebarWidth - 3
+		m.files.height = bodyH - 4 // framed: content height (panel bodyH-2 minus top+bottom border)
+		m.files.width = sidebarWidth - 4
 	}
 	m.editor.SetWidth(cw)
 	m.editor.SetHeight(bodyH)
