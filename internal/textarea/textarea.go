@@ -360,6 +360,7 @@ func (m *Model) SetValue(s string) {
 // InsertString inserts a string at the cursor position.
 func (m *Model) InsertString(s string) {
 	m.insertRunesFromUserInput([]rune(s))
+	m.ensureWrapCacheCapacity()
 }
 
 // InsertRune inserts a rune at the cursor position.
@@ -1044,10 +1045,6 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.value[m.row] = make([]rune, 0)
 	}
 
-	if m.MaxHeight > 0 && m.MaxHeight != m.cache.Capacity() {
-		m.cache = memoization.NewMemoCache[line, [][]rune](m.MaxHeight)
-	}
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -1159,6 +1156,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	m.repositionView()
+	m.ensureWrapCacheCapacity()
 
 	return m, tea.Batch(cmds...)
 }
@@ -1391,6 +1389,14 @@ func (m Model) memoizedWrap(runes []rune, width int) [][]rune {
 	v := wrap(runes, width)
 	m.cache.Set(input, v)
 	return v
+}
+
+// ensureWrapCacheCapacity grows the wrap-memoization cache to cover the whole
+// buffer so large files don't thrash it. Never shrinks below the default.
+func (m *Model) ensureWrapCacheCapacity() {
+	if want := max(defaultMaxHeight, len(m.value)); m.cache.Capacity() < want {
+		m.cache = memoization.NewMemoCache[line, [][]rune](want)
+	}
 }
 
 // cursorLineNumber returns the line number that the cursor is on.
