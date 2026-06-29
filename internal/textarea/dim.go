@@ -1,5 +1,9 @@
 package textarea
 
+import (
+	"strings"
+)
+
 // currentSentenceSpan returns the [start,end) rune range of the sentence under
 // cursorOffset. A sentence runs from after the previous terminator (.!?) +
 // whitespace (or paragraph start) to the next terminator (inclusive). A blank
@@ -54,6 +58,33 @@ func currentSentenceSpan(text string, cursorOffset int) (int, int) {
 		start = end
 	}
 	return start, end
+}
+
+// cursorSentenceSpan returns the same absolute [span0,span1) as
+// currentSentenceSpan(m.Value(), m.cursorRuneOffset()) but scans only a bounded
+// window of source lines around the cursor, avoiding an O(buffer) m.Value() join
+// every frame. okashi:dim
+func (m Model) cursorSentenceSpan() (int, int) {
+	const radius = 4 // sentences never span more than a few source lines here
+	lo := max(0, m.row-radius)
+	hi := min(len(m.value), m.row+radius+1)
+
+	// Absolute rune offset of the first rune of line `lo`.
+	base := 0
+	for i := 0; i < lo; i++ {
+		base += len(m.value[i]) + 1
+	}
+	// Join the window exactly as Value() would (newline between lines).
+	var b strings.Builder
+	for i := lo; i < hi; i++ {
+		if i > lo {
+			b.WriteByte('\n')
+		}
+		b.WriteString(string(m.value[i]))
+	}
+	local := m.cursorRuneOffset() - base
+	s0, s1 := currentSentenceSpan(b.String(), local)
+	return s0 + base, s1 + base
 }
 
 // dimRun is a maximal run of characters that are all in- or out-of-span.

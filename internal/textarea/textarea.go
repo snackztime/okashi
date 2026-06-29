@@ -1178,7 +1178,7 @@ func (m Model) View() string {
 
 	var dimSpan0, dimSpan1 int
 	if m.Dim {
-		dimSpan0, dimSpan1 = currentSentenceSpan(m.Value(), m.cursorRuneOffset())
+		dimSpan0, dimSpan1 = m.cursorSentenceSpan()
 	}
 	lineOffset := 0
 
