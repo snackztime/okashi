@@ -234,6 +234,11 @@ type Model struct {
 	Dim      bool
 	DimStyle lipgloss.Style
 
+	// Decorator, when set, is called once per visible source line during View and
+	// returns rune-range decorations to style (spellcheck/syntax). nil → no
+	// decorations (render unchanged). okashi:decorations
+	Decorator func(line string) []Decoration
+
 	// CharLimit is the maximum number of characters this input element will
 	// accept. If 0 or less, there's no limit.
 	CharLimit int
@@ -943,20 +948,38 @@ func (m Model) cursorRuneOffset() int {
 	return off + m.col
 }
 
+// Decoration styles a [Start,End) rune range within a source line.
+type Decoration struct {
+	Start, End int
+	Style      lipgloss.Style
+}
+
 // renderSeg renders seg (first rune at absolute offset absStart). When Dim is
-// off it's just style.Render; when on, out-of-[span0,span1) runs use DimStyle.
-// okashi:dim
-func (m Model) renderSeg(seg []rune, absStart, span0, span1 int, style lipgloss.Style) string {
-	if !m.Dim {
-		return style.Render(string(seg))
+// off and there are no decorations it's just style.Render; otherwise each rune
+// is styled by precedence decoration > dim > normal via splitStyledRuns.
+// decos are ABSOLUTE-offset ranges (the View converts line-relative → absolute).
+// okashi:dim okashi:decorations
+func (m Model) renderSeg(seg []rune, absStart, span0, span1 int, style lipgloss.Style, decos []Decoration) string {
+	if !m.Dim && len(decos) == 0 {
+		return style.Render(string(seg)) // fast path, unchanged
 	}
-	var b strings.Builder
-	for _, run := range splitDimRuns(seg, absStart, span0, span1) {
-		if run.dim {
-			b.WriteString(m.DimStyle.Render(run.text))
-		} else {
-			b.WriteString(style.Render(run.text))
+	if len(decos) == 0 {
+		// Dim-only hot path: boolean run comparison (no per-rune lipgloss render).
+		// Byte-identical to the original dim render. okashi:dim
+		var b strings.Builder
+		for _, run := range splitDimRuns(seg, absStart, span0, span1) {
+			if run.dim {
+				b.WriteString(m.DimStyle.Render(run.text))
+			} else {
+				b.WriteString(style.Render(run.text))
+			}
 		}
+		return b.String()
+	}
+	// Decorated path (intermittent — spellcheck/syntax): style-aware grouping.
+	var b strings.Builder
+	for _, run := range splitStyledRuns(seg, absStart, span0, span1, m.Dim, style, m.DimStyle, decos) {
+		b.WriteString(run.style.Render(run.text))
 	}
 	return b.String()
 }
@@ -1232,6 +1255,15 @@ func (m Model) View() string {
 		line := m.value[l]
 		wrappedLines := m.memoizedWrap(line, m.width)
 
+		// Compute the line's decorations once per visible source line, converting
+		// line-relative offsets to absolute buffer rune offsets. okashi:decorations
+		var lineDecos []Decoration
+		if m.Decorator != nil {
+			for _, d := range m.Decorator(string(line)) {
+				lineDecos = append(lineDecos, Decoration{Start: lineOffset + d.Start, End: lineOffset + d.End, Style: d.Style})
+			}
+		}
+
 		// On the first source line, skip the pieces before wl0 and account for
 		// their rune lengths so pieceStart indexes the source correctly.
 		startPiece := 0
@@ -1305,17 +1337,17 @@ func (m Model) View() string {
 				padding -= m.width - strwidth
 			}
 			if m.row == l && lineInfo.RowOffset == wl {
-				s.WriteString(m.renderSeg(wrappedLine[:lineInfo.ColumnOffset], lineOffset+pieceStart, dimSpan0, dimSpan1, style))
+				s.WriteString(m.renderSeg(wrappedLine[:lineInfo.ColumnOffset], lineOffset+pieceStart, dimSpan0, dimSpan1, style, lineDecos))
 				if m.col >= len(line) && lineInfo.CharOffset >= m.width {
 					m.Cursor.SetChar(" ")
 					s.WriteString(m.Cursor.View())
 				} else {
 					m.Cursor.SetChar(string(wrappedLine[lineInfo.ColumnOffset]))
 					s.WriteString(style.Render(m.Cursor.View()))
-					s.WriteString(m.renderSeg(wrappedLine[lineInfo.ColumnOffset+1:], lineOffset+pieceStart+lineInfo.ColumnOffset+1, dimSpan0, dimSpan1, style))
+					s.WriteString(m.renderSeg(wrappedLine[lineInfo.ColumnOffset+1:], lineOffset+pieceStart+lineInfo.ColumnOffset+1, dimSpan0, dimSpan1, style, lineDecos))
 				}
 			} else {
-				s.WriteString(m.renderSeg(wrappedLine, lineOffset+pieceStart, dimSpan0, dimSpan1, style))
+				s.WriteString(m.renderSeg(wrappedLine, lineOffset+pieceStart, dimSpan0, dimSpan1, style, lineDecos))
 			}
 			s.WriteString(style.Render(strings.Repeat(" ", max(0, padding))))
 			s.WriteRune('\n')

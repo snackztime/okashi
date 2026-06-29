@@ -3,6 +3,8 @@ package textarea
 import (
 	"strings"
 	"unicode/utf8"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // currentSentenceSpan returns the [start,end) rune range of the sentence under
@@ -125,6 +127,41 @@ func splitDimRuns(seg []rune, absStart, span0, span1 int) []dimRun {
 			j++
 		}
 		runs = append(runs, dimRun{text: string(seg[i:j]), dim: dim})
+		i = j
+	}
+	return runs
+}
+
+// styledRun is a maximal run of characters that all render with the same style.
+type styledRun struct {
+	text  string
+	style lipgloss.Style
+}
+
+// splitStyledRuns splits seg (first rune at absolute offset absStart) into runs,
+// choosing each rune's style by precedence: a covering decoration > dim > normal.
+// decos are ABSOLUTE-offset ranges (the View converts line-relative → absolute).
+func splitStyledRuns(seg []rune, absStart, span0, span1 int, dimOn bool, normal, dimStyle lipgloss.Style, decos []Decoration) []styledRun {
+	styleAt := func(off int) lipgloss.Style {
+		for _, d := range decos {
+			if off >= d.Start && off < d.End {
+				return d.Style
+			}
+		}
+		if dimOn && (off < span0 || off >= span1) {
+			return dimStyle
+		}
+		return normal
+	}
+	var runs []styledRun
+	i := 0
+	for i < len(seg) {
+		st := styleAt(absStart + i)
+		j := i + 1
+		for j < len(seg) && styleAt(absStart+j).String() == st.String() {
+			j++
+		}
+		runs = append(runs, styledRun{text: string(seg[i:j]), style: st})
 		i = j
 	}
 	return runs
