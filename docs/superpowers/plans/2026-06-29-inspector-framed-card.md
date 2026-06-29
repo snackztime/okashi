@@ -203,16 +203,16 @@ func TestFramedInspectorClickAlignment(t *testing.T) {
 
 (Keep the tab bar as the first inner line. The Analysis tab's `[ ] Spellcheck`/POS rows likewise get a 2-space indent; `analysisRowY` must continue to point at the rendered checkbox rows — see Step 5.)
 
-- [ ] **Step 4: Frame the panel in `main.go`** — replace the inspector column build (`inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner)`) with:
+- [ ] **Step 4: Frame the panel in `main.go` + keep inner width 29 by widening the column** — The full box's two borders + two padding cols take 2 more than the old left-border + padding, which would shrink the inner width to 27 and the 28-col tab bar would no longer fit. Keep the inner width at **29** by widening the column: change `const inspectorWidth = 32` → `34`. Then:
+  - `inspectorInnerWidth()` → `return inspectorWidth - 5` (panel rendered at `inspectorWidth-1` = 33; minus 2 borders + 2 padding = 29 — UNCHANGED, so the tab bar still fits and `View`/`tabBar` are unaffected).
+  - Replace `inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner)` with:
+    ```go
+    		title := inspectorTabLabels()[m.inspector.tab]
+    		cols = append(cols, framedPanel(title, insInner, inspectorWidth-1, bodyH-2))
+    ```
+  (Bumping `inspectorWidth` propagates to the existing `editorArea -= inspectorWidth` and the min-width check automatically.)
 
-```go
-		title := inspectorTabLabels()[m.inspector.tab]
-		cols = append(cols, framedPanel(title, insInner, inspectorWidth-1, bodyH-2))
-```
-
-And update `inspectorInnerWidth()` to the framed content width — full box at total `inspectorWidth-1`: `return inspectorWidth - 1 - 4` (2 borders + 2 padding). Keep it the single source `View` is called with.
-
-- [ ] **Step 5: Shift the mouse hit-tests by the top border** — in `main.go`'s `MouseMsg` handler, the inspector content now starts one row lower (top border). Where it currently treats `msg.Y` as the content row, subtract 1. Concretely, compute `contentY := msg.Y - 1` once and use it for both the tab-row check (`contentY == 0`) and `inspectorAnalysisRowAtY(contentY)`. The `localX` offset is unchanged (content still starts at panel col 2: left border + padding). If `analysisRowY`/`inspectorTabAtX` are defined relative to the inner content (row 0 = tab bar), they stay as-is; only the main.go `msg.Y - 1` shift is new. Verify against the indentation: `localX := msg.X - (m.width - inspectorWidth) - 2` may need `- 2` more if the 2-space content indent pushes the checkbox glyph right — adjust so a click on the visible `[ ]` toggles (the alignment test is the check).
+- [ ] **Step 5: Shift the mouse hit-tests by the top border** — Because the inner width stays 29 and content still starts at panel col 2 (left border + 1 padding), the **X offset is unchanged** (`localX := msg.X - (m.width - inspectorWidth) - 2` still lands on the content — the 2-space section indent only affects section rows, not the tab bar or the checkbox `[ ]` glyphs, which render at content col 0). The ONLY change is vertical: the top border adds row 0, so the content now starts one row lower. Where the handler treats `msg.Y` as the content row, use `msg.Y - 1`: the tab-row click fires when `msg.Y-1 == 0`, and the Analysis checkbox uses `inspectorAnalysisRowAtY(msg.Y - 1)`. `analysisRowY`/`inspectorTabAtX` stay content-relative (unchanged). The `TestFramedInspectorClickAlignment` gate (find the row on-screen, click it, assert the toggle) is the objective check — adjust the `-1` (and the X if a click misses) until it passes for tabs AND checkboxes.
 
 - [ ] **Step 6: Update existing geometry tests** — `TestTabBarFitsOneRow` (inner width is now `inspectorWidth-1-4`), `TestAnalysisRowAtY`, and the existing tab-click/checkbox-click smoke tests must use the framed positions (find the row on-screen like the alignment test, or add 1 for the top border). Make them pass against the new layout without weakening assertions.
 
