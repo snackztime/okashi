@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestComputeDocStats(t *testing.T) {
@@ -248,5 +249,60 @@ func TestAnalysisRowAtY(t *testing.T) {
 	}
 	if _, ok := inspectorAnalysisRowAtY(0); ok {
 		t.Fatal("the tab-bar row is not a checkbox row")
+	}
+}
+
+func TestFramedPanel(t *testing.T) {
+	out := framedPanel("Words", "alpha\nbeta", 20, 6)
+	lines := strings.Split(ansi.Strip(out), "\n")
+	if len(lines) != 6 {
+		t.Fatalf("framedPanel height: want 6 lines, got %d", len(lines))
+	}
+	if !strings.HasPrefix(lines[0], "╭") || !strings.Contains(lines[0], "Words") || !strings.HasSuffix(lines[0], "╮") {
+		t.Fatalf("top border malformed: %q", lines[0])
+	}
+	if !strings.HasPrefix(lines[5], "╰") || !strings.HasSuffix(lines[5], "╯") {
+		t.Fatalf("bottom border malformed: %q", lines[5])
+	}
+	for i, ln := range lines {
+		if w := lipgloss.Width(ln); w != 20 {
+			t.Fatalf("line %d width = %d, want 20: %q", i, w, ln)
+		}
+	}
+	// content present and bordered
+	if !strings.Contains(lines[1], "alpha") || !strings.HasPrefix(lines[1], "│") || !strings.HasSuffix(lines[1], "│") {
+		t.Fatalf("content line malformed: %q", lines[1])
+	}
+}
+
+func TestSectionHeader(t *testing.T) {
+	out := ansi.Strip(sectionHeader("Document", 24))
+	if !strings.HasPrefix(out, "DOCUMENT ") {
+		t.Fatalf("section header should start with UPPERCASE label + space: %q", out)
+	}
+	if !strings.Contains(out, "─") {
+		t.Fatalf("section header should have a rule fill: %q", out)
+	}
+	if lipgloss.Width(out) != 24 {
+		t.Fatalf("section header width = %d, want 24", lipgloss.Width(out))
+	}
+}
+
+func TestFramedPanelTruncatesLongLine(t *testing.T) {
+	// An inner line wider than the content area must be truncated, not wrapped —
+	// every output line stays exactly `width` and there are exactly `height` lines.
+	long := "Words Outline Goals Analysis Extra Overflowing Tabs"
+	out := framedPanel("X", long, 20, 4)
+	lines := strings.Split(ansi.Strip(out), "\n")
+	if len(lines) != 4 {
+		t.Fatalf("over-long inner line wrapped: want 4 lines, got %d:\n%s", len(lines), ansi.Strip(out))
+	}
+	for i, ln := range lines {
+		if lipgloss.Width(ln) != 20 {
+			t.Fatalf("line %d width %d != 20 (overflow): %q", i, lipgloss.Width(ln), ln)
+		}
+		if i > 0 && i < 3 && (!strings.HasPrefix(ln, "│") || !strings.HasSuffix(ln, "│")) {
+			t.Fatalf("content line %d lost its border (wrap): %q", i, ln)
+		}
 	}
 }

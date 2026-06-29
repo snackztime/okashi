@@ -11,6 +11,58 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// sectionHeader renders an UPPERCASE accent label followed by a subtle rule to width.
+func sectionHeader(label string, width int) string {
+	up := strings.ToUpper(label)
+	hs := lipgloss.NewStyle().Foreground(accent).Bold(true)
+	fill := width - lipgloss.Width(up) - 1
+	if fill < 0 {
+		fill = 0
+	}
+	return hs.Render(up) + " " + lipgloss.NewStyle().Foreground(subtle).Render(strings.Repeat("─", fill))
+}
+
+// framedPanel wraps inner (multi-line) in a rounded box of the given total width/height,
+// with title injected into the top border. Inner lines are padded/truncated ansi-aware.
+func framedPanel(title, inner string, width, height int) string {
+	if width < 6 {
+		width = 6
+	}
+	if height < 2 {
+		height = 2
+	}
+	bs := lipgloss.NewStyle().Foreground(subtle)
+	ts := lipgloss.NewStyle().Foreground(accent).Bold(true)
+	contentW := width - 4 // │ <space> content <space> │
+
+	titleStr := title
+	maxTitle := width - 4 // ╭, " ", at least one ─, " " is folded into title segment, ╮
+	if lipgloss.Width(titleStr) > maxTitle {
+		titleStr = ansi.Truncate(titleStr, maxTitle, "")
+	}
+	fill := width - 2 - (lipgloss.Width(titleStr) + 2) // minus ╭╮, minus the two spaces around the title
+	if fill < 0 {
+		fill = 0
+	}
+	top := bs.Render("╭") + ts.Render(" "+titleStr+" ") + bs.Render(strings.Repeat("─", fill)+"╮")
+
+	// Pad to contentW; truncate FIRST (ansi-aware) so an over-long line never
+	// wraps and breaks the frame.
+	cell := lipgloss.NewStyle().Width(contentW)
+	lines := strings.Split(inner, "\n")
+	out := make([]string, 0, height)
+	out = append(out, top)
+	for r := 0; r < height-2; r++ {
+		c := ""
+		if r < len(lines) {
+			c = ansi.Truncate(lines[r], contentW, "")
+		}
+		out = append(out, bs.Render("│")+" "+cell.Render(c)+" "+bs.Render("│"))
+	}
+	out = append(out, bs.Render("╰"+strings.Repeat("─", width-2)+"╯"))
+	return strings.Join(out, "\n")
+}
+
 // inspectorInnerWidth returns the true inner content width of the inspector
 // panel — the value main.go must pass to View() and the click handlers must
 // use. It equals inspectorWidth (total column) minus the border (1) and both
