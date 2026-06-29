@@ -1076,3 +1076,24 @@ func TestCtrlGSetsGoals(t *testing.T) {
 		t.Fatalf("goals not saved: %+v", m.goalsAll[dir])
 	}
 }
+
+func TestInspectorTabClick(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.inspector.visible = true
+	m.inspector.tab = tabWords
+	m.layout()
+	// Click the "Outline" chip: inspector content starts at width-inspectorWidth+2;
+	// Outline chip begins at localX 7 (" Words " = 7). Click at that column, row 0.
+	x := m.width - inspectorWidth + 2 + 8 // mid-"Outline"
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.inspector.tab != tabOutline {
+		t.Fatalf("click on Outline chip → tab=%v, want Outline", m.inspector.tab)
+	}
+}

@@ -470,6 +470,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		showSidebar, _, _ := m.effectivePanels()
 		inSidebar := showSidebar && msg.X < sidebarWidth
 
+		_, showInspector, _ := m.effectivePanels()
+		if showInspector && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.Y == 0 {
+			localX := msg.X - (m.width - inspectorWidth) - 2 // panel-left + border + padding
+			if localX >= 0 {
+				if tb, ok := inspectorTabAtX(localX); ok {
+					m.inspector.tab = tb
+					return m, nil
+				}
+			}
+		}
+
 		// Wheel scrolls whichever pane is under the pointer.
 		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
 			up := msg.Button == tea.MouseButtonWheelUp
