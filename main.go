@@ -441,6 +441,32 @@ func (m *model) applySuggestion(i int) {
 	m.suggesting = false
 }
 
+// spellHintSuggestionAtX maps a content column on the spell-hint status row to a
+// suggestion index. The hint is "✗ " + word + " → " + sugg joined by " · " + "  ·  ^R".
+func spellHintSuggestionAtX(word string, sugg []string, localX int) (int, bool) {
+	col := lipgloss.Width("✗ " + word + " → ")
+	for i, s := range sugg {
+		w := lipgloss.Width(s)
+		if localX >= col && localX < col+w {
+			return i, true
+		}
+		col += w + lipgloss.Width(" · ")
+	}
+	return 0, false
+}
+
+// openSpellMenuAndApply applies suggestion i for the misspelled word under the cursor.
+func (m *model) openSpellMenuAndApply(i int, sugg []string) {
+	w, s, e, ok := m.wordUnderCursor()
+	if !ok {
+		return
+	}
+	m.suggestions = sugg
+	m.suggestWord = w
+	m.suggestStart, m.suggestEnd = s, e
+	m.applySuggestion(i)
+}
+
 func (m model) Init() tea.Cmd {
 	return autosaveTick()
 }
@@ -697,6 +723,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 				return m, nil
+			}
+		}
+
+		// Click on the status bar applies a spell suggestion if one is active.
+		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.Y == m.height-1 {
+			if w, sugg, ok := m.cursorSpellHint(); ok {
+				if i, hit := spellHintSuggestionAtX(w, sugg, msg.X-1); hit { // -1 for status left padding
+					m.openSpellMenuAndApply(i, sugg)
+					return m, nil
+				}
 			}
 		}
 

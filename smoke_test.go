@@ -1422,6 +1422,39 @@ func TestEditorClickShowsSpellHint(t *testing.T) {
 	}
 }
 
+func TestClickSuggestionApplies(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("teh cat"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.analysis.spell = true
+	m.editor.MoveToLine(0)
+	m.editor.SetCursor(1) // cursor in "teh" → hint active
+	w, sugg, ok := m.cursorSpellHint()
+	if !ok || len(sugg) == 0 {
+		t.Fatalf("precondition: hint for %q should be active", w)
+	}
+	// The hint renders "✗ teh → the · ...". Click the first suggestion's column.
+	// prefix = "✗ "(2) + "teh"(3) + " → "(3) = 8 display cols; first suggestion starts at
+	// content col 8; status padding adds 1 → screen col 9. Click mid-suggestion.
+	// Use display width (not byte offset) because "✗" and "→" are 3-byte/1-col each.
+	stripped := ansi.Strip(m.statusBar())
+	bidx := strings.Index(stripped, sugg[0])
+	if bidx < 0 {
+		t.Fatalf("suggestion %q not in the rendered hint", sugg[0])
+	}
+	idx := lipgloss.Width(stripped[:bidx]) // byte offset → display col
+	nm, _ = m.Update(tea.MouseMsg{X: idx + 1 + 1, Y: m.height - 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if got := m.editor.Value(); got != sugg[0]+" cat" {
+		t.Fatalf("clicking suggestion %q should apply it: value=%q", sugg[0], got)
+	}
+}
+
 func TestPanelsFullHeight(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
