@@ -149,10 +149,11 @@ func homeRows(items []homeItem, sel int, icons iconSet) (lines []string, itemRow
 		default:
 			g = icons.iconFor(fileEntry{name: it.label})
 		}
-		selected := i == sel
-		row := "  " + renderIcon(g, selected) + it.label
-		if selected {
+		var row string
+		if i == sel {
 			row = selectedStyle.Render(" " + renderIcon(g, true) + it.label + " ")
+		} else {
+			row = "  " + renderIcon(g, false) + it.label
 		}
 		itemRow[i] = len(lines)
 		lines = append(lines, row)
