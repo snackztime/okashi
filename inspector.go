@@ -195,7 +195,7 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 	case tabAnalysis:
 		b.WriteString(breadcrumbStyle.Render("Analysis") + "\n\n")
 		b.WriteString(checkbox(analysis.spell) + "Spellcheck\n")
-		b.WriteString(lipgloss.NewStyle().Foreground(subtle).Render(checkbox(analysis.syntax) + "Syntax"))
+		b.WriteString(checkbox(analysis.syntax) + "Syntax")
 	case tabOutline:
 		b.WriteString(breadcrumbStyle.Render("Outline") + "\n\n")
 		b.WriteString(renderOutline(outline, width))

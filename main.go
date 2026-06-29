@@ -316,11 +316,17 @@ func (m *model) syncDim() {
 }
 
 // applyDecorator sets the editor's Decorator from the current analysis toggles.
-// (Syntax composes here in the next cycle; for now only spellcheck.)
 func (m *model) applyDecorator() {
-	if m.analysis.spell {
+	switch {
+	case m.analysis.spell && m.analysis.syntax:
+		m.editor.Decorator = func(line string) []textarea.Decoration {
+			return append(spellDecorator(line), syntaxDecorator(line)...)
+		}
+	case m.analysis.spell:
 		m.editor.Decorator = spellDecorator
-	} else {
+	case m.analysis.syntax:
+		m.editor.Decorator = syntaxDecorator
+	default:
 		m.editor.Decorator = nil
 	}
 }
@@ -500,8 +506,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if row == 0 {
 						m.analysis.spell = !m.analysis.spell
 						m.applyDecorator()
+					} else if row == 1 {
+						m.analysis.syntax = !m.analysis.syntax
+						m.applyDecorator()
 					}
-					// row 1 (Syntax) is wired next cycle.
 					return m, nil
 				}
 			}

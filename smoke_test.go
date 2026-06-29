@@ -1112,6 +1112,38 @@ func TestSpellcheckToggleViaAnalysisClick(t *testing.T) {
 	}
 }
 
+func TestSyntaxToggleComposesWithSpell(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.inspector.visible = true
+	m.inspector.tab = tabAnalysis
+	m.layout()
+
+	// Click the Syntax row (spellRowY+1) → syntax on, Decorator set.
+	x := m.width - inspectorWidth + 4
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: spellRowY + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if !m.analysis.syntax {
+		t.Fatal("clicking the Syntax row should enable it")
+	}
+	if m.editor.Decorator == nil {
+		t.Fatal("syntax on should set the editor Decorator")
+	}
+	// Now enable spell too → combined decorator, spell spans first.
+	m.analysis.spell = true
+	m.applyDecorator()
+	got := m.editor.Decorator("teh **word**")
+	// spell flags "teh" (a span starting at 0); a syntax bold span starts at 4.
+	if len(got) < 2 || got[0].Start != 0 {
+		t.Fatalf("combined decorator should put the spell span (teh @0) first: %+v", got)
+	}
+}
+
 func TestInspectorTabClick(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
