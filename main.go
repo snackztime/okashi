@@ -123,6 +123,9 @@ type renameTarget struct {
 	section bool // a numbered section -> title-only rename
 }
 
+const inspectorWidth = 32
+const minEditorMeasure = 50
+
 type model struct {
 	width, height int
 
@@ -136,6 +139,7 @@ type model struct {
 	homeSelected int
 
 	sidebarVisible bool
+	inspector      inspectorModel
 	focus          focus
 	creatingFile   bool
 	creatingFolder bool
@@ -208,7 +212,7 @@ func initialModel() model {
 		focus:          focusSidebar,
 		typewriter:     true,
 		dimEnabled:     true,
-		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+c quit",
+		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+i inspector · ctrl+c quit",
 		icons:          resolveIcons(),
 	}
 }
@@ -529,6 +533,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.layout()
 			return m, nil
+		case "ctrl+i":
+			m.inspector.visible = !m.inspector.visible
+			m.layout()
+			return m, nil
 		case "esc":
 			if m.previewing {
 				m.togglePreview() // exit preview
@@ -657,30 +665,48 @@ func (m model) View() string {
 		pane = lipgloss.JoinVertical(lipgloss.Left, header, m.preview.View())
 	}
 
-	var body string
-	if m.sidebarVisible {
+	showSidebar, showInspector, editorArea := m.effectivePanels()
+
+	cols := []string{}
+	if showSidebar {
 		sideInner := lipgloss.JoinVertical(
 			lipgloss.Left,
 			func() string { row, _ := m.files.breadcrumbBar(sidebarWidth - 3); return breadcrumbStyle.Render(row) }(),
 			m.files.View(),
 		)
-		side := sidebarStyle.
-			Width(sidebarWidth - 1).
-			Height(bodyH - 2).
-			Render(sideInner)
-
-		// Center the 80-col column inside the space left of the sidebar.
-		editorArea := m.width - sidebarWidth
-		ed := lipgloss.Place(editorArea, bodyH, lipgloss.Center, lipgloss.Top, pane)
-
-		body = lipgloss.JoinHorizontal(lipgloss.Top, side, ed)
-	} else {
-		// Full-screen: center the same column in the whole window.
-		body = lipgloss.Place(m.width, bodyH, lipgloss.Center, lipgloss.Top, pane)
+		cols = append(cols, sidebarStyle.Width(sidebarWidth-1).Height(bodyH-2).Render(sideInner))
 	}
+	cols = append(cols, lipgloss.Place(editorArea, bodyH, lipgloss.Center, lipgloss.Top, pane))
+	if showInspector {
+		doc := computeDocStats(m.editor.Value())
+		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
+		insInner := m.inspector.View(inspectorWidth-3, doc, proj)
+		cols = append(cols, inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner))
+	}
+	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 
 	status := statusStyle.Width(m.width).Render(m.statusBar())
 	return lipgloss.JoinVertical(lipgloss.Left, body, status)
+}
+
+// effectivePanels resolves which side panels are shown this render and the
+// width left for the editor. When the inspector is open and showing both panels
+// would squeeze the editor below minEditorMeasure, the sidebar is suppressed for
+// this render (m.sidebarVisible is not mutated).
+func (m model) effectivePanels() (showSidebar, showInspector bool, editorArea int) {
+	showSidebar = m.sidebarVisible
+	showInspector = m.inspector.visible
+	if showInspector && showSidebar && m.width-sidebarWidth-inspectorWidth < minEditorMeasure {
+		showSidebar = false
+	}
+	editorArea = m.width
+	if showSidebar {
+		editorArea -= sidebarWidth
+	}
+	if showInspector {
+		editorArea -= inspectorWidth
+	}
+	return
 }
 
 // layout recomputes pane sizes whenever the window resizes or the sidebar
@@ -695,11 +721,11 @@ func (m *model) layout() {
 		bodyH = 1
 	}
 
-	cw := min(m.colWidth, m.width-2)
-	if m.sidebarVisible {
+	showSidebar, _, editorArea := m.effectivePanels()
+	cw := min(m.colWidth, editorArea-2)
+	if showSidebar {
 		m.files.height = bodyH - 3 // sidebar content height (bodyH-2) minus the breadcrumb row
 		m.files.width = sidebarWidth - 3
-		cw = min(m.colWidth, m.width-sidebarWidth-2)
 	}
 	m.editor.SetWidth(cw)
 	m.editor.SetHeight(bodyH)

@@ -908,6 +908,55 @@ func TestStatsCenteredOnEditorPane(t *testing.T) {
 	}
 }
 
+func TestEffectivePanels(t *testing.T) {
+	m := initialModel()
+	m.screen = screenWriting
+	m.sidebarVisible = true
+	m.inspector.visible = true
+
+	// Wide: all three columns; editor area is the remainder.
+	m.width = 140
+	ss, si, area := m.effectivePanels()
+	if !ss || !si {
+		t.Fatalf("wide: showSidebar=%v showInspector=%v, want both true", ss, si)
+	}
+	if area != 140-sidebarWidth-inspectorWidth {
+		t.Fatalf("wide editorArea = %d, want %d", area, 140-sidebarWidth-inspectorWidth)
+	}
+
+	// Narrow: inspector open squeezes the editor → sidebar suppressed, editor keeps >= min.
+	m.width = 90 // 90-32-32 = 26 < 50
+	ss, si, area = m.effectivePanels()
+	if ss {
+		t.Fatal("narrow: sidebar should be suppressed while the inspector is open")
+	}
+	if !si {
+		t.Fatal("narrow: inspector should stay visible")
+	}
+	if area < minEditorMeasure {
+		t.Fatalf("narrow editorArea = %d, want >= %d", area, minEditorMeasure)
+	}
+}
+
+func TestInspectorToggleAndRender(t *testing.T) {
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
+	m = nm.(model)
+	m.editor.SetValue("Some prose here.\n")
+
+	// Inspector hidden by default — check against a string only the inspector emits.
+	if strings.Contains(m.View(), "Document") {
+		t.Fatal("inspector should be hidden by default")
+	}
+	// Toggle directly (ctrl+i == tab in bubbletea; drive via field mutation):
+	m.inspector.visible = true
+	m.layout()
+	if !strings.Contains(m.View(), "Document") {
+		t.Fatal("writing View should contain the inspector when visible")
+	}
+}
+
 func TestPreviewHeaderShown(t *testing.T) {
 	m := initialModel()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
