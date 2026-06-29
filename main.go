@@ -713,7 +713,7 @@ func (m model) View() string {
 	if showInspector {
 		doc := computeDocStats(m.editor.Value())
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
-		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir))
+		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir), goalStats{})
 		cols = append(cols, inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)

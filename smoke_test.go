@@ -967,11 +967,20 @@ func TestInspectorToggleAndRender(t *testing.T) {
 	if m.inspector.tab != tabOutline {
 		t.Fatalf("2nd ctrl+y: expected tabOutline, got %v", m.inspector.tab)
 	}
-	// 3rd ctrl+y → inspector closes (past the last tab).
+	// 3rd ctrl+y → Goals tab (still visible).
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
+	m = nm.(model)
+	if !m.inspector.visible {
+		t.Fatal("3rd ctrl+y should keep the inspector visible (Goals tab)")
+	}
+	if m.inspector.tab != tabGoals {
+		t.Fatalf("3rd ctrl+y: expected tabGoals, got %v", m.inspector.tab)
+	}
+	// 4th ctrl+y → inspector closes (past the last tab).
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = nm.(model)
 	if m.inspector.visible || strings.Contains(m.View(), "Document") {
-		t.Fatal("3rd ctrl+y should close the inspector (cycle past last tab)")
+		t.Fatal("4th ctrl+y should close the inspector (cycle past last tab)")
 	}
 }
 

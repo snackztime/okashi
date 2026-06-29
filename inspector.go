@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -15,11 +16,12 @@ type inspectorTab int
 const (
 	tabWords inspectorTab = iota
 	tabOutline
+	tabGoals
 )
 
 // inspectorTabLabels is the single source of the tab set — used by both the tab
 // bar render and cycle() so they never diverge.
-func inspectorTabLabels() []string { return []string{"Words", "Outline"} }
+func inspectorTabLabels() []string { return []string{"Words", "Outline", "Goals"} }
 
 // inspectorModel is the read-only right-side panel: a tab bar + the active tab.
 type inspectorModel struct {
@@ -67,6 +69,39 @@ type docStats struct{ words, chars, paragraphs int }
 type projStats struct {
 	words, chapters int
 	manuscript      bool
+}
+
+type goalStats struct{ today, dailyGoal, project, projectGoal int }
+
+// progressBar renders a width-cell bar: filled proportion in accent █, rest ░.
+func progressBar(cur, goal, width int) string {
+	filled := 0
+	if goal > 0 {
+		filled = (cur * width) / goal
+		if filled > width {
+			filled = width
+		}
+		if filled < 0 {
+			filled = 0
+		}
+	}
+	bar := lipgloss.NewStyle().Foreground(accent).Render(strings.Repeat("█", filled)) +
+		lipgloss.NewStyle().Foreground(subtle).Render(strings.Repeat("░", width-filled))
+	return "[" + bar + "]"
+}
+
+// inspectorTabAtX maps an x offset within the tab bar to a tab (chips are
+// " label " = len+2 wide). Mirrors the View tab-bar render.
+func inspectorTabAtX(localX int) (inspectorTab, bool) {
+	x := 0
+	for i, t := range inspectorTabLabels() {
+		w := len(t) + 2
+		if localX >= x && localX < x+w {
+			return inspectorTab(i), true
+		}
+		x += w
+	}
+	return tabWords, false
 }
 
 var blankLineRe = regexp.MustCompile(`\n[ \t]*\n`)
@@ -120,7 +155,7 @@ func kvRow(label string, n, width int) string {
 }
 
 // View renders the tab bar + the active tab's body, fit to the given inner width.
-func (in inspectorModel) View(width int, doc docStats, proj projStats, outline string) string {
+func (in inspectorModel) View(width int, doc docStats, proj projStats, outline string, goals goalStats) string {
 	var bar strings.Builder
 	for i, t := range inspectorTabLabels() {
 		chip := " " + t + " "
@@ -138,6 +173,20 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 	case tabOutline:
 		b.WriteString(breadcrumbStyle.Render("Outline") + "\n\n")
 		b.WriteString(renderOutline(outline, width))
+	case tabGoals:
+		b.WriteString(breadcrumbStyle.Render("Daily") + "\n")
+		b.WriteString(progressBar(goals.today, goals.dailyGoal, max(4, width-8)) + "\n")
+		b.WriteString(fmt.Sprintf("%s / %s\n", commafy(goals.today), commafy(goals.dailyGoal)))
+		if goals.today >= goals.dailyGoal && goals.dailyGoal > 0 {
+			b.WriteString(lipgloss.NewStyle().Foreground(accent).Render("✓ goal met"))
+		} else {
+			b.WriteString(lipgloss.NewStyle().Foreground(subtle).Render(commafy(goals.dailyGoal-goals.today) + " to go"))
+		}
+		if goals.projectGoal > 0 {
+			b.WriteString("\n\n" + breadcrumbStyle.Render("Project") + "\n")
+			b.WriteString(progressBar(goals.project, goals.projectGoal, max(4, width-8)) + "\n")
+			b.WriteString(fmt.Sprintf("%s / %s", commafy(goals.project), commafy(goals.projectGoal)))
+		}
 	default: // tabWords
 		b.WriteString(breadcrumbStyle.Render("Document") + "\n")
 		b.WriteString(kvRow("Words", doc.words, width) + "\n")
