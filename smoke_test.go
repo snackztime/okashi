@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -947,7 +948,7 @@ func TestInspectorToggleAndRender(t *testing.T) {
 	m.editor.SetValue("Some prose here.\n")
 
 	// Inspector hidden by default — check against a string only the inspector emits.
-	if strings.Contains(m.View(), "Document") {
+	if strings.Contains(ansi.Strip(m.View()), "DOCUMENT") {
 		t.Fatal("inspector should be hidden by default")
 	}
 	// 1st ctrl+y → Words tab visible.
@@ -956,7 +957,7 @@ func TestInspectorToggleAndRender(t *testing.T) {
 	if !m.inspector.visible {
 		t.Fatal("1st ctrl+y should make the inspector visible")
 	}
-	if !strings.Contains(m.View(), "Document") {
+	if !strings.Contains(ansi.Strip(m.View()), "DOCUMENT") {
 		t.Fatal("writing View should contain the inspector (Words tab) after 1st ctrl+y")
 	}
 	// 2nd ctrl+y → Outline tab (still visible, NOT closed).
@@ -989,7 +990,7 @@ func TestInspectorToggleAndRender(t *testing.T) {
 	// 5th ctrl+y → inspector closes (past the last tab).
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = nm.(model)
-	if m.inspector.visible || strings.Contains(m.View(), "Document") {
+	if m.inspector.visible || strings.Contains(ansi.Strip(m.View()), "DOCUMENT") {
 		t.Fatal("5th ctrl+y should close the inspector (cycle past last tab)")
 	}
 }
@@ -1102,8 +1103,9 @@ func TestSpellcheckToggleViaAnalysisClick(t *testing.T) {
 		t.Fatal("spellcheck should default off")
 	}
 	// Click the Spellcheck checkbox row in the inspector body.
+	// analysisRowY is content-relative; add 1 for the framed panel's top border.
 	x := m.width - inspectorWidth + 4
-	nm, _ = m.Update(tea.MouseMsg{X: x, Y: analysisRowY(0), Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: analysisRowY(0) + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = nm.(model)
 	if !m.analysis.spell {
 		t.Fatal("clicking the Spellcheck row should enable it")
@@ -1124,8 +1126,9 @@ func TestPOSToggleViaAnalysisClick(t *testing.T) {
 	m.inspector.visible = true
 	m.inspector.tab = tabAnalysis
 	m.layout()
+	// analysisRowY is content-relative; add 1 for the framed panel's top border.
 	x := m.width - inspectorWidth + 4
-	nm, _ = m.Update(tea.MouseMsg{X: x, Y: analysisRowY(1), Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: analysisRowY(1) + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = nm.(model)
 	if !m.analysis.adverb {
 		t.Fatal("clicking the Adverb row should enable it")
@@ -1147,9 +1150,10 @@ func TestInspectorTabClick(t *testing.T) {
 	m.inspector.tab = tabWords
 	m.layout()
 	// Click the "Outline" chip: inspector content starts at width-inspectorWidth+2;
-	// Outline chip begins at localX 7 (" Words " = 7). Click at that column, row 0.
+	// Outline chip begins at localX 7 ("Words " = 6). Click at that column, row 1
+	// (row 0 is the framed panel's top border, row 1 is the tab bar).
 	x := m.width - inspectorWidth + 2 + 8 // mid-"Outline"
-	nm, _ = m.Update(tea.MouseMsg{X: x, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = nm.(model)
 	if m.inspector.tab != tabOutline {
 		t.Fatalf("click on Outline chip → tab=%v, want Outline", m.inspector.tab)
@@ -1247,6 +1251,37 @@ func TestCursorSpellHint(t *testing.T) {
 	m.renaming = false
 }
 
+func TestFramedInspectorClickAlignment(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.inspector.visible = true
+	m.inspector.tab = tabAnalysis
+	m.layout()
+	// Click the Adverb checkbox row at its on-screen position; it must toggle adverb.
+	x := m.width - inspectorWidth + 4 // into the content (left border+padding+indent)
+	// y must be wherever Adverb actually renders on screen — find it:
+	lines := strings.Split(ansi.Strip(m.View()), "\n")
+	yAdverb := -1
+	for i, ln := range lines {
+		if strings.Contains(ln, "Adverb") {
+			yAdverb = i
+		}
+	}
+	if yAdverb < 0 {
+		t.Fatal("Adverb row not found on screen")
+	}
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: yAdverb, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if !m.analysis.adverb {
+		t.Fatalf("clicking the on-screen Adverb row (y=%d) must toggle adverb — geometry misaligned", yAdverb)
+	}
+}
+
 func TestStatusShowsSpellHint(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("teh cat"), 0o644)
@@ -1262,5 +1297,38 @@ func TestStatusShowsSpellHint(t *testing.T) {
 	out := ansi.Strip(m.View())
 	if !strings.Contains(out, "✗ teh") || !strings.Contains(out, "the") {
 		t.Fatalf("status should show the spell hint for teh:\n%s", out)
+	}
+}
+
+func TestTabClickColumnAlignment(t *testing.T) {
+	// Clicking each tab at its real on-screen COLUMN (rune-based) must select it —
+	// guards inspectorTabAtX against the panel's box-drawing offset.
+	for _, tc := range []struct {
+		label string
+		want  inspectorTab
+	}{{"Words", tabWords}, {"Outline", tabOutline}, {"Goals", tabGoals}, {"Analysis", tabAnalysis}} {
+		dir := t.TempDir()
+		os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
+		t.Setenv("OKASHI_DIR", dir)
+		m := initialModel()
+		m.screen = screenWriting
+		nm, _ := m.Update(tea.WindowSizeMsg{Width: 170, Height: 40})
+		m = nm.(model)
+		m.inspector.visible = true
+		m.layout()
+		col, row := -1, -1
+		for y, ln := range strings.Split(ansi.Strip(m.View()), "\n") {
+			if i := strings.Index(ln, tc.label); i >= 0 {
+				col, row = utf8.RuneCountInString(ln[:i]), y
+				break
+			}
+		}
+		if col < 0 {
+			t.Fatalf("tab %q not on screen", tc.label)
+		}
+		nm, _ = m.Update(tea.MouseMsg{X: col, Y: row, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+		if got := nm.(model).inspector.tab; got != tc.want {
+			t.Errorf("click %q at col %d → tab %d, want %d", tc.label, col, got, tc.want)
+		}
 	}
 }

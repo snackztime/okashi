@@ -66,7 +66,7 @@ func TestComputeProjStatsPlainFolder(t *testing.T) {
 func TestInspectorViewRendersWords(t *testing.T) {
 	in := inspectorModel{visible: true}
 	out := in.View(28, docStats{words: 1204, chars: 6830, paragraphs: 38}, projStats{words: 47032, chapters: 12, manuscript: true}, "", goalStats{}, analysisState{})
-	for _, want := range []string{"Words", "Document", "Project", "1,204", "47,032", "Chapters", "12"} {
+	for _, want := range []string{"Words", "DOCUMENT", "PROJECT", "1,204", "47,032", "Chapters", "12"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("inspector view missing %q:\n%s", want, out)
 		}
@@ -138,14 +138,14 @@ func TestProgressBar(t *testing.T) {
 func TestInspectorGoalsTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabGoals}
 	out := in.View(28, docStats{}, projStats{}, "", goalStats{today: 312, dailyGoal: 500, project: 47032, projectGoal: 80000}, analysisState{})
-	for _, w := range []string{"Daily", "312", "500", "Project", "80,000"} {
+	for _, w := range []string{"DAILY", "312", "500", "PROJECT", "80,000"} {
 		if !strings.Contains(out, w) {
 			t.Fatalf("goals tab missing %q:\n%s", w, out)
 		}
 	}
 	// projectGoal 0 → no Project section.
 	noproj := in.View(28, docStats{}, projStats{}, "", goalStats{today: 10, dailyGoal: 500, project: 10, projectGoal: 0}, analysisState{})
-	if strings.Contains(noproj, "Project") {
+	if strings.Contains(noproj, "PROJECT") {
 		t.Fatal("projectGoal 0 should omit the Project section")
 	}
 	// goal met.
@@ -178,8 +178,8 @@ func TestInspectorTabAtX(t *testing.T) {
 func TestInspectorAnalysisTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
 	on := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: false})
-	if !strings.Contains(on, "Spellcheck") || !strings.Contains(on, "Syntax") {
-		t.Fatalf("analysis tab should list Spellcheck and Syntax:\n%s", on)
+	if !strings.Contains(on, "Spellcheck") || !strings.Contains(on, "SYNTAX") {
+		t.Fatalf("analysis tab should list Spellcheck and SYNTAX:\n%s", on)
 	}
 	if !strings.Contains(on, "[x] Spellcheck") {
 		t.Fatalf("spell on → checked box:\n%s", on)
@@ -206,7 +206,7 @@ func TestInspectorAnalysisRowAtY(t *testing.T) {
 func TestAnalysisTabPOSList(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
 	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: true})
-	for _, w := range []string{"Spellcheck", "Syntax", "Adverb", "Adjective", "Passive"} {
+	for _, w := range []string{"Spellcheck", "SYNTAX", "Adverb", "Adjective", "Passive"} {
 		if !strings.Contains(out, w) {
 			t.Fatalf("analysis tab missing %q:\n%s", w, out)
 		}

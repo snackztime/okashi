@@ -65,9 +65,9 @@ func framedPanel(title, inner string, width, height int) string {
 
 // inspectorInnerWidth returns the true inner content width of the inspector
 // panel — the value main.go must pass to View() and the click handlers must
-// use. It equals inspectorWidth (total column) minus the border (1) and both
-// horizontal padding cells (2) from inspectorStyle.
-func inspectorInnerWidth() int { return inspectorWidth - 3 }
+// use. The panel is framed at exactly inspectorWidth so render == reservation
+// == offset; framedPanel uses 2 borders + 2 padding cols = 4, so inner = -4.
+func inspectorInnerWidth() int { return inspectorWidth - 4 }
 
 type inspectorTab int
 
@@ -267,39 +267,44 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 	b.WriteString("\n\n")
 	switch in.tab {
 	case tabAnalysis:
-		b.WriteString(breadcrumbStyle.Render("Analysis") + "\n\n")
-		b.WriteString(checkbox(analysis.spell) + "Spellcheck\n")
+		b.WriteString(sectionHeader("Analysis", width) + "\n\n")
+		b.WriteString("  " + checkbox(analysis.spell) + "Spellcheck\n")
 		b.WriteString("\n")
-		b.WriteString(breadcrumbStyle.Render("Syntax") + "\n")
-		b.WriteString(checkbox(analysis.adverb) + adverbStyle.Render("Adverb") + "\n")
-		b.WriteString(checkbox(analysis.adjective) + adjStyle.Render("Adjective") + "\n")
-		b.WriteString(checkbox(analysis.passive) + passiveStyle.Render("Passive/weak"))
+		b.WriteString(sectionHeader("Syntax", width) + "\n")
+		b.WriteString("  " + checkbox(analysis.adverb) + adverbStyle.Render("Adverb") + "\n")
+		b.WriteString("  " + checkbox(analysis.adjective) + adjStyle.Render("Adjective") + "\n")
+		b.WriteString("  " + checkbox(analysis.passive) + passiveStyle.Render("Passive/weak"))
 	case tabOutline:
-		b.WriteString(breadcrumbStyle.Render("Outline") + "\n\n")
-		b.WriteString(renderOutline(outline, width))
+		b.WriteString(sectionHeader("Outline", width) + "\n\n")
+		outLines := strings.Split(renderOutline(outline, width-2), "\n")
+		indented := make([]string, len(outLines))
+		for i, l := range outLines {
+			indented[i] = "  " + l
+		}
+		b.WriteString(strings.Join(indented, "\n"))
 	case tabGoals:
-		b.WriteString(breadcrumbStyle.Render("Daily") + "\n")
-		b.WriteString(progressBar(goals.today, goals.dailyGoal, max(4, width-8)) + "\n")
-		b.WriteString(fmt.Sprintf("%s / %s\n", commafy(goals.today), commafy(goals.dailyGoal)))
+		b.WriteString(sectionHeader("Daily", width) + "\n")
+		b.WriteString("  " + progressBar(goals.today, goals.dailyGoal, max(4, width-10)) + "\n")
+		b.WriteString("  " + fmt.Sprintf("%s / %s\n", commafy(goals.today), commafy(goals.dailyGoal)))
 		if goals.today >= goals.dailyGoal && goals.dailyGoal > 0 {
-			b.WriteString(lipgloss.NewStyle().Foreground(accent).Render("✓ goal met"))
+			b.WriteString("  " + lipgloss.NewStyle().Foreground(accent).Render("✓ goal met"))
 		} else {
-			b.WriteString(lipgloss.NewStyle().Foreground(subtle).Render(commafy(goals.dailyGoal-goals.today) + " to go"))
+			b.WriteString("  " + lipgloss.NewStyle().Foreground(subtle).Render(commafy(goals.dailyGoal-goals.today)+" to go"))
 		}
 		if goals.projectGoal > 0 {
-			b.WriteString("\n\n" + breadcrumbStyle.Render("Project") + "\n")
-			b.WriteString(progressBar(goals.project, goals.projectGoal, max(4, width-8)) + "\n")
-			b.WriteString(fmt.Sprintf("%s / %s", commafy(goals.project), commafy(goals.projectGoal)))
+			b.WriteString("\n\n" + sectionHeader("Project", width) + "\n")
+			b.WriteString("  " + progressBar(goals.project, goals.projectGoal, max(4, width-10)) + "\n")
+			b.WriteString("  " + fmt.Sprintf("%s / %s", commafy(goals.project), commafy(goals.projectGoal)))
 		}
 	default: // tabWords
-		b.WriteString(breadcrumbStyle.Render("Document") + "\n")
-		b.WriteString(kvRow("Words", doc.words, width) + "\n")
-		b.WriteString(kvRow("Characters", doc.chars, width) + "\n")
-		b.WriteString(kvRow("Paragraphs", doc.paragraphs, width) + "\n\n")
-		b.WriteString(breadcrumbStyle.Render("Project") + "\n")
-		b.WriteString(kvRow("Words", proj.words, width))
+		b.WriteString(sectionHeader("Document", width) + "\n")
+		b.WriteString("  " + kvRow("Words", doc.words, width-2) + "\n")
+		b.WriteString("  " + kvRow("Characters", doc.chars, width-2) + "\n")
+		b.WriteString("  " + kvRow("Paragraphs", doc.paragraphs, width-2) + "\n\n")
+		b.WriteString(sectionHeader("Project", width) + "\n")
+		b.WriteString("  " + kvRow("Words", proj.words, width-2))
 		if proj.manuscript {
-			b.WriteString("\n" + kvRow("Chapters", proj.chapters, width))
+			b.WriteString("\n  " + kvRow("Chapters", proj.chapters, width-2))
 		}
 	}
 	return b.String()

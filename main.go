@@ -124,7 +124,7 @@ type renameTarget struct {
 	section bool // a numbered section -> title-only rename
 }
 
-const inspectorWidth = 32
+const inspectorWidth = 34
 const minEditorMeasure = 50
 
 type model struct {
@@ -599,7 +599,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		inSidebar := showSidebar && msg.X < sidebarWidth
 
 		_, showInspector, _ := m.effectivePanels()
-		if showInspector && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.Y == 0 {
+		if showInspector && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.Y == 1 {
 			localX := msg.X - (m.width - inspectorWidth) - 2 // panel-left + border + padding
 			if localX >= 0 {
 				if tb, ok := inspectorTabAtX(localX); ok {
@@ -612,7 +612,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if showInspector && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && m.inspector.tab == tabAnalysis {
 			localX := msg.X - (m.width - inspectorWidth) - 2
 			if localX >= 0 {
-				if row, ok := inspectorAnalysisRowAtY(msg.Y); ok {
+				if row, ok := inspectorAnalysisRowAtY(msg.Y - 1); ok {
 					switch row {
 					case 0:
 						m.analysis.spell = !m.analysis.spell
@@ -964,7 +964,8 @@ func (m model) View() string {
 		pg := m.goalsAll[m.files.dir].applyEnvDefaults()
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
 		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
-		cols = append(cols, inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner))
+		title := inspectorTabLabels()[m.inspector.tab]
+		cols = append(cols, framedPanel(title, insInner, inspectorWidth, bodyH-2))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 
