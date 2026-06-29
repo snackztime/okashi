@@ -32,12 +32,17 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   editing surface is chapter-sized.
 - **`View()` MUST stay O(visible).** Render only the visible window. The read-through
   **manuscript pager** (`pager.go`) builds its wrapped line→source map **once** on open and
-  renders only `lines[offset:offset+height]`; the file pane and outline do likewise. Never
-  stringify a whole document every frame — Bubble Tea diffs the entire `View()` output, so a
-  giant string is the performance killer.
-- A true gap-buffer editor core is a possible **future** optimization only if single-file
-  editing ever needs very large files; it is **not** needed for okashi's chapter-sized model
-  and is not currently built.
+  renders only `lines[offset:offset+height]`; the file pane and outline do likewise. The
+  **editor** (`internal/textarea`) `View()` is also windowed — it renders only the visible
+  rows (tracks an explicit scroll `offset`; `locateRow`/`displayHeight` map display rows to
+  source via the buffer-sized wrap cache), so even a large *single* file edits smoothly (a
+  400-page file went 51 ms → ~2 ms/frame). Never stringify a whole document every frame —
+  Bubble Tea diffs the entire `View()` output, so a giant string is the performance killer.
+- A true gap-buffer editor core is **not** built and not needed: the bottleneck was *render*
+  cost (styling every line), fixed by windowing `View()`; a gap buffer addresses *edit* cost,
+  which never dominated. A prefix-sum wrap-height index (to make the editor `View()` perfectly
+  flat vs size, vs the current cheap residual cached-wrap walks) is a possible future
+  optimization, deferred as YAGNI.
 - Keep lipgloss **out of the hot path** — pre-style static chrome; don't restyle per cell
   per frame.
 
