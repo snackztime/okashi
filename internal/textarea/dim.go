@@ -2,6 +2,7 @@ package textarea
 
 import (
 	"strings"
+	"unicode/utf8"
 )
 
 // currentSentenceSpan returns the [start,end) rune range of the sentence under
@@ -90,8 +91,11 @@ func (m Model) cursorSentenceSpan() (int, int) {
 		s0, s1 := currentSentenceSpan(joined, m.cursorRuneOffset()-base)
 		// If a boundary sits at the window edge while the buffer extends past it,
 		// the true sentence may continue beyond the window — widen and retry.
+		// currentSentenceSpan returns RUNE indices, so compare s1 against the
+		// window's rune count, not len(joined) (bytes) — multibyte chars (curly
+		// quotes, em-dashes) would otherwise make this check never fire.
 		needLeft := s0 == 0 && lo > 0
-		needRight := s1 == len(joined) && hi < full
+		needRight := s1 == utf8.RuneCountInString(joined) && hi < full
 		if (!needLeft && !needRight) || (lo == 0 && hi == full) {
 			return s0 + base, s1 + base
 		}

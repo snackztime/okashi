@@ -66,3 +66,33 @@ func TestCursorSentenceSpanWidensForLongSentence(t *testing.T) {
 		t.Fatalf("row %d col %d: got [%d,%d), want [%d,%d)", m.row, m.col, got0, got1, want0, want1)
 	}
 }
+
+// TestCursorSentenceSpanWidensRightWithMultibyte is the regression test for the
+// rune-index-vs-byte-length bug in the widen guard. currentSentenceSpan returns
+// RUNE indices, so the right-edge check must compare s1 against the window's
+// RUNE count, not its byte length. With multibyte chars (em-dashes/curly quotes,
+// pervasive in okashi prose) byte length > rune count, so the buggy guard never
+// fires and returns a right-truncated span. The fixture: a terminator near the
+// top (so the LEFT boundary is found inside the window → needLeft false), then a
+// long em-dash-joined terminator-free run extending well past the right window
+// edge, forcing ONLY the right side to widen.
+func TestCursorSentenceSpanWidensRightWithMultibyte(t *testing.T) {
+	m := New()
+	m.SetWidth(72)
+	m.CharLimit = 0 // don't truncate the multi-line fixture
+	var b strings.Builder
+	b.WriteString("Done.\n")  // row 0: terminator => left boundary lands here
+	for i := 0; i < 40; i++ { // 40 terminator-free lines, each with an em-dash
+		b.WriteString("a clause — continues onward across the source lines\n")
+	}
+	b.WriteString("End.\n")
+	m.SetValue(b.String())
+	// Cursor on row 3: "Done." (left boundary) is inside the initial radius-4
+	// window, but the sentence's right boundary ("End.") is ~38 lines below it.
+	m.row, m.col = 3, 2
+	want0, want1 := currentSentenceSpan(m.Value(), m.cursorRuneOffset())
+	got0, got1 := m.cursorSentenceSpan()
+	if got0 != want0 || got1 != want1 {
+		t.Fatalf("row %d col %d: got [%d,%d), want [%d,%d)", m.row, m.col, got0, got1, want0, want1)
+	}
+}
