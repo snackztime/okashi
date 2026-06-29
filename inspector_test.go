@@ -62,15 +62,48 @@ func TestComputeProjStatsPlainFolder(t *testing.T) {
 
 func TestInspectorViewRendersWords(t *testing.T) {
 	in := inspectorModel{visible: true}
-	out := in.View(28, docStats{words: 1204, chars: 6830, paragraphs: 38}, projStats{words: 47032, chapters: 12, manuscript: true})
+	out := in.View(28, docStats{words: 1204, chars: 6830, paragraphs: 38}, projStats{words: 47032, chapters: 12, manuscript: true}, "")
 	for _, want := range []string{"Words", "Document", "Project", "1,204", "47,032", "Chapters", "12"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("inspector view missing %q:\n%s", want, out)
 		}
 	}
 	// Non-manuscript omits the Chapters line.
-	plain := in.View(28, docStats{words: 10}, projStats{words: 10, manuscript: false})
+	plain := in.View(28, docStats{words: 10}, projStats{words: 10, manuscript: false}, "")
 	if strings.Contains(plain, "Chapters") {
 		t.Fatal("non-manuscript inspector should omit 'Chapters'")
+	}
+}
+
+func TestInspectorCycle(t *testing.T) {
+	in := inspectorModel{}
+	in.cycle()
+	if !in.visible || in.tab != tabWords {
+		t.Fatalf("first cycle: visible=%v tab=%v, want visible Words", in.visible, in.tab)
+	}
+	in.cycle()
+	if !in.visible || in.tab != tabOutline {
+		t.Fatalf("second cycle: visible=%v tab=%v, want visible Outline", in.visible, in.tab)
+	}
+	in.cycle()
+	if in.visible {
+		t.Fatal("third cycle should close the inspector (past the last tab)")
+	}
+	if in.tab != tabWords {
+		t.Fatalf("closed cycle should reset tab to Words, got %v", in.tab)
+	}
+}
+
+func TestInspectorOutlineTab(t *testing.T) {
+	in := inspectorModel{visible: true, tab: tabOutline}
+	out := in.View(28, docStats{}, projStats{}, "- Top\n  - sub")
+	for _, want := range []string{"Outline", "Top", "sub"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("outline tab missing %q:\n%s", want, out)
+		}
+	}
+	empty := in.View(28, docStats{}, projStats{}, "")
+	if !strings.Contains(empty, "empty") {
+		t.Fatal("empty outline should show an (empty …) hint")
 	}
 }

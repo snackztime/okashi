@@ -269,6 +269,16 @@ func writingDir() string {
 	return dir
 }
 
+// readOutlineDoc returns the project's outline.md content ("" if none) for the
+// inspector's read-only Outline tab.
+func readOutlineDoc(dir string) string {
+	data, err := os.ReadFile(filepath.Join(dir, "outline.md"))
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
 type autosaveTickMsg time.Time
 
 // autosaveTick schedules the next autosave check. One loop runs for the app's
@@ -557,7 +567,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.layout()
 			return m, nil
 		case "ctrl+y":
-			m.inspector.visible = !m.inspector.visible
+			m.inspector.cycle()
 			m.layout()
 			return m, nil
 		case "esc":
@@ -703,7 +713,7 @@ func (m model) View() string {
 	if showInspector {
 		doc := computeDocStats(m.editor.Value())
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
-		insInner := m.inspector.View(inspectorWidth-3, doc, proj)
+		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir))
 		cols = append(cols, inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)

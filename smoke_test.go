@@ -949,20 +949,29 @@ func TestInspectorToggleAndRender(t *testing.T) {
 	if strings.Contains(m.View(), "Document") {
 		t.Fatal("inspector should be hidden by default")
 	}
-	// ctrl+y toggles it on (ctrl+i is unusable — it's identical to Tab in terminals).
+	// 1st ctrl+y → Words tab visible.
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = nm.(model)
 	if !m.inspector.visible {
-		t.Fatal("ctrl+y should toggle the inspector visible")
+		t.Fatal("1st ctrl+y should make the inspector visible")
 	}
 	if !strings.Contains(m.View(), "Document") {
-		t.Fatal("writing View should contain the inspector when visible")
+		t.Fatal("writing View should contain the inspector (Words tab) after 1st ctrl+y")
 	}
-	// ctrl+y again toggles it back off.
+	// 2nd ctrl+y → Outline tab (still visible, NOT closed).
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
+	m = nm.(model)
+	if !m.inspector.visible {
+		t.Fatal("2nd ctrl+y should keep the inspector visible (Outline tab)")
+	}
+	if m.inspector.tab != tabOutline {
+		t.Fatalf("2nd ctrl+y: expected tabOutline, got %v", m.inspector.tab)
+	}
+	// 3rd ctrl+y → inspector closes (past the last tab).
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
 	m = nm.(model)
 	if m.inspector.visible || strings.Contains(m.View(), "Document") {
-		t.Fatal("ctrl+y should toggle the inspector back off")
+		t.Fatal("3rd ctrl+y should close the inspector (cycle past last tab)")
 	}
 }
 

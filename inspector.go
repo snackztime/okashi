@@ -7,16 +7,59 @@ import (
 	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 type inspectorTab int
 
-const tabWords inspectorTab = 0 // more tabs (Goals, Analysis, Outline) added later
+const (
+	tabWords inspectorTab = iota
+	tabOutline
+)
+
+// inspectorTabLabels is the single source of the tab set — used by both the tab
+// bar render and cycle() so they never diverge.
+func inspectorTabLabels() []string { return []string{"Words", "Outline"} }
 
 // inspectorModel is the read-only right-side panel: a tab bar + the active tab.
 type inspectorModel struct {
 	visible bool
 	tab     inspectorTab
+}
+
+// cycle advances the inspector: hidden → Words → Outline → … → hidden.
+func (in *inspectorModel) cycle() {
+	if !in.visible {
+		in.visible = true
+		in.tab = tabWords
+		return
+	}
+	in.tab++
+	if int(in.tab) >= len(inspectorTabLabels()) {
+		in.visible = false
+		in.tab = tabWords
+	}
+}
+
+// renderOutline shows the outline read-only: top-level bullets in accent, nested
+// lines plain, each truncated to width. Empty → a hint.
+func renderOutline(text string, width int) string {
+	if strings.TrimSpace(text) == "" {
+		return lipgloss.NewStyle().Foreground(subtle).Render("(empty — ctrl+l to edit)")
+	}
+	var b strings.Builder
+	for i, line := range strings.Split(strings.TrimRight(text, "\n"), "\n") {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		shown := ansi.Truncate(line, width, "…")
+		if len(line) > 0 && line[0] != ' ' && line[0] != '\t' {
+			b.WriteString(lipgloss.NewStyle().Foreground(accent).Render(shown))
+		} else {
+			b.WriteString(shown)
+		}
+	}
+	return b.String()
 }
 
 type docStats struct{ words, chars, paragraphs int }
@@ -77,10 +120,9 @@ func kvRow(label string, n, width int) string {
 }
 
 // View renders the tab bar + the active tab's body, fit to the given inner width.
-func (in inspectorModel) View(width int, doc docStats, proj projStats) string {
-	tabs := []string{"Words"} // future: Goals, Analysis, Outline
+func (in inspectorModel) View(width int, doc docStats, proj projStats, outline string) string {
 	var bar strings.Builder
-	for i, t := range tabs {
+	for i, t := range inspectorTabLabels() {
 		chip := " " + t + " "
 		if inspectorTab(i) == in.tab {
 			bar.WriteString(selectedStyle.Render(chip))
@@ -92,14 +134,20 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats) string {
 	var b strings.Builder
 	b.WriteString(bar.String())
 	b.WriteString("\n\n")
-	b.WriteString(breadcrumbStyle.Render("Document") + "\n")
-	b.WriteString(kvRow("Words", doc.words, width) + "\n")
-	b.WriteString(kvRow("Characters", doc.chars, width) + "\n")
-	b.WriteString(kvRow("Paragraphs", doc.paragraphs, width) + "\n\n")
-	b.WriteString(breadcrumbStyle.Render("Project") + "\n")
-	b.WriteString(kvRow("Words", proj.words, width))
-	if proj.manuscript {
-		b.WriteString("\n" + kvRow("Chapters", proj.chapters, width))
+	switch in.tab {
+	case tabOutline:
+		b.WriteString(breadcrumbStyle.Render("Outline") + "\n\n")
+		b.WriteString(renderOutline(outline, width))
+	default: // tabWords
+		b.WriteString(breadcrumbStyle.Render("Document") + "\n")
+		b.WriteString(kvRow("Words", doc.words, width) + "\n")
+		b.WriteString(kvRow("Characters", doc.chars, width) + "\n")
+		b.WriteString(kvRow("Paragraphs", doc.paragraphs, width) + "\n\n")
+		b.WriteString(breadcrumbStyle.Render("Project") + "\n")
+		b.WriteString(kvRow("Words", proj.words, width))
+		if proj.manuscript {
+			b.WriteString("\n" + kvRow("Chapters", proj.chapters, width))
+		}
 	}
 	return b.String()
 }
