@@ -727,9 +727,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Click on the status bar applies a spell suggestion if one is active.
+		// The status renders inside the editor column, so its content starts at
+		// editorStart + 1 (column left + the style's left padding).
 		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.Y == m.height-1 {
 			if w, sugg, ok := m.cursorSpellHint(); ok {
-				if i, hit := spellHintSuggestionAtX(w, sugg, msg.X-1); hit { // -1 for status left padding
+				showSidebar, _, _ := m.effectivePanels()
+				editorStart := 0
+				if showSidebar {
+					editorStart = sidebarWidth
+				}
+				if i, hit := spellHintSuggestionAtX(w, sugg, msg.X-editorStart-1); hit {
 					m.openSpellMenuAndApply(i, sugg)
 					return m, nil
 				}
@@ -743,7 +750,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if showSidebar {
 				editorStart = sidebarWidth
 			}
-			inEditor := msg.X >= editorStart && (!showInspector || msg.X < m.width-inspectorWidth) && msg.Y < m.height-1
+			inEditor := msg.X >= editorStart && (!showInspector || msg.X < m.width-inspectorWidth) && msg.Y < m.height-2
 			if inEditor && !m.previewing {
 				cw := min(m.colWidth, editorArea-2)
 				textLeft := editorStart + (editorArea-cw)/2
@@ -1037,9 +1044,19 @@ func (m model) View() string {
 		if m.files.dir == "" {
 			title = "Files"
 		}
-		cols = append(cols, framedPanel(title, m.files.View(), sidebarWidth, bodyH))
+		cols = append(cols, framedPanel(title, m.files.View(), sidebarWidth, m.height))
 	}
-	cols = append(cols, lipgloss.Place(editorArea, bodyH, lipgloss.Center, lipgloss.Top, pane))
+	// Editor column: the editor pane, a blank line break, then the status bar —
+	// all at the editor width, so the side panels render truly full height and the
+	// status/spelling hint stay within the editor column.
+	editorH := bodyH - 1 // leave one row for the blank line above the status
+	if editorH < 1 {
+		editorH = 1
+	}
+	editorPane := lipgloss.Place(editorArea, editorH, lipgloss.Center, lipgloss.Top, pane)
+	statusRow := statusStyle.Width(editorArea).Render(m.statusBar())
+	editorCol := lipgloss.JoinVertical(lipgloss.Left, editorPane, strings.Repeat(" ", editorArea), statusRow)
+	cols = append(cols, editorCol)
 	if showInspector {
 		doc := computeDocStats(m.editor.Value())
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
@@ -1047,12 +1064,9 @@ func (m model) View() string {
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
 		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
 		title := inspectorTabLabels()[m.inspector.tab]
-		cols = append(cols, framedPanel(title, insInner, inspectorWidth, bodyH))
+		cols = append(cols, framedPanel(title, insInner, inspectorWidth, m.height))
 	}
-	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
-
-	status := statusStyle.Width(m.width).Render(m.statusBar())
-	return lipgloss.JoinVertical(lipgloss.Left, body, status)
+	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 }
 
 // effectivePanels resolves which side panels are shown this render and the
@@ -1090,13 +1104,17 @@ func (m *model) layout() {
 	showSidebar, _, editorArea := m.effectivePanels()
 	cw := min(m.colWidth, editorArea-2)
 	if showSidebar {
-		m.files.height = bodyH - 2 // framed: content height (panel bodyH minus top+bottom border)
+		m.files.height = m.height - 2 // full-height panel content (m.height minus top+bottom border)
 		m.files.width = sidebarWidth - 4
 	}
+	editorH := bodyH - 1 // editor column reserves a blank line + the status row
+	if editorH < 1 {
+		editorH = 1
+	}
 	m.editor.SetWidth(cw)
-	m.editor.SetHeight(bodyH)
+	m.editor.SetHeight(editorH)
 	m.preview.Width = cw
-	m.preview.Height = bodyH - 1 // reserve one row for the PREVIEW header
+	m.preview.Height = editorH - 1 // reserve one row for the PREVIEW header
 }
 
 // updateOutline handles input on the outline screen: select, open, back, reorder.
@@ -1694,18 +1712,14 @@ func (m model) statusBar() string {
 // (last save/open) right-aligned to the text's right edge, within the editor
 // text column. Stats win if both don't fit.
 func (m model) composeStatus(status, stats string) string {
-	showSidebar, _, editorArea := m.effectivePanels()
-	editorStart := 0
-	if showSidebar {
-		editorStart = sidebarWidth
-	}
+	_, _, editorArea := m.effectivePanels()
 	cw := min(m.colWidth, editorArea-2)
-	totalW := m.width - 2 // statusStyle pads one col each side
+	totalW := editorArea - 2 // status renders at editorArea width; statusStyle pads one col each side
 	sw := lipgloss.Width(stats)
 	if cw < sw+1 || totalW < sw {
 		return stats // too narrow for the two-element layout
 	}
-	left := editorStart + (editorArea-cw)/2 - 1 // content col of the text's left edge
+	left := (editorArea-cw)/2 - 1 // content col of the text's left edge (within the editor column)
 	if left < 0 {
 		left = 0
 	}

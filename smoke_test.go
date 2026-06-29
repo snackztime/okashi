@@ -882,12 +882,14 @@ func TestStatsAtEditorTextLeftEdge(t *testing.T) {
 	// editorArea = 100-sidebarWidth; cw = min(colWidth, editorArea-2)
 	_, _, editorArea := m.effectivePanels()
 	cw := min(m.colWidth, editorArea-2)
-	want := sidebarWidth + (editorArea-cw)/2 - 1
+	// composeStatus is now relative to the editor column (the View places that
+	// column at the sidebar offset), so the leading spaces are column-relative.
+	want := (editorArea-cw)/2 - 1
 	if want < 0 {
 		want = 0
 	}
 	if leading < want-1 || leading > want+1 {
-		t.Fatalf("stats start col = %d, want ~%d (at the editor text left edge)", leading, want)
+		t.Fatalf("stats start col = %d, want ~%d (at the editor text left edge within the column)", leading, want)
 	}
 }
 
@@ -1432,6 +1434,9 @@ func TestClickSuggestionApplies(t *testing.T) {
 	m = nm.(model)
 	m.loadFile(filepath.Join(dir, "01-a.md"))
 	m.analysis.spell = true
+	m.sidebarVisible = false // editorStart = 0 so the click math below is simple
+	m.inspector.visible = false
+	m.layout()
 	m.editor.MoveToLine(0)
 	m.editor.SetCursor(1) // cursor in "teh" → hint active
 	w, sugg, ok := m.cursorSpellHint()
@@ -1466,13 +1471,14 @@ func TestPanelsFullHeight(t *testing.T) {
 	m.sidebarVisible = true
 	m.inspector.visible = true
 	m.layout()
-	bodyH := m.height - 1
 	lines := strings.Split(ansi.Strip(m.View()), "\n")
-	// The sidebar's bottom border (╰) must be on the last body row (bodyH-1), i.e. flush with the editor.
-	if !strings.Contains(lines[bodyH-1], "╰") {
-		t.Fatalf("panels should be full height — bottom border expected on row %d:\n%s", bodyH-1, lines[bodyH-1])
+	// Panels are full height: their bottom border (╰) is on the very LAST row —
+	// the status now lives inside the editor column on that same row.
+	last := m.height - 1
+	if !strings.Contains(lines[last], "╰") {
+		t.Fatalf("panels should be full height — bottom border expected on row %d:\n%s", last, lines[last])
 	}
-	if m.files.height != bodyH-2 {
-		t.Fatalf("files.height = %d, want bodyH-2 = %d", m.files.height, bodyH-2)
+	if m.files.height != m.height-2 {
+		t.Fatalf("files.height = %d, want m.height-2 = %d", m.files.height, m.height-2)
 	}
 }
