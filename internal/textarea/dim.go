@@ -63,28 +63,39 @@ func currentSentenceSpan(text string, cursorOffset int) (int, int) {
 // cursorSentenceSpan returns the same absolute [span0,span1) as
 // currentSentenceSpan(m.Value(), m.cursorRuneOffset()) but scans only a bounded
 // window of source lines around the cursor, avoiding an O(buffer) m.Value() join
-// every frame. okashi:dim
+// every frame. The window starts small (radius 4 covers normal prose in one
+// pass) and widens only when a found boundary sits at the window edge while the
+// buffer extends past it — so the result always equals the whole-buffer
+// computation, yet stays O(sentence). okashi:dim
 func (m Model) cursorSentenceSpan() (int, int) {
-	const radius = 4 // sentences never span more than a few source lines here
-	lo := max(0, m.row-radius)
-	hi := min(len(m.value), m.row+radius+1)
+	full := len(m.value)
+	for radius := 4; ; radius *= 2 {
+		lo := max(0, m.row-radius)
+		hi := min(full, m.row+radius+1)
 
-	// Absolute rune offset of the first rune of line `lo`.
-	base := 0
-	for i := 0; i < lo; i++ {
-		base += len(m.value[i]) + 1
-	}
-	// Join the window exactly as Value() would (newline between lines).
-	var b strings.Builder
-	for i := lo; i < hi; i++ {
-		if i > lo {
-			b.WriteByte('\n')
+		// Absolute rune offset of the first rune of line `lo`.
+		base := 0
+		for i := 0; i < lo; i++ {
+			base += len(m.value[i]) + 1
 		}
-		b.WriteString(string(m.value[i]))
+		// Join the window exactly as Value() would (newline between lines).
+		var b strings.Builder
+		for i := lo; i < hi; i++ {
+			if i > lo {
+				b.WriteByte('\n')
+			}
+			b.WriteString(string(m.value[i]))
+		}
+		joined := b.String()
+		s0, s1 := currentSentenceSpan(joined, m.cursorRuneOffset()-base)
+		// If a boundary sits at the window edge while the buffer extends past it,
+		// the true sentence may continue beyond the window — widen and retry.
+		needLeft := s0 == 0 && lo > 0
+		needRight := s1 == len(joined) && hi < full
+		if (!needLeft && !needRight) || (lo == 0 && hi == full) {
+			return s0 + base, s1 + base
+		}
 	}
-	local := m.cursorRuneOffset() - base
-	s0, s1 := currentSentenceSpan(b.String(), local)
-	return s0 + base, s1 + base
 }
 
 // dimRun is a maximal run of characters that are all in- or out-of-span.
