@@ -2,22 +2,47 @@ package main
 
 import "testing"
 
-func TestSpellDecorator(t *testing.T) {
-	decos := spellDecorator("teh quikc brown fox")
-	// "teh" and "quikc" are misspelled; "brown"/"fox" are real words.
-	if len(decos) != 2 {
-		t.Fatalf("expected 2 misspellings (teh, quikc), got %d: %+v", len(decos), decos)
+func TestSpellOK(t *testing.T) {
+	// Morphology/contractions/possessives the old list flagged are now correct.
+	for _, w := range []string{"jumps", "emailed", "reconnected", "don't", "it's", "Sarah's", "cafe's"} {
+		if !spellOK(w) {
+			t.Errorf("spellOK(%q) = false, want true", w)
+		}
 	}
-	// First decoration covers "teh" (0..3).
-	if decos[0].Start != 0 || decos[0].End != 3 {
-		t.Fatalf("first misspelling span = [%d,%d), want [0,3)", decos[0].Start, decos[0].End)
+	for _, w := range []string{"teh", "quikc", "brilig"} {
+		if spellOK(w) {
+			t.Errorf("spellOK(%q) = true, want false", w)
+		}
 	}
-	// A correctly-spelled line yields nothing.
-	if d := spellDecorator("the quick brown fox"); len(d) != 0 {
-		t.Fatalf("correct line should have no decorations, got %+v", d)
+}
+
+func TestSpellSuggest(t *testing.T) {
+	got := spellSuggest("teh", 5)
+	found := false
+	for _, s := range got {
+		if s == "the" {
+			found = true
+		}
 	}
-	// Short words and all-caps are skipped.
-	if d := spellDecorator("OK is a NASA go"); len(d) != 0 {
-		t.Fatalf("short/all-caps words should be skipped, got %+v", d)
+	if !found {
+		t.Fatalf("spellSuggest(teh) should include \"the\", got %v", got)
+	}
+	if len(spellSuggest("the", 5)) >= 0 { // a correct word: suggester may return [] — just must not panic
+	}
+}
+
+func TestSpellDecoratorEngine(t *testing.T) {
+	// In a normal sentence, only the typo is flagged (not jumps/don't).
+	decos := spellDecorator("The fox jumps but teh dog don't care")
+	if len(decos) != 1 {
+		t.Fatalf("expected exactly 1 flag (teh), got %d: %+v", len(decos), decos)
+	}
+	runes := []rune("The fox jumps but teh dog don't care")
+	if got := string(runes[decos[0].Start:decos[0].End]); got != "teh" {
+		t.Fatalf("flagged %q, want \"teh\"", got)
+	}
+	// All-caps acronym + digit token skipped.
+	if d := spellDecorator("NASA sent 3 rockets"); len(d) != 0 {
+		t.Fatalf("all-caps/digit tokens should be skipped, got %+v", d)
 	}
 }

@@ -7,27 +7,53 @@ import (
 	"unicode"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/client9/gospell"
 	"okashi/internal/textarea"
 )
 
-//go:embed assets/words.txt
-var wordsFile string
+//go:embed assets/en.aff
+var affData string
+
+//go:embed assets/en.dic
+var dicData string
 
 var (
 	spellOnce sync.Once
-	spellSet  map[string]struct{}
+	speller   *gospell.GoSpell
 )
 
-func loadSpellSet() {
-	spellSet = make(map[string]struct{}, 240000)
-	for _, w := range strings.Split(wordsFile, "\n") {
-		if w != "" {
-			spellSet[w] = struct{}{}
-		}
-	}
+func loadSpeller() {
+	speller, _ = gospell.NewGoSpellReader(strings.NewReader(affData), strings.NewReader(dicData))
 }
 
 var misspellStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555")).Underline(true)
+
+// spellOK reports whether word is spelled correctly (gospell handles case,
+// contractions, and possessives).
+func spellOK(word string) bool {
+	spellOnce.Do(loadSpeller)
+	if speller == nil {
+		return true
+	}
+	return speller.Spell(word)
+}
+
+// spellSuggest returns up to limit correction candidates, best first.
+func spellSuggest(word string, limit int) []string {
+	spellOnce.Do(loadSpeller)
+	if speller == nil {
+		return nil
+	}
+	ss, err := speller.Suggest(word, limit)
+	if err != nil {
+		return nil
+	}
+	out := make([]string, 0, len(ss))
+	for _, s := range ss {
+		out = append(out, s.Word)
+	}
+	return out
+}
 
 // wordSpans returns [start,end) rune ranges of word tokens (letters + apostrophe).
 func wordSpans(line string) [][2]int {
@@ -49,25 +75,30 @@ func wordSpans(line string) [][2]int {
 	return spans
 }
 
-// spellDecorator flags misspelled words (red underline). Words in the embedded
-// list, shorter than 3 letters, or all-caps (acronyms) are skipped.
+func isAllCaps(s string) bool { return s == strings.ToUpper(s) && s != strings.ToLower(s) }
+
+func hasDigit(s string) bool {
+	for _, r := range s {
+		if unicode.IsDigit(r) {
+			return true
+		}
+	}
+	return false
+}
+
+// spellDecorator flags misspelled words (red underline). All-caps acronyms and
+// tokens with digits are skipped.
 func spellDecorator(line string) []textarea.Decoration {
-	spellOnce.Do(loadSpellSet)
 	var decos []textarea.Decoration
 	runes := []rune(line)
 	for _, s := range wordSpans(line) {
-		w := runes[s[0]:s[1]]
-		word := strings.Trim(string(w), "'")
-		if len([]rune(word)) < 3 {
+		word := strings.Trim(string(runes[s[0]:s[1]]), "'")
+		if word == "" || isAllCaps(word) || hasDigit(word) {
 			continue
 		}
-		if word == strings.ToUpper(word) { // all-caps acronym
-			continue
+		if !spellOK(word) {
+			decos = append(decos, textarea.Decoration{Start: s[0], End: s[1], Style: misspellStyle})
 		}
-		if _, ok := spellSet[strings.ToLower(word)]; ok {
-			continue
-		}
-		decos = append(decos, textarea.Decoration{Start: s[0], End: s[1], Style: misspellStyle})
 	}
 	return decos
 }
