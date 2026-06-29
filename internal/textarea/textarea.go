@@ -584,6 +584,51 @@ func (m *Model) SetCursor(col int) {
 // CursorColumn returns the cursor's rune column on the current logical line.
 func (m *Model) CursorColumn() int { return m.col }
 
+// ClickTo positions the cursor from a display cell relative to the editor's
+// top-left (the same window the View renders). Mirrors View's top math.
+func (m *Model) ClickTo(displayRow, displayCol int) {
+	if displayCol < 0 {
+		displayCol = 0
+	}
+	if len(m.value) == 0 {
+		return
+	}
+	top := m.offset
+	if m.Typewriter && m.height > 0 {
+		top = m.cursorLineNumber() - m.height/2
+	}
+	target := top + displayRow
+	if target < 0 {
+		target = 0
+	}
+	if dh := m.displayHeight(); dh > 0 && target >= dh {
+		target = dh - 1
+	}
+	l, wl, _ := m.locateRow(target)
+	if l >= len(m.value) {
+		l = len(m.value) - 1
+	}
+	wrapped := m.memoizedWrap(m.value[l], m.width)
+	pieceStart, pieceLen := 0, 0
+	for i := 0; i < len(wrapped); i++ {
+		if i == wl {
+			pieceLen = len(wrapped[i])
+			break
+		}
+		pieceStart += len(wrapped[i])
+	}
+	col := pieceStart + displayCol
+	if col > pieceStart+pieceLen {
+		col = pieceStart + pieceLen
+	}
+	if col > len(m.value[l]) {
+		col = len(m.value[l])
+	}
+	m.row = l
+	m.col = col
+	m.SetCursor(col)
+}
+
 // ReplaceRange replaces runes [start,end) on the current line with s and places
 // the cursor just after the inserted text. Out-of-range args are clamped.
 func (m *Model) ReplaceRange(start, end int, s string) {
