@@ -1720,8 +1720,11 @@ func (m *Model) Outdent() {
 	m.SetCursor(m.col - removed)
 }
 
-// CurrentLine returns the text of the line the cursor is on.
+// CurrentLine returns the text of the cursor's logical line (O(line)).
 func (m Model) CurrentLine() string {
+	if m.row < 0 || m.row >= len(m.value) {
+		return ""
+	}
 	return string(m.value[m.row])
 }
 

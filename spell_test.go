@@ -31,6 +31,17 @@ func TestSpellSuggest(t *testing.T) {
 	}
 }
 
+func TestSpellSuggestMemoized(t *testing.T) {
+	a := spellSuggest("teh", 4)
+	b := spellSuggest("teh", 4)
+	if len(a) == 0 || len(a) != len(b) {
+		t.Fatalf("memoized spellSuggest should return a stable non-empty list: %v vs %v", a, b)
+	}
+	if len(suggestCache) == 0 {
+		t.Fatal("spellSuggest should populate suggestCache")
+	}
+}
+
 func TestSpellDecoratorEngine(t *testing.T) {
 	// In a normal sentence, only the typo is flagged (not jumps/don't).
 	decos := spellDecorator("The fox jumps but teh dog don't care")

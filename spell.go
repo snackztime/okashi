@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "embed"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -22,6 +23,11 @@ var (
 	speller   *gospell.GoSpell
 )
 
+var (
+	suggestMu    sync.Mutex
+	suggestCache = map[string][]string{}
+)
+
 func loadSpeller() {
 	speller, _ = gospell.NewGoSpellReader(strings.NewReader(affData), strings.NewReader(dicData))
 }
@@ -38,20 +44,36 @@ func spellOK(word string) bool {
 	return speller.Spell(word)
 }
 
-// spellSuggest returns up to limit correction candidates, best first.
+// spellSuggest returns up to limit correction candidates, best first (memoized —
+// gospell's Suggest is heavier than Spell and this is called per frame by the
+// passive status hint).
 func spellSuggest(word string, limit int) []string {
 	spellOnce.Do(loadSpeller)
 	if speller == nil {
 		return nil
 	}
+	key := word + "\x00" + strconv.Itoa(limit)
+	suggestMu.Lock()
+	if v, ok := suggestCache[key]; ok {
+		suggestMu.Unlock()
+		return v
+	}
+	suggestMu.Unlock()
+
 	ss, err := speller.Suggest(word, limit)
-	if err != nil {
-		return nil
+	var out []string
+	if err == nil {
+		out = make([]string, 0, len(ss))
+		for _, s := range ss {
+			out = append(out, s.Word)
+		}
 	}
-	out := make([]string, 0, len(ss))
-	for _, s := range ss {
-		out = append(out, s.Word)
+	suggestMu.Lock()
+	if len(suggestCache) > 4096 {
+		suggestCache = map[string][]string{}
 	}
+	suggestCache[key] = out
+	suggestMu.Unlock()
 	return out
 }
 

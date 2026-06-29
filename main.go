@@ -358,16 +358,12 @@ func (m *model) syncGoal() {
 	}
 }
 
-// wordUnderCursor returns the token spanning the editor cursor on its line.
+// wordUnderCursor returns the token spanning the editor cursor on its line (O(line)).
 func (m *model) wordUnderCursor() (word string, start, end int, ok bool) {
-	lines := strings.Split(m.editor.Value(), "\n")
-	row := m.editor.Line()
-	if row < 0 || row >= len(lines) {
-		return "", 0, 0, false
-	}
+	line := m.editor.CurrentLine()
 	col := m.editor.CursorColumn()
-	runes := []rune(lines[row])
-	for _, s := range wordSpans(lines[row]) {
+	runes := []rune(line)
+	for _, s := range wordSpans(line) {
 		if col >= s[0] && col <= s[1] {
 			return string(runes[s[0]:s[1]]), s[0], s[1], true
 		}
