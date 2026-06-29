@@ -1154,3 +1154,52 @@ func TestInspectorTabClick(t *testing.T) {
 		t.Fatalf("click on Outline chip → tab=%v, want Outline", m.inspector.tab)
 	}
 }
+
+func TestSuggestMenuReplacesWord(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("teh cat"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.editor.MoveToLine(0)
+	m.editor.SetCursor(1) // cursor inside "teh"
+	// ctrl+r opens the menu.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	m = nm.(model)
+	if !m.suggesting {
+		t.Fatalf("ctrl+r on a misspelled word should open the menu; status=%q", m.status)
+	}
+	if len(m.suggestions) == 0 || m.suggestions[0] != "the" {
+		t.Fatalf("expected suggestions led by \"the\", got %v", m.suggestions)
+	}
+	// enter applies the top suggestion.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.suggesting {
+		t.Fatal("enter should close the menu")
+	}
+	if got := m.editor.Value(); got != "the cat" {
+		t.Fatalf("after applying, value = %q, want \"the cat\"", got)
+	}
+}
+
+func TestSuggestMenuCorrectWordNoMenu(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("the cat"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.editor.MoveToLine(0)
+	m.editor.SetCursor(1)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlR})
+	m = nm.(model)
+	if m.suggesting {
+		t.Fatal("ctrl+r on a correct word should NOT open the menu")
+	}
+}

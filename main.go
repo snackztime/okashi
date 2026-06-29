@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -174,6 +175,12 @@ type model struct {
 
 	dirty      bool
 	lastEditAt time.Time
+
+	suggesting               bool
+	suggestions              []string
+	suggestIndex             int
+	suggestStart, suggestEnd int
+	suggestWord              string
 }
 
 func initialModel() model {
@@ -351,6 +358,52 @@ func (m *model) syncGoal() {
 	}
 }
 
+// wordUnderCursor returns the token spanning the editor cursor on its line.
+func (m *model) wordUnderCursor() (word string, start, end int, ok bool) {
+	lines := strings.Split(m.editor.Value(), "\n")
+	row := m.editor.Line()
+	if row < 0 || row >= len(lines) {
+		return "", 0, 0, false
+	}
+	col := m.editor.CursorColumn()
+	runes := []rune(lines[row])
+	for _, s := range wordSpans(lines[row]) {
+		if col >= s[0] && col <= s[1] {
+			return string(runes[s[0]:s[1]]), s[0], s[1], true
+		}
+	}
+	return "", 0, 0, false
+}
+
+// matchCase applies orig's capitalization pattern to sugg.
+func matchCase(orig, sugg string) string {
+	if orig == "" || sugg == "" {
+		return sugg
+	}
+	if isAllCaps(orig) {
+		return strings.ToUpper(sugg)
+	}
+	or := []rune(orig)
+	if unicode.IsUpper(or[0]) {
+		sr := []rune(sugg)
+		sr[0] = unicode.ToUpper(sr[0])
+		return string(sr)
+	}
+	return sugg
+}
+
+// applySuggestion applies the i-th suggestion to the editor, replacing the word.
+func (m *model) applySuggestion(i int) {
+	if i < 0 || i >= len(m.suggestions) {
+		m.suggesting = false
+		return
+	}
+	chosen := matchCase(m.suggestWord, m.suggestions[i])
+	m.editor.ReplaceRange(m.suggestStart, m.suggestEnd, chosen)
+	m.status = "'" + m.suggestWord + "' → '" + chosen + "'"
+	m.suggesting = false
+}
+
 func (m model) Init() tea.Cmd {
 	return autosaveTick()
 }
@@ -480,6 +533,41 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.nameInput, cmd = m.nameInput.Update(msg)
 		return m, cmd
+	}
+
+	if m.suggesting {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.suggesting = false
+				m.status = "suggestion cancelled"
+				return m, nil
+			case "left":
+				if m.suggestIndex > 0 {
+					m.suggestIndex--
+				}
+				return m, nil
+			case "right":
+				if m.suggestIndex < len(m.suggestions)-1 {
+					m.suggestIndex++
+				}
+				return m, nil
+			case "enter":
+				m.applySuggestion(m.suggestIndex)
+				return m, nil
+			default:
+				if len(key.String()) == 1 && key.String() >= "1" && key.String() <= "9" {
+					i := int(key.String()[0] - '1')
+					if i < len(m.suggestions) {
+						m.applySuggestion(i)
+					}
+				}
+				return m, nil
+			}
+		}
+		return m, nil
 	}
 
 	switch msg := msg.(type) {
@@ -722,6 +810,29 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+s":
 			m.save()
 			return m, nil
+		case "ctrl+r":
+			if !m.renaming && m.goalPromptField == 0 && !m.suggesting && !m.previewing {
+				w, s, e, ok := m.wordUnderCursor()
+				if !ok {
+					m.status = "no word under cursor"
+					return m, nil
+				}
+				if spellOK(w) {
+					m.status = "'" + w + "' looks correct"
+					return m, nil
+				}
+				sugg := spellSuggest(w, 7)
+				if len(sugg) == 0 {
+					m.status = "no suggestions for '" + w + "'"
+					return m, nil
+				}
+				m.suggesting = true
+				m.suggestions = sugg
+				m.suggestIndex = 0
+				m.suggestWord = w
+				m.suggestStart, m.suggestEnd = s, e
+				return m, nil
+			}
 		}
 	}
 
@@ -1444,6 +1555,17 @@ func (m model) statusBar() string {
 			return bar
 		}
 		return bar + strings.Repeat(" ", gap) + hint
+	}
+	if m.suggesting {
+		parts := make([]string, len(m.suggestions))
+		for i, s := range m.suggestions {
+			if i == m.suggestIndex {
+				parts[i] = selectedStyle.Render(s)
+			} else {
+				parts[i] = s
+			}
+		}
+		return "suggest ▸ " + strings.Join(parts, " · ")
 	}
 	if m.renaming {
 		return "rename ▸ " + m.nameInput.View()
