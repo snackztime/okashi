@@ -43,14 +43,11 @@ var breadcrumbStyle = lipgloss.NewStyle().
 	Foreground(accent).
 	Bold(true)
 
-// bannerArt is figlet's "digital" font. Regenerate for your app's real name:
-//
-//	figlet -f digital YOURNAME
-//
-// then paste the output between the backticks.
-const bannerArt = `+-+-+-+-+-+-+
-|o|k|a|s|h|i|
-+-+-+-+-+-+-+`
+// bannerArt is a hand-set wordmark: the letters spaced out with a rule beneath
+// (derived from figlet's "digital" font, with the box dropped). For a rename,
+// space the new name's letters and match the rule width.
+const bannerArt = `o k a s h i
+───────────`
 
 // bannerView styles the ASCII art and centers it across the window.
 func bannerView(width int) string {
