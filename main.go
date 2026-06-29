@@ -39,6 +39,23 @@ Files open in $OKASHI_DIR, else iCloud Drive's okashi folder, else
 // measure" is ~66). Override with OKASHI_WIDTH.
 const defaultColumnWidth = 72
 
+const helpText = `ctrl+b   toggle sidebar
+ctrl+y   inspector tabs
+ctrl+n   new file
+r        rename (sidebar)
+ctrl+l   outline
+ctrl+k   binder
+ctrl+e   export
+ctrl+p   preview
+ctrl+t   typewriter
+ctrl+d   focus dim
+ctrl+s   save
+ctrl+g   set goals
+ctrl+r   spelling suggestions
+ctrl+o   home
+esc      switch focus / back
+ctrl+c   quit`
+
 // resolveColumnWidth reads OKASHI_WIDTH (a column count in [20,200]); otherwise
 // defaultColumnWidth.
 func resolveColumnWidth() int {
@@ -182,6 +199,8 @@ type model struct {
 	suggestIndex             int
 	suggestStart, suggestEnd int
 	suggestWord              string
+
+	showHelp bool
 }
 
 func initialModel() model {
@@ -226,7 +245,7 @@ func initialModel() model {
 		focus:          focusSidebar,
 		typewriter:     true,
 		dimEnabled:     true,
-		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+k binder · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+y inspector · ctrl+g goals · ctrl+c quit",
+		status:         "",
 		icons:          resolveIcons(),
 		goalsAll:       loadGoals(goalsPath()),
 	}
@@ -551,6 +570,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.nameInput, cmd = m.nameInput.Update(msg)
 		return m, cmd
+	}
+
+	if m.showHelp {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			if key.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			m.showHelp = false
+			return m, nil
+		}
+		return m, nil
+	}
+
+	if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyF1 {
+		m.showHelp = true
+		return m, nil
 	}
 
 	if m.suggesting {
@@ -921,6 +956,12 @@ func (m model) View() string {
 	bodyH := m.height - 1 // status only; no banner in the writing zone
 	if bodyH < 1 {
 		bodyH = 1
+	}
+
+	if m.showHelp {
+		card := framedPanel("Keys", helpText, 36, min(bodyH, lipgloss.Height(helpText)+2))
+		body := lipgloss.Place(m.width, bodyH, lipgloss.Center, lipgloss.Center, card)
+		return lipgloss.JoinVertical(lipgloss.Left, body, statusStyle.Width(m.width).Render("F1/esc close"))
 	}
 
 	// The writing pane shows either the live editor or the rendered preview.

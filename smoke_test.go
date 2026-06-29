@@ -1373,6 +1373,30 @@ func TestSidebarFramedClickAlignment(t *testing.T) {
 	}
 }
 
+func TestF1HelpToggle(t *testing.T) {
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	if m.showHelp {
+		t.Fatal("help should default closed")
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyF1})
+	m = nm.(model)
+	if !m.showHelp {
+		t.Fatal("F1 should open help")
+	}
+	if !strings.Contains(ansi.Strip(m.View()), "ctrl+b") {
+		t.Fatalf("help view should list keybinds:\n%s", ansi.Strip(m.View()))
+	}
+	// esc closes; '?' would NOT toggle (it types text) — F1 closes here.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyF1})
+	m = nm.(model)
+	if m.showHelp {
+		t.Fatal("F1 again should close help")
+	}
+}
+
 func TestPanelsFullHeight(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
