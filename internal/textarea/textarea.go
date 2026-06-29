@@ -586,6 +586,8 @@ func (m *Model) CursorColumn() int { return m.col }
 
 // ClickTo positions the cursor from a display cell relative to the editor's
 // top-left (the same window the View renders). Mirrors View's top math.
+// NOTE: displayCol maps 1:1 to runes, so wide (CJK/emoji) cells can mis-map
+// the column within a line — bounded by the clamps (no panic), fine for prose.
 func (m *Model) ClickTo(displayRow, displayCol int) {
 	if displayCol < 0 {
 		displayCol = 0

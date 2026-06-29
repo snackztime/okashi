@@ -398,7 +398,7 @@ func (m *model) cursorSpellHint() (word string, suggestions []string, ok bool) {
 	if !m.analysis.spell || m.screen != screenWriting {
 		return "", nil, false
 	}
-	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.previewing || m.exportPrompt {
+	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.previewing || m.exportPrompt || m.creatingFile {
 		return "", nil, false
 	}
 	w, _, _, found := m.wordUnderCursor()
