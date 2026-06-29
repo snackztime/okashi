@@ -17,11 +17,12 @@ const (
 	tabWords inspectorTab = iota
 	tabOutline
 	tabGoals
+	tabAnalysis
 )
 
 // inspectorTabLabels is the single source of the tab set — used by both the tab
 // bar render and cycle() so they never diverge.
-func inspectorTabLabels() []string { return []string{"Words", "Outline", "Goals"} }
+func inspectorTabLabels() []string { return []string{"Words", "Outline", "Goals", "Analysis"} }
 
 // inspectorModel is the read-only right-side panel: a tab bar + the active tab.
 type inspectorModel struct {
@@ -72,6 +73,27 @@ type projStats struct {
 }
 
 type goalStats struct{ today, dailyGoal, project, projectGoal int }
+
+type analysisState struct{ spell, syntax bool }
+
+// spellRowY is the body row (within the inspector, y from the top) of the
+// Spellcheck checkbox: tab-bar(0) + blank(1) + "Analysis"(2) + blank(3) → 4.
+const spellRowY = 4
+
+func inspectorAnalysisRowAtY(localY int) (int, bool) {
+	row := localY - spellRowY
+	if row == 0 || row == 1 {
+		return row, true
+	}
+	return 0, false
+}
+
+func checkbox(on bool) string {
+	if on {
+		return "[x] "
+	}
+	return "[ ] "
+}
 
 // progressBar renders a width-cell bar: filled proportion in accent █, rest ░.
 func progressBar(cur, goal, width int) string {
@@ -155,7 +177,7 @@ func kvRow(label string, n, width int) string {
 }
 
 // View renders the tab bar + the active tab's body, fit to the given inner width.
-func (in inspectorModel) View(width int, doc docStats, proj projStats, outline string, goals goalStats) string {
+func (in inspectorModel) View(width int, doc docStats, proj projStats, outline string, goals goalStats, analysis analysisState) string {
 	var bar strings.Builder
 	for i, t := range inspectorTabLabels() {
 		chip := " " + t + " "
@@ -170,6 +192,10 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 	b.WriteString(bar.String())
 	b.WriteString("\n\n")
 	switch in.tab {
+	case tabAnalysis:
+		b.WriteString(breadcrumbStyle.Render("Analysis") + "\n\n")
+		b.WriteString(checkbox(analysis.spell) + "Spellcheck\n")
+		b.WriteString(lipgloss.NewStyle().Foreground(subtle).Render(checkbox(analysis.syntax) + "Syntax"))
 	case tabOutline:
 		b.WriteString(breadcrumbStyle.Render("Outline") + "\n\n")
 		b.WriteString(renderOutline(outline, width))

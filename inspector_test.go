@@ -62,14 +62,14 @@ func TestComputeProjStatsPlainFolder(t *testing.T) {
 
 func TestInspectorViewRendersWords(t *testing.T) {
 	in := inspectorModel{visible: true}
-	out := in.View(28, docStats{words: 1204, chars: 6830, paragraphs: 38}, projStats{words: 47032, chapters: 12, manuscript: true}, "", goalStats{})
+	out := in.View(28, docStats{words: 1204, chars: 6830, paragraphs: 38}, projStats{words: 47032, chapters: 12, manuscript: true}, "", goalStats{}, analysisState{})
 	for _, want := range []string{"Words", "Document", "Project", "1,204", "47,032", "Chapters", "12"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("inspector view missing %q:\n%s", want, out)
 		}
 	}
 	// Non-manuscript omits the Chapters line.
-	plain := in.View(28, docStats{words: 10}, projStats{words: 10, manuscript: false}, "", goalStats{})
+	plain := in.View(28, docStats{words: 10}, projStats{words: 10, manuscript: false}, "", goalStats{}, analysisState{})
 	if strings.Contains(plain, "Chapters") {
 		t.Fatal("non-manuscript inspector should omit 'Chapters'")
 	}
@@ -90,8 +90,12 @@ func TestInspectorCycle(t *testing.T) {
 		t.Fatalf("third cycle: visible=%v tab=%v, want visible Goals", in.visible, in.tab)
 	}
 	in.cycle()
+	if !in.visible || in.tab != tabAnalysis {
+		t.Fatalf("fourth cycle: visible=%v tab=%v, want visible Analysis", in.visible, in.tab)
+	}
+	in.cycle()
 	if in.visible {
-		t.Fatal("fourth cycle should close the inspector (past the last tab)")
+		t.Fatal("fifth cycle should close the inspector (past the last tab)")
 	}
 	if in.tab != tabWords {
 		t.Fatalf("closed cycle should reset tab to Words, got %v", in.tab)
@@ -100,13 +104,13 @@ func TestInspectorCycle(t *testing.T) {
 
 func TestInspectorOutlineTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabOutline}
-	out := in.View(28, docStats{}, projStats{}, "- Top\n  - sub", goalStats{})
+	out := in.View(28, docStats{}, projStats{}, "- Top\n  - sub", goalStats{}, analysisState{})
 	for _, want := range []string{"Outline", "Top", "sub"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("outline tab missing %q:\n%s", want, out)
 		}
 	}
-	empty := in.View(28, docStats{}, projStats{}, "", goalStats{})
+	empty := in.View(28, docStats{}, projStats{}, "", goalStats{}, analysisState{})
 	if !strings.Contains(empty, "empty") {
 		t.Fatal("empty outline should show an (empty …) hint")
 	}
@@ -130,26 +134,26 @@ func TestProgressBar(t *testing.T) {
 
 func TestInspectorGoalsTab(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabGoals}
-	out := in.View(28, docStats{}, projStats{}, "", goalStats{today: 312, dailyGoal: 500, project: 47032, projectGoal: 80000})
+	out := in.View(28, docStats{}, projStats{}, "", goalStats{today: 312, dailyGoal: 500, project: 47032, projectGoal: 80000}, analysisState{})
 	for _, w := range []string{"Daily", "312", "500", "Project", "80,000"} {
 		if !strings.Contains(out, w) {
 			t.Fatalf("goals tab missing %q:\n%s", w, out)
 		}
 	}
 	// projectGoal 0 → no Project section.
-	noproj := in.View(28, docStats{}, projStats{}, "", goalStats{today: 10, dailyGoal: 500, project: 10, projectGoal: 0})
+	noproj := in.View(28, docStats{}, projStats{}, "", goalStats{today: 10, dailyGoal: 500, project: 10, projectGoal: 0}, analysisState{})
 	if strings.Contains(noproj, "Project") {
 		t.Fatal("projectGoal 0 should omit the Project section")
 	}
 	// goal met.
-	met := in.View(28, docStats{}, projStats{}, "", goalStats{today: 600, dailyGoal: 500, project: 1, projectGoal: 0})
+	met := in.View(28, docStats{}, projStats{}, "", goalStats{today: 600, dailyGoal: 500, project: 1, projectGoal: 0}, analysisState{})
 	if !strings.Contains(met, "met") {
 		t.Fatal("today >= daily goal should show '✓ goal met'")
 	}
 }
 
 func TestInspectorTabAtX(t *testing.T) {
-	// labels {"Words","Outline","Goals"} → chips " Words "(7) " Outline "(9) " Goals "(7).
+	// labels {"Words","Outline","Goals","Analysis"} → chips " Words "(7) " Outline "(9) " Goals "(7) " Analysis "(10).
 	if tb, ok := inspectorTabAtX(2); !ok || tb != tabWords {
 		t.Fatalf("x=2 → %v ok=%v, want Words", tb, ok)
 	}
@@ -161,5 +165,33 @@ func TestInspectorTabAtX(t *testing.T) {
 	}
 	if _, ok := inspectorTabAtX(100); ok {
 		t.Fatal("x past the last chip → not ok")
+	}
+}
+
+func TestInspectorAnalysisTab(t *testing.T) {
+	in := inspectorModel{visible: true, tab: tabAnalysis}
+	on := in.View(28, docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, syntax: false})
+	if !strings.Contains(on, "Spellcheck") || !strings.Contains(on, "Syntax") {
+		t.Fatalf("analysis tab should list Spellcheck and Syntax:\n%s", on)
+	}
+	if !strings.Contains(on, "[x] Spellcheck") {
+		t.Fatalf("spell on → checked box:\n%s", on)
+	}
+	off := in.View(28, docStats{}, projStats{}, "", goalStats{}, analysisState{})
+	if !strings.Contains(off, "[ ] Spellcheck") {
+		t.Fatalf("spell off → empty box:\n%s", off)
+	}
+}
+
+func TestInspectorAnalysisRowAtY(t *testing.T) {
+	// Body rows after the tab bar + blank + header: Spellcheck row, Syntax row.
+	if r, ok := inspectorAnalysisRowAtY(spellRowY); !ok || r != 0 {
+		t.Fatalf("spellRowY → row %d ok=%v, want 0", r, ok)
+	}
+	if r, ok := inspectorAnalysisRowAtY(spellRowY + 1); !ok || r != 1 {
+		t.Fatalf("syntax row → %d ok=%v, want 1", r, ok)
+	}
+	if _, ok := inspectorAnalysisRowAtY(0); ok {
+		t.Fatal("the tab-bar row is not a checkbox row")
 	}
 }

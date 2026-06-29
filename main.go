@@ -792,7 +792,7 @@ func (m model) View() string {
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
 		pg := m.goalsAll[m.files.dir].applyEnvDefaults()
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
-		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir), gs)
+		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir), gs, analysisState{})
 		cols = append(cols, inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
