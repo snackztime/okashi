@@ -212,7 +212,7 @@ func initialModel() model {
 		focus:          focusSidebar,
 		typewriter:     true,
 		dimEnabled:     true,
-		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+i inspector · ctrl+c quit",
+		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+y inspector · ctrl+c quit",
 		icons:          resolveIcons(),
 	}
 }
@@ -397,7 +397,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.MouseMsg:
-		inSidebar := m.sidebarVisible && msg.X < sidebarWidth
+		showSidebar, _, _ := m.effectivePanels()
+		inSidebar := showSidebar && msg.X < sidebarWidth
 
 		// Wheel scrolls whichever pane is under the pointer.
 		if msg.Button == tea.MouseButtonWheelUp || msg.Button == tea.MouseButtonWheelDown {
@@ -533,7 +534,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.layout()
 			return m, nil
-		case "ctrl+i":
+		case "ctrl+y":
 			m.inspector.visible = !m.inspector.visible
 			m.layout()
 			return m, nil

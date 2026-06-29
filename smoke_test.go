@@ -949,11 +949,20 @@ func TestInspectorToggleAndRender(t *testing.T) {
 	if strings.Contains(m.View(), "Document") {
 		t.Fatal("inspector should be hidden by default")
 	}
-	// Toggle directly (ctrl+i == tab in bubbletea; drive via field mutation):
-	m.inspector.visible = true
-	m.layout()
+	// ctrl+y toggles it on (ctrl+i is unusable — it's identical to Tab in terminals).
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
+	m = nm.(model)
+	if !m.inspector.visible {
+		t.Fatal("ctrl+y should toggle the inspector visible")
+	}
 	if !strings.Contains(m.View(), "Document") {
 		t.Fatal("writing View should contain the inspector when visible")
+	}
+	// ctrl+y again toggles it back off.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlY})
+	m = nm.(model)
+	if m.inspector.visible || strings.Contains(m.View(), "Document") {
+		t.Fatal("ctrl+y should toggle the inspector back off")
 	}
 }
 
