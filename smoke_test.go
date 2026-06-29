@@ -983,3 +983,45 @@ func TestPreviewHeaderShown(t *testing.T) {
 		t.Fatal("preview header should show the filename")
 	}
 }
+
+func TestOutlineDocToggle(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("chapter body"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+
+	// ctrl+l opens outline.md (created on disk).
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	if filepath.Base(m.currentFile) != "outline.md" {
+		t.Fatalf("ctrl+l should open outline.md, got %q", m.currentFile)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "outline.md")); err != nil {
+		t.Fatal("outline.md should be created on disk")
+	}
+	// ctrl+l again returns to the chapter.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	m = nm.(model)
+	if filepath.Base(m.currentFile) != "01-a.md" {
+		t.Fatalf("second ctrl+l should return to the chapter, got %q", m.currentFile)
+	}
+}
+
+func TestBinderOnCtrlK(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
+	m = nm.(model)
+	if m.screen != screenOutline {
+		t.Fatalf("ctrl+k should open the binder, got screen %v", m.screen)
+	}
+}

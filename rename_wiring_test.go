@@ -270,7 +270,7 @@ func TestRenameRefusedInRefuseModeManifest(t *testing.T) {
 	}
 }
 
-func TestCtrlLOnNonManuscriptStaysPut(t *testing.T) {
+func TestCtrlKOnNonManuscriptStaysPut(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
 	plain := filepath.Join(root, "plain")
@@ -278,9 +278,9 @@ func TestCtrlLOnNonManuscriptStaysPut(t *testing.T) {
 	os.WriteFile(filepath.Join(plain, "a.md"), []byte("x"), 0o644) // unnumbered, no manifest
 	m := sidebarModel(t, plain)
 
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	if m.screen == screenOutline {
-		t.Fatal("ctrl+l on a non-manuscript folder must not enter the outline")
+		t.Fatal("ctrl+k on a non-manuscript folder must not enter the outline")
 	}
 }

@@ -53,9 +53,12 @@ import (
 )
 
 // The wrap cache must grow with the buffer, not stay pinned at the MaxHeight
-// default (99). Regression for the large-file render thrash.
+// default (99). Regression for the large-file render thrash. Note: CharLimit
+// and MaxHeight are both 0 (okashi's settings) so the buffer isn't truncated;
+// the resize must fire on the SetValue (load) path, not only on a keystroke.
 func TestWrapCacheGrowsWithBuffer(t *testing.T) {
 	m := New()
+	m.CharLimit = 0 // unlimited (default 400 would truncate the test buffer)
 	m.MaxHeight = 0 // okashi's setting
 	m.SetWidth(72)
 	var b strings.Builder
@@ -64,9 +67,7 @@ func TestWrapCacheGrowsWithBuffer(t *testing.T) {
 		b.WriteString(strings.Repeat("x", i%7))
 		b.WriteByte('\n')
 	}
-	m.SetValue(b.String())
-	// Touch every line so each would be cached.
-	_ = m.View()
+	m.SetValue(b.String()) // load path — no keystroke/Update
 	if m.cache.Capacity() < 500 {
 		t.Fatalf("cache capacity = %d, want >= 500 (buffer size) — cache thrashes on big files", m.cache.Capacity())
 	}
@@ -78,17 +79,34 @@ func TestWrapCacheGrowsWithBuffer(t *testing.T) {
 Run: `/opt/homebrew/bin/go test ./internal/textarea/ -run TestWrapCacheGrowsWithBuffer 2>&1 | tail`
 Expected: FAIL — capacity is 99.
 
-- [ ] **Step 3: Size the cache to the buffer**
+- [ ] **Step 3: Size the cache to the buffer (on the load path AND the keystroke path)**
 
-In `internal/textarea/textarea.go`, in `Update` (~line 1047), replace the MaxHeight-gated cache resize:
+The cache resize must fire when the buffer is established (`SetValue → InsertString`), not only on a keystroke (`Update`). Add a pointer-receiver helper and call it from both. In `internal/textarea/textarea.go`:
+
+Add the helper:
 
 ```go
+// ensureWrapCacheCapacity grows the wrap-memoization cache to cover the whole
+// buffer so large files don't thrash it. Never shrinks below the default.
+func (m *Model) ensureWrapCacheCapacity() {
 	if want := max(defaultMaxHeight, len(m.value)); m.cache.Capacity() < want {
 		m.cache = memoization.NewMemoCache[line, [][]rune](want)
 	}
+}
 ```
 
-(`max` is already used in this file. This grows the cache as the buffer grows and never shrinks below the default.)
+Call it at the **end of `InsertString`** (covers `SetValue`/load and typed insertions) and at the **end of `Update`** just before `return m, tea.Batch(cmds...)` (covers line growth from `splitLine` on Enter, which doesn't go through `InsertString`). `Update` has a value receiver but `m` is addressable there, so `m.ensureWrapCacheCapacity()` works exactly like the existing `m.repositionView()` call.
+
+**Remove** the old MaxHeight-gated resize block in `Update` (~line 1047):
+
+```go
+	// DELETE these lines:
+	if m.MaxHeight > 0 && m.MaxHeight != m.cache.Capacity() {
+		m.cache = memoization.NewMemoCache[line, [][]rune](m.MaxHeight)
+	}
+```
+
+(`max` is already used in this file.)
 
 - [ ] **Step 4: Run tests; gofmt; commit**
 

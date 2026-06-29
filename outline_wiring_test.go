@@ -56,19 +56,19 @@ func setupManuscript(t *testing.T) (model, string) {
 	return m, proj
 }
 
-func TestCtrlLEntersOutlineInManuscript(t *testing.T) {
+func TestCtrlKEntersBinderInManuscript(t *testing.T) {
 	m, _ := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	if m.screen != screenOutline {
-		t.Fatalf("ctrl+l in a manuscript should enter screenOutline, got %v", m.screen)
+		t.Fatalf("ctrl+k in a manuscript should enter screenOutline, got %v", m.screen)
 	}
 	if len(m.outline.working) != 2 {
 		t.Fatalf("outline should load 2 sections, got %d", len(m.outline.working))
 	}
 }
 
-func TestCtrlLRejectedOutsideManuscript(t *testing.T) {
+func TestCtrlKRejectedOutsideManuscript(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
 	os.WriteFile(filepath.Join(root, "loose.md"), []byte("x"), 0o644)
@@ -77,16 +77,16 @@ func TestCtrlLRejectedOutsideManuscript(t *testing.T) {
 	m = nm.(model)
 	m.screen = screenWriting
 	m.files.SetDir(root)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	if m.screen == screenOutline {
-		t.Fatal("ctrl+l outside a manuscript should not enter the outline")
+		t.Fatal("ctrl+k outside a manuscript should not enter the outline")
 	}
 }
 
 func TestOutlineEnterOpensSection(t *testing.T) {
 	m, proj := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // select 02-b
 	m = nm.(model)
@@ -102,7 +102,7 @@ func TestOutlineEnterOpensSection(t *testing.T) {
 
 func TestOutlineEscReturnsToEditor(t *testing.T) {
 	m, _ := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = nm.(model)
@@ -113,7 +113,7 @@ func TestOutlineEscReturnsToEditor(t *testing.T) {
 
 func TestOutlineHandlesResize(t *testing.T) {
 	m, _ := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	nm, _ = m.Update(tea.WindowSizeMsg{Width: 70, Height: 20})
 	m = nm.(model)
@@ -124,7 +124,7 @@ func TestOutlineHandlesResize(t *testing.T) {
 
 func TestOutlineClickSelectsThenDoubleClickOpens(t *testing.T) {
 	m, proj := setupManuscript(t) // 01-a (row 0), 02-b (row 1)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	// Click row 1 (02-b): mouse Y = header height + 1.
 	clickY := outlineHeaderHeight + 1

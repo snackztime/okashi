@@ -54,7 +54,7 @@ func manuscriptModel(t *testing.T) (model, string) {
 
 func TestOutlineMEntersPager(t *testing.T) {
 	m, _ := manuscriptModel(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL}) // outline
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK}) // binder
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}) // pager
 	m = nm.(model)
@@ -68,7 +68,7 @@ func TestOutlineMEntersPager(t *testing.T) {
 
 func TestPagerEnterJumpsToEditAtLine(t *testing.T) {
 	m, proj := manuscriptModel(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
 	m = nm.(model)
@@ -89,7 +89,7 @@ func TestPagerEnterJumpsToEditAtLine(t *testing.T) {
 
 func TestPagerOGoesToOutlineEscToEditor(t *testing.T) {
 	m, _ := manuscriptModel(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
 	m = nm.(model)
@@ -111,7 +111,7 @@ func TestPagerClampsWidthToTerminal(t *testing.T) {
 	m, _ := manuscriptModel(t)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 20}) // narrow terminal
 	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
 	m = nm.(model)
@@ -122,7 +122,7 @@ func TestPagerClampsWidthToTerminal(t *testing.T) {
 
 func TestPagerResizeReclampsWidth(t *testing.T) {
 	m, _ := manuscriptModel(t) // 100-col terminal
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
 	m = nm.(model)
@@ -139,7 +139,7 @@ func TestPagerResizeReclampsWidth(t *testing.T) {
 
 func TestPagerClickThenDoubleClickJumps(t *testing.T) {
 	m, proj := manuscriptModel(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
 	m = nm.(model)

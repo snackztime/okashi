@@ -147,14 +147,15 @@ type model struct {
 	typewriter     bool
 	dimEnabled     bool
 
-	mdStyle         string // glamour theme, detected once at startup
-	colWidth        int
-	smartQuotes     bool
-	sessionBaseline int // word count when the current file was opened/created
-	currentFile     string
-	status          string
-	icons           iconSet
-	outline         outlineModel
+	mdStyle           string // glamour theme, detected once at startup
+	colWidth          int
+	smartQuotes       bool
+	sessionBaseline   int // word count when the current file was opened/created
+	currentFile       string
+	outlineReturnFile string // chapter to return to after editing outline.md (ctrl+l)
+	status            string
+	icons             iconSet
+	outline           outlineModel
 
 	pager pagerModel
 
@@ -212,7 +213,7 @@ func initialModel() model {
 		focus:          focusSidebar,
 		typewriter:     true,
 		dimEnabled:     true,
-		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+y inspector · ctrl+c quit",
+		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+k binder · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+y inspector · ctrl+c quit",
 		icons:          resolveIcons(),
 	}
 }
@@ -507,6 +508,27 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+l":
+			// ctrl+l always toggles the planning outline.md (ctrl+k is the binder).
+			outlinePath := filepath.Join(m.files.dir, "outline.md")
+			if m.currentFile == outlinePath {
+				m.save()
+				if m.outlineReturnFile != "" {
+					m.loadFile(m.outlineReturnFile)
+				}
+			} else {
+				m.save()
+				m.outlineReturnFile = m.currentFile
+				if _, err := os.Stat(outlinePath); err != nil {
+					if werr := atomicWrite(outlinePath, []byte("- \n"), 0o644); werr != nil {
+						m.status = "couldn't create outline: " + werr.Error()
+						return m, nil
+					}
+					m.files.SetDir(m.files.dir) // surface outline.md in the sidebar
+				}
+				m.loadFile(outlinePath)
+			}
+			return m, nil
+		case "ctrl+k":
 			if m.files.view.ordered() {
 				m.enterOutline()
 			} else {
@@ -949,7 +971,7 @@ func (m *model) enterManuscript() {
 	m.pager.load(m.outline.dir, w)
 	m.lastClickTime = time.Time{} // don't carry a stale double-click in from another screen
 	m.screen = screenManuscript
-	m.status = "manuscript · ↑↓ scroll · enter edit here · o outline · esc editor"
+	m.status = "manuscript · ↑↓ scroll · enter edit here · o binder · esc editor"
 }
 
 // pagerWidth is the pager's measure: the configured column width, never wider than
@@ -970,7 +992,7 @@ func (m *model) enterOutline() {
 	m.outline.load(m.files.dir, m.files.wc)
 	m.screen = screenOutline
 	m.previewing = false
-	m.status = "outline · ↑↓ select · enter open · r rename · m read · ctrl+e export · esc back"
+	m.status = "binder · ↑↓ select · enter open · r rename · m read · ctrl+e export · esc back"
 }
 
 func (m *model) loadFile(path string) {
