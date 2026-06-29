@@ -176,6 +176,7 @@ func initialModel() model {
 	ta.Prompt = "" // no gutter pipe — read like paper, not code
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 0 // unlimited
+	ta.MaxHeight = 0 // unlimited — chapters routinely exceed the fork's default 99-line cap
 	ta.Focus()
 
 	// Strip the textarea's built-in chrome so the prose stands alone.
