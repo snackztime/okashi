@@ -1186,7 +1186,6 @@ func (m Model) View() string {
 	var (
 		s                strings.Builder
 		style            lipgloss.Style
-		newLines         int
 		widestLineNumber int
 		lineInfo         = m.LineInfo()
 	)
@@ -1209,17 +1208,19 @@ func (m Model) View() string {
 		top = m.cursorLineNumber() - m.height/2
 	}
 
-	// rendered counts the display rows written so far; displayLine is the
-	// running emitted-row index used for the prompt.
+	// rendered counts the display rows written so far. displayLine is the
+	// ABSOLUTE display-row index passed to a prompt func: it starts at the first
+	// visible content row (max(0, top)) so prompt indices match the old full-buffer
+	// render, and the blank pad rows above row 0 (which carry no prompt) do not
+	// advance it. okashi uses an empty Prompt, so this only matters under SetPromptFunc.
 	rendered := 0
-	displayLine := 0
+	displayLine := max(0, top)
 
 	// Leading blank rows for a negative top (typewriter near the start). These
 	// match the blank rows the old viewport prepended above row 0.
 	for cur := top; cur < 0 && rendered < h; cur++ {
 		s.WriteRune('\n')
 		rendered++
-		displayLine++
 	}
 
 	// Locate the source line / wrap-piece containing the first visible row.
@@ -1283,6 +1284,13 @@ func (m Model) View() string {
 				widestLineNumber = lnw
 			}
 
+			// KNOWN LIMITATION (line numbers only): padding accounts for the text
+			// width (m.width) but not the line-number gutter. The old internal
+			// viewport width-clamped every row, masking a 1-col overshoot when
+			// ShowLineNumbers is on; the windowed render has no such clamp. okashi
+			// sets ShowLineNumbers=false so this never fires here — if the fork is
+			// reused with line numbers, clamp each emitted row to the gutter+text
+			// width (e.g. ansi.Truncate) to restore the old behavior.
 			strwidth := uniseg.StringWidth(string(wrappedLine))
 			padding := m.width - strwidth
 			// If the trailing space causes the line to be wider than the
@@ -1311,7 +1319,6 @@ func (m Model) View() string {
 			}
 			s.WriteString(style.Render(strings.Repeat(" ", max(0, padding))))
 			s.WriteRune('\n')
-			newLines++
 			rendered++
 			pieceStart += pieceLen
 		}
