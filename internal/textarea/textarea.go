@@ -16,7 +16,6 @@ import (
 	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/runeutil"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -280,9 +279,10 @@ type Model struct {
 	// vertically such that we can maintain the same navigating position.
 	lastCharOffset int
 
-	// viewport is the vertically-scrollable viewport of the multi-line text
-	// input.
-	viewport *viewport.Model
+	// offset is the first visible display row (the absolute wrapped-row index of
+	// the top of the window) in non-typewriter mode. In typewriter mode the top
+	// is derived from the cursor in View(); offset is unused. okashi:windowed
+	offset int
 
 	// rune sanitizer for input.
 	rsan runeutil.Sanitizer
@@ -290,8 +290,6 @@ type Model struct {
 
 // New creates a new model with default settings.
 func New() Model {
-	vp := viewport.New(0, 0)
-	vp.KeyMap = viewport.KeyMap{}
 	cur := cursor.New()
 
 	focusedStyle, blurredStyle := DefaultStyles()
@@ -314,8 +312,6 @@ func New() Model {
 		focus: false,
 		col:   0,
 		row:   0,
-
-		viewport: &vp,
 	}
 
 	m.SetHeight(defaultHeight)
@@ -493,10 +489,14 @@ func (m Model) Line() int {
 	return m.row
 }
 
-// ViewportYOffset returns the current vertical scroll offset of the internal
-// viewport. okashi:typewriter
+// ViewportYOffset returns the current vertical scroll offset of the editor.
+// In typewriter mode this is the cursor's display row (the value used to center
+// the caret); otherwise it is the windowed scroll offset. okashi:typewriter
 func (m Model) ViewportYOffset() int {
-	return m.viewport.YOffset
+	if m.Typewriter && m.height > 0 {
+		return m.cursorLineNumber()
+	}
+	return m.offset
 }
 
 // CursorDown moves the cursor down by one line.
@@ -626,7 +626,7 @@ func (m *Model) Reset() {
 	m.value = make([][]rune, minHeight, startCap)
 	m.col = 0
 	m.row = 0
-	m.viewport.GotoTop()
+	m.offset = 0
 	m.SetCursor(0)
 }
 
@@ -881,20 +881,56 @@ func (m Model) LineInfo() LineInfo {
 	return LineInfo{}
 }
 
-// repositionView repositions the view of the viewport based on the defined
-// scrolling behavior.
+// repositionView updates the scroll offset so the cursor stays visible. In
+// typewriter mode the window top is derived from the cursor in View(), so there
+// is nothing to track here. okashi:windowed
 func (m *Model) repositionView() {
 	if m.Typewriter {
-		return // centering is applied in renderViewport during View. okashi:typewriter
+		return // typewriter centering is computed in View. okashi:typewriter
 	}
-	min := m.viewport.YOffset
-	max := min + m.viewport.Height - 1
+	row := m.cursorLineNumber()
+	if row < m.offset {
+		m.offset = row
+	} else if row >= m.offset+m.height {
+		m.offset = row - m.height + 1
+	}
+	if maxOff := max(0, m.displayHeight()-m.height); m.offset > maxOff {
+		m.offset = maxOff
+	}
+	if m.offset < 0 {
+		m.offset = 0
+	}
+}
 
-	if row := m.cursorLineNumber(); row < min {
-		m.viewport.LineUp(min - row)
-	} else if row > max {
-		m.viewport.LineDown(row - max)
+// displayHeight is the total number of wrapped display rows in the buffer.
+// okashi:windowed
+func (m Model) displayHeight() int {
+	n := 0
+	for _, line := range m.value {
+		n += len(m.memoizedWrap(line, m.width))
 	}
+	return n
+}
+
+// locateRow returns the source line index and wrap-piece index containing
+// absolute display row `row`, plus the absolute rune offset of that source
+// line's first rune. row <= 0 maps to (0, 0, 0). row past the end returns
+// (len(m.value), 0, <offset past end>). okashi:windowed
+func (m Model) locateRow(row int) (l, wl, lineOffset int) {
+	if row < 0 {
+		row = 0
+	}
+	acc := 0
+	off := 0
+	for i, line := range m.value {
+		h := len(m.memoizedWrap(line, m.width))
+		if acc+h > row {
+			return i, row - acc, off
+		}
+		acc += h
+		off += len(line) + 1
+	}
+	return len(m.value), 0, off
 }
 
 // cursorRuneOffset returns the cursor's absolute rune offset in Value().
@@ -923,21 +959,6 @@ func (m Model) renderSeg(seg []rune, absStart, span0, span1 int, style lipgloss.
 		}
 	}
 	return b.String()
-}
-
-// renderViewport sets the viewport content and returns the rendered view. When
-// Typewriter is on it prepends Height/2 blank rows so the caret's wrapped row
-// can sit at screen-center (the buffer already pads Height end-of-buffer rows
-// below, covering the bottom). okashi:typewriter
-func (m Model) renderViewport(content string) string {
-	if m.Typewriter && m.height > 0 {
-		pad := m.height / 2
-		m.viewport.SetContent(strings.Repeat("\n", pad) + content)
-		m.viewport.SetYOffset(m.cursorLineNumber())
-	} else {
-		m.viewport.SetContent(content)
-	}
-	return m.style.Base.Render(m.viewport.View())
 }
 
 // Width returns the width of the textarea.
@@ -997,7 +1018,6 @@ func (m *Model) SetWidth(w int) {
 	// borders, prompt and line numbers, we need to calculate it by subtracting
 	// the reserved width from them.
 
-	m.viewport.Width = inputWidth - reservedOuter
 	m.width = inputWidth - reservedOuter - reservedInner
 }
 
@@ -1022,10 +1042,8 @@ func (m Model) Height() int {
 func (m *Model) SetHeight(h int) {
 	if m.MaxHeight > 0 {
 		m.height = clamp(h, minHeight, m.MaxHeight)
-		m.viewport.Height = clamp(h, minHeight, m.MaxHeight)
 	} else {
 		m.height = max(h, minHeight)
-		m.viewport.Height = max(h, minHeight)
 	}
 }
 
@@ -1143,11 +1161,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.Err = msg
 	}
 
-	vp, cmd := m.viewport.Update(msg)
-	m.viewport = &vp
-	cmds = append(cmds, cmd)
-
 	newRow, newCol := m.cursorLineNumber(), m.col
+	var cmd tea.Cmd
 	m.Cursor, cmd = m.Cursor.Update(msg)
 	if (newRow != oldRow || newCol != oldCol) && m.Cursor.Mode() == cursor.CursorBlink {
 		m.Cursor.Blink = false
@@ -1180,12 +1195,52 @@ func (m Model) View() string {
 	if m.Dim {
 		dimSpan0, dimSpan1 = m.cursorSentenceSpan()
 	}
-	lineOffset := 0
 
+	// Window math: render only the `height` display rows starting at `top`.
+	// Non-typewriter: top is the tracked scroll offset. Typewriter: the caret's
+	// display row is centered, so the window starts height/2 rows above it (which
+	// may be negative near the start → blank rows above row 0). okashi:windowed
+	h := m.height
+	if h < 1 {
+		h = 1
+	}
+	top := m.offset
+	if m.Typewriter && m.height > 0 {
+		top = m.cursorLineNumber() - m.height/2
+	}
+
+	// rendered counts the display rows written so far; displayLine is the
+	// running emitted-row index used for the prompt.
+	rendered := 0
 	displayLine := 0
-	for l, line := range m.value {
+
+	// Leading blank rows for a negative top (typewriter near the start). These
+	// match the blank rows the old viewport prepended above row 0.
+	for cur := top; cur < 0 && rendered < h; cur++ {
+		s.WriteRune('\n')
+		rendered++
+		displayLine++
+	}
+
+	// Locate the source line / wrap-piece containing the first visible row.
+	startRow := max(0, top)
+	l0, wl0, lineOffset := m.locateRow(startRow)
+
+	// Per-piece render block over the visible window.
+	for l := l0; l < len(m.value) && rendered < h; l++ {
+		line := m.value[l]
 		wrappedLines := m.memoizedWrap(line, m.width)
+
+		// On the first source line, skip the pieces before wl0 and account for
+		// their rune lengths so pieceStart indexes the source correctly.
+		startPiece := 0
 		pieceStart := 0 // rune offset of the current wrapped piece within this line
+		if l == l0 {
+			startPiece = wl0
+			for i := 0; i < wl0 && i < len(wrappedLines); i++ {
+				pieceStart += len(wrappedLines[i])
+			}
+		}
 
 		if m.row == l {
 			style = m.style.computedCursorLine()
@@ -1193,7 +1248,8 @@ func (m Model) View() string {
 			style = m.style.computedText()
 		}
 
-		for wl, wrappedLine := range wrappedLines {
+		for wl := startPiece; wl < len(wrappedLines) && rendered < h; wl++ {
+			wrappedLine := wrappedLines[wl]
 			pieceLen := len(wrappedLine) // source rune count of this piece (before TrimSuffix)
 			prompt := m.getPromptString(displayLine)
 			prompt = m.style.computedPrompt().Render(prompt)
@@ -1256,14 +1312,15 @@ func (m Model) View() string {
 			s.WriteString(style.Render(strings.Repeat(" ", max(0, padding))))
 			s.WriteRune('\n')
 			newLines++
+			rendered++
 			pieceStart += pieceLen
 		}
 		lineOffset += len(line) + 1
 	}
 
-	// Always show at least `m.Height` lines at all times.
-	// To do this we can simply pad out a few extra new lines in the view.
-	for i := 0; i < m.height; i++ {
+	// Fill the rest of the window with end-of-buffer rows so the view is always
+	// exactly `height` rows tall.
+	for rendered < h {
 		prompt := m.getPromptString(displayLine)
 		prompt = m.style.computedPrompt().Render(prompt)
 		s.WriteString(prompt)
@@ -1275,9 +1332,13 @@ func (m Model) View() string {
 		rightGap := strings.Repeat(" ", max(0, rightGapWidth))
 		s.WriteString(m.style.computedEndOfBuffer().Render(leftGutter + rightGap))
 		s.WriteRune('\n')
+		rendered++
 	}
 
-	return m.renderViewport(s.String())
+	// Trim the final newline so the view is exactly `height` lines tall (no
+	// trailing blank row) — matching the old viewport.View() contract that
+	// downstream lipgloss.Join layouts depend on. okashi:windowed
+	return m.style.Base.Render(strings.TrimSuffix(s.String(), "\n"))
 }
 
 // formatLineNumber formats the line number for display dynamically based on
@@ -1373,7 +1434,7 @@ func (m Model) placeholderView() string {
 		s.WriteRune('\n')
 	}
 
-	return m.renderViewport(s.String())
+	return m.style.Base.Render(strings.TrimSuffix(s.String(), "\n"))
 }
 
 // Blink returns the blink command for the cursor.
