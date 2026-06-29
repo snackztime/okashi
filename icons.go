@@ -4,45 +4,72 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
-// iconSet is the glyph set for the file pane and launch lists. Each glyph
-// string includes its own trailing space for alignment.
+// glyph is a file-pane icon: a Nerd Font (or ASCII) glyph plus its color. The
+// ch string includes its own trailing space for alignment. color "" means the
+// glyph is rendered uncolored (the plain/ascii set). A plain-space regression
+// in the nerd set is caught by TestNerdIconsAreRealGlyphs.
+type glyph struct {
+	ch    string
+	color lipgloss.Color
+}
+
+// iconSet is the glyph set for the file pane and launch lists.
 type iconSet struct {
-	folder string
-	parent string
-	file   string
-	action string
-	byExt  map[string]string
+	folder, parent, file, action glyph
+	byExt                        map[string]glyph
 }
 
 // resolveIcons picks the glyph set once at startup. OKASHI_ICONS=plain (or
-// ascii) avoids Nerd Font glyphs for terminals without a patched font.
+// ascii) avoids Nerd Font glyphs (and color) for terminals without a patched font.
 func resolveIcons() iconSet {
 	switch strings.ToLower(os.Getenv("OKASHI_ICONS")) {
 	case "plain", "ascii":
-		return iconSet{folder: "▸ ", parent: "↑ ", file: "  ", action: "+ ", byExt: map[string]string{}}
+		return iconSet{
+			folder: glyph{ch: "▸ "},
+			parent: glyph{ch: "↑ "},
+			file:   glyph{ch: "  "},
+			action: glyph{ch: "+ "},
+			byExt:  map[string]glyph{},
+		}
 	}
+	text := glyph{ch: " ", color: iconTextColor} // nf-fa-file_text_o
+	img := glyph{ch: " ", color: iconImageColor} // nf-fa-file_image_o
+	code := glyph{ch: " ", color: iconCodeColor} // nf-fa-file_code_o
 	return iconSet{
-		folder: " ", // nf-fa-folder
-		parent: " ", // nf-fa-arrow_up
-		file:   " ", // nf-fa-file
-		action: " ", // nf-fa-plus (U+F067)
-		byExt: map[string]string{
-			".md":       " ", // nf-fa-file_text_o
-			".markdown": " ",
-			".txt":      " ",
-			".wg":       " ",
+		folder: glyph{ch: " ", color: iconFolderColor},  // nf-fa-folder
+		parent: glyph{ch: " ", color: iconParentColor},  // nf-fa-arrow_up
+		file:   glyph{ch: " ", color: iconGenericColor}, // nf-fa-file
+		action: glyph{ch: " ", color: accent},           // nf-fa-plus
+		byExt: map[string]glyph{
+			".md":       text,
+			".markdown": text,
+			".txt":      text,
+			".wg":       text,
+			".pdf":      {ch: " ", color: iconPdfColor}, // nf-fa-file_pdf_o
+			".png":      img,
+			".jpg":      img,
+			".jpeg":     img,
+			".gif":      img,
+			".webp":     img,
+			".json":     code,
+			".toml":     code,
+			".yml":      code,
+			".yaml":     code,
+			".sh":       code,
 		},
 	}
 }
 
-// icon returns the glyph for an entry.
-func (s iconSet) icon(e fileEntry) string {
-	if e.name == ".." {
+// iconFor returns the glyph (ch + color) for an entry.
+func (s iconSet) iconFor(e fileEntry) glyph {
+	switch {
+	case e.name == "..":
 		return s.parent
-	}
-	if e.isDir {
+	case e.isDir:
 		return s.folder
 	}
 	if g, ok := s.byExt[strings.ToLower(filepath.Ext(e.name))]; ok {
@@ -50,3 +77,6 @@ func (s iconSet) icon(e fileEntry) string {
 	}
 	return s.file
 }
+
+// icon returns just the glyph string for an entry (back-compat).
+func (s iconSet) icon(e fileEntry) string { return s.iconFor(e).ch }

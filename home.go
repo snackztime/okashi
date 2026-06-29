@@ -143,9 +143,9 @@ func homeRows(items []homeItem, sel int, icons iconSet) (lines []string, itemRow
 		var icon string
 		switch it.kind {
 		case homeProject, homeOpenOther:
-			icon = icons.folder
+			icon = icons.folder.ch
 		case homeNewDocument, homeNewProject:
-			icon = icons.action
+			icon = icons.action.ch
 		default:
 			icon = icons.icon(fileEntry{name: it.label})
 		}

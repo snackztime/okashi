@@ -11,6 +11,17 @@ var (
 	subtle = lipgloss.Color("#6C6C6C")
 )
 
+// Per-type icon colors (Dracula palette). The base palette above is unchanged.
+var (
+	iconFolderColor  = lipgloss.Color("#8be9fd") // cyan
+	iconParentColor  = lipgloss.Color("#6272a4") // comment grey
+	iconTextColor    = lipgloss.Color("#f8f8f2") // foreground
+	iconPdfColor     = lipgloss.Color("#ff5555") // red
+	iconImageColor   = lipgloss.Color("#50fa7b") // green
+	iconCodeColor    = lipgloss.Color("#f1fa8c") // yellow
+	iconGenericColor = lipgloss.Color("#6272a4") // comment grey
+)
+
 var bannerStyle = lipgloss.NewStyle().
 	Foreground(accent).
 	Bold(true)
