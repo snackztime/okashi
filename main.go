@@ -316,16 +316,21 @@ func (m *model) syncDim() {
 }
 
 // applyDecorator sets the editor's Decorator from the current analysis toggles.
+// Spell decorations are always composed first.
 func (m *model) applyDecorator() {
+	a := m.analysis
+	posOn := a.adverb || a.adjective || a.passive
 	switch {
-	case m.analysis.spell && m.analysis.syntax:
+	case a.spell && posOn:
 		m.editor.Decorator = func(line string) []textarea.Decoration {
-			return append(spellDecorator(line), syntaxDecorator(line)...)
+			return append(spellDecorator(line), posDecorator(line, a.adverb, a.adjective, a.passive)...)
 		}
-	case m.analysis.spell:
+	case a.spell:
 		m.editor.Decorator = spellDecorator
-	case m.analysis.syntax:
-		m.editor.Decorator = syntaxDecorator
+	case posOn:
+		m.editor.Decorator = func(line string) []textarea.Decoration {
+			return posDecorator(line, a.adverb, a.adjective, a.passive)
+		}
 	default:
 		m.editor.Decorator = nil
 	}
@@ -503,13 +508,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			localX := msg.X - (m.width - inspectorWidth) - 2
 			if localX >= 0 {
 				if row, ok := inspectorAnalysisRowAtY(msg.Y); ok {
-					if row == 0 {
+					switch row {
+					case 0:
 						m.analysis.spell = !m.analysis.spell
-						m.applyDecorator()
-					} else if row == 1 {
-						m.analysis.syntax = !m.analysis.syntax
-						m.applyDecorator()
+					case 1:
+						m.analysis.adverb = !m.analysis.adverb
+					case 2:
+						m.analysis.adjective = !m.analysis.adjective
+					case 3:
+						m.analysis.passive = !m.analysis.passive
 					}
+					m.applyDecorator()
 					return m, nil
 				}
 			}
@@ -826,7 +835,7 @@ func (m model) View() string {
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
 		pg := m.goalsAll[m.files.dir].applyEnvDefaults()
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
-		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
+		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
 		cols = append(cols, inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)

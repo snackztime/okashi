@@ -11,6 +11,12 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+// inspectorInnerWidth returns the true inner content width of the inspector
+// panel — the value main.go must pass to View() and the click handlers must
+// use. It equals inspectorWidth (total column) minus the border (1) and both
+// horizontal padding cells (2) from inspectorStyle.
+func inspectorInnerWidth() int { return inspectorWidth - 3 }
+
 type inspectorTab int
 
 const (
@@ -74,16 +80,24 @@ type projStats struct {
 
 type goalStats struct{ today, dailyGoal, project, projectGoal int }
 
-type analysisState struct{ spell, syntax bool }
+type analysisState struct{ spell, adverb, adjective, passive bool }
 
-// spellRowY is the body row (within the inspector, y from the top) of the
-// Spellcheck checkbox: tab-bar(0) + blank(1) + "Analysis"(2) + blank(3) → 4.
-const spellRowY = 4
+// analysisRowY returns the inspector body row (y from the very top of the
+// inspector, row 0 = tab bar) for each Analysis checkbox:
+//
+//	0 → Spellcheck  (tab-bar(0) + blank(1) + header(2) + blank(3) = 4)
+//	1 → Adverb      (+ blank(5) + Syntax-header(6) = 7)
+//	2 → Adjective   (8)
+//	3 → Passive     (9)
+func analysisRowY(i int) int {
+	return [4]int{4, 7, 8, 9}[i]
+}
 
 func inspectorAnalysisRowAtY(localY int) (int, bool) {
-	row := localY - spellRowY
-	if row == 0 || row == 1 {
-		return row, true
+	for i := 0; i < 4; i++ {
+		if analysisRowY(i) == localY {
+			return i, true
+		}
 	}
 	return 0, false
 }
@@ -112,16 +126,34 @@ func progressBar(cur, goal, width int) string {
 	return "[" + bar + "]"
 }
 
-// inspectorTabAtX maps an x offset within the tab bar to a tab (chips are
-// " label " = len+2 wide). Mirrors the View tab-bar render.
+// tabBar renders the tab labels as a single row: labels separated by single
+// spaces, the active label highlighted via selectedStyle. Total width fits
+// within inspectorInnerWidth().
+func (in inspectorModel) tabBar() string {
+	var b strings.Builder
+	for i, t := range inspectorTabLabels() {
+		if i > 0 {
+			b.WriteString(lipgloss.NewStyle().Foreground(subtle).Render(" "))
+		}
+		if inspectorTab(i) == in.tab {
+			b.WriteString(selectedStyle.Render(t))
+		} else {
+			b.WriteString(lipgloss.NewStyle().Foreground(subtle).Render(t))
+		}
+	}
+	return b.String()
+}
+
+// inspectorTabAtX maps an x offset within the tab bar to a tab. Labels are
+// rendered as: label0 space label1 space label2 space label3 (no chip padding).
 func inspectorTabAtX(localX int) (inspectorTab, bool) {
 	x := 0
 	for i, t := range inspectorTabLabels() {
-		w := len(t) + 2
+		w := len(t)
 		if localX >= x && localX < x+w {
 			return inspectorTab(i), true
 		}
-		x += w
+		x += w + 1 // +1 for the separator space
 	}
 	return tabWords, false
 }
@@ -178,24 +210,18 @@ func kvRow(label string, n, width int) string {
 
 // View renders the tab bar + the active tab's body, fit to the given inner width.
 func (in inspectorModel) View(width int, doc docStats, proj projStats, outline string, goals goalStats, analysis analysisState) string {
-	var bar strings.Builder
-	for i, t := range inspectorTabLabels() {
-		chip := " " + t + " "
-		if inspectorTab(i) == in.tab {
-			bar.WriteString(selectedStyle.Render(chip))
-		} else {
-			bar.WriteString(lipgloss.NewStyle().Foreground(subtle).Render(chip))
-		}
-	}
-
 	var b strings.Builder
-	b.WriteString(bar.String())
+	b.WriteString(in.tabBar())
 	b.WriteString("\n\n")
 	switch in.tab {
 	case tabAnalysis:
 		b.WriteString(breadcrumbStyle.Render("Analysis") + "\n\n")
 		b.WriteString(checkbox(analysis.spell) + "Spellcheck\n")
-		b.WriteString(checkbox(analysis.syntax) + "Syntax")
+		b.WriteString("\n")
+		b.WriteString(breadcrumbStyle.Render("Syntax") + "\n")
+		b.WriteString(checkbox(analysis.adverb) + adverbStyle.Render("Adverb") + "\n")
+		b.WriteString(checkbox(analysis.adjective) + adjStyle.Render("Adjective") + "\n")
+		b.WriteString(checkbox(analysis.passive) + passiveStyle.Render("Passive/weak"))
 	case tabOutline:
 		b.WriteString(breadcrumbStyle.Render("Outline") + "\n\n")
 		b.WriteString(renderOutline(outline, width))
