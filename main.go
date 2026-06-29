@@ -16,6 +16,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/muesli/termenv"
 	"okashi/internal/textarea"
 )
@@ -1594,33 +1595,50 @@ func (m model) statusBar() string {
 	return m.composeStatus(m.status, stats)
 }
 
-// composeStatus lays out the bottom bar: the status message at the far left and
-// the stats centered over the editor pane (the area right of the sidebar).
+// composeStatus lays the stats at the editor text's left edge and the status
+// (last save/open) right-aligned to the text's right edge, within the editor
+// text column. Stats win if both don't fit.
 func (m model) composeStatus(status, stats string) string {
-	w := m.width - 2 // statusStyle adds one column of padding on each side
-	sw := lipgloss.Width(stats)
-	if w < 1 || sw >= w {
-		return status
-	}
+	showSidebar, _, editorArea := m.effectivePanels()
 	editorStart := 0
-	if m.sidebarVisible && sidebarWidth < m.width {
+	if showSidebar {
 		editorStart = sidebarWidth
 	}
-	// Center of the editor pane, in status content columns (content starts one
-	// column in because of the style's left padding, hence the -1).
-	center := editorStart + (m.width-editorStart)/2 - 1
-	left := center - sw/2
-	if left+sw > w {
-		left = w - sw
+	cw := min(m.colWidth, editorArea-2)
+	totalW := m.width - 2 // statusStyle pads one col each side
+	sw := lipgloss.Width(stats)
+	if cw < sw+1 || totalW < sw {
+		return stats // too narrow for the two-element layout
 	}
-	statusW := lipgloss.Width(status)
-	if left < statusW+1 {
-		left = statusW + 1
+	left := editorStart + (editorArea-cw)/2 - 1 // content col of the text's left edge
+	if left < 0 {
+		left = 0
 	}
-	if left+sw > w {
-		return status // no room for both
+	if left+sw > totalW {
+		left = totalW - sw
 	}
-	return status + strings.Repeat(" ", left-statusW) + stats
+	// status right-aligned to the text right edge (content col left+cw), truncated to fit.
+	avail := cw - sw - 1
+	st := status
+	if lipgloss.Width(st) > avail {
+		if avail <= 0 {
+			return strings.Repeat(" ", left) + stats
+		}
+		st = ansi.Truncate(st, avail, "…")
+	}
+	stW := lipgloss.Width(st)
+	statusStart := left + cw - stW
+	used := left + sw
+	if statusStart < used+1 {
+		statusStart = used + 1
+	}
+	if statusStart+stW > totalW {
+		statusStart = totalW - stW
+	}
+	if statusStart < used {
+		return strings.Repeat(" ", left) + stats
+	}
+	return strings.Repeat(" ", left) + stats + strings.Repeat(" ", statusStart-used) + st
 }
 
 func (m *model) save() {

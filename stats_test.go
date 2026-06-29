@@ -105,13 +105,18 @@ func TestStatusBarShowsStatusAndStats(t *testing.T) {
 	m.sessionBaseline = 0
 
 	bar := m.statusBar()
-	if !strings.HasPrefix(bar, "ready") {
-		t.Fatalf("bar should start with the status message: %q", bar)
-	}
-	// Stats are centered over the editor pane (precise centering is covered by
-	// TestStatsCenteredOnEditorPane); here just confirm they're present.
-	if !strings.Contains(bar, m.statsText()) {
+	// Stats are at the left edge of the editor text column; status is right-aligned
+	// to the text's right edge. Both must be present.
+	statsText := m.statsText()
+	if !strings.Contains(bar, statsText) {
 		t.Fatalf("bar should contain the stats readout: %q", bar)
+	}
+	if !strings.Contains(bar, "ready") {
+		t.Fatalf("bar should contain the status message: %q", bar)
+	}
+	// Stats must appear before status in the bar.
+	if strings.Index(bar, statsText) >= strings.Index(bar, "ready") {
+		t.Fatalf("stats must be left of status in bar: %q", bar)
 	}
 }
 
@@ -121,9 +126,10 @@ func TestStatusBarHidesStatsWhenNarrow(t *testing.T) {
 	m = nm.(model)
 	m.status = "a fairly long status message"
 
-	// No room for both — show the status message alone, no truncated stats.
-	if got := m.statusBar(); got != m.status {
-		t.Fatalf("narrow bar = %q, want just the status message", got)
+	// Too narrow for the two-element layout — stats win (shown alone).
+	got := m.statusBar()
+	if strings.Contains(got, m.status) {
+		t.Fatalf("narrow bar should not show the status message: %q", got)
 	}
 }
 

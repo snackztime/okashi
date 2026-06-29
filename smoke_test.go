@@ -870,17 +870,52 @@ func TestDimFollowsTypewriterAndToggle(t *testing.T) {
 	}
 }
 
-func TestStatsCenteredOnEditorPane(t *testing.T) {
+func TestStatsAtEditorTextLeftEdge(t *testing.T) {
 	m := initialModel()
 	m.width = 100
 	m.sidebarVisible = true
+	m.inspector.visible = false
 	stats := "✓ 1,240 words · +142 session"
 	bar := m.composeStatus("", stats)
 	leading := len(bar) - len(strings.TrimLeft(bar, " "))
-	sw := lipgloss.Width(stats)
-	want := sidebarWidth + (100-sidebarWidth)/2 - 1 - sw/2
+	// Stats should start at the editor text's left edge:
+	// editorArea = 100-sidebarWidth; cw = min(colWidth, editorArea-2)
+	_, _, editorArea := m.effectivePanels()
+	cw := min(m.colWidth, editorArea-2)
+	want := sidebarWidth + (editorArea-cw)/2 - 1
+	if want < 0 {
+		want = 0
+	}
 	if leading < want-1 || leading > want+1 {
-		t.Fatalf("stats start col = %d, want ~%d (centered over the editor pane)", leading, want)
+		t.Fatalf("stats start col = %d, want ~%d (at the editor text left edge)", leading, want)
+	}
+}
+
+func TestStatusBarLeftRight(t *testing.T) {
+	m := initialModel()
+	m.width = 120
+	m.height = 30
+	m.colWidth = 72
+	m.sidebarVisible = false
+	m.inspector.visible = false
+	stats := "✓ 1,240 words · +142 session"
+	out := ansi.Strip(m.composeStatus("saved draft.md", stats))
+	si := strings.Index(out, "1,240")
+	di := strings.Index(out, "saved")
+	if si < 0 || di < 0 {
+		t.Fatalf("both stats and status should render: %q", out)
+	}
+	if si >= di {
+		t.Fatalf("stats must be left of the status: stats@%d status@%d in %q", si, di, out)
+	}
+	// A very long status truncates rather than pushing the stats off / overrunning.
+	long := strings.Repeat("verylongmessage ", 20)
+	out2 := ansi.Strip(m.composeStatus(long, stats))
+	if !strings.Contains(out2, "1,240") {
+		t.Fatalf("stats must survive a long status: %q", out2)
+	}
+	if lipgloss.Width(out2) > m.width {
+		t.Fatalf("status row overflows width: %d > %d", lipgloss.Width(out2), m.width)
 	}
 }
 
