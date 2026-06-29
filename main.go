@@ -167,6 +167,8 @@ type model struct {
 	goalsAll        map[string]projectGoals
 	goalPromptField int // 0 off, 1 daily, 2 project
 
+	analysis analysisState
+
 	lastClickRow  int
 	lastClickTime time.Time
 
@@ -311,6 +313,16 @@ func sidebarRow(mouseY, bannerH, listHeight int) int {
 // typewriter AND dimEnabled.
 func (m *model) syncDim() {
 	m.editor.Dim = m.typewriter && m.dimEnabled
+}
+
+// applyDecorator sets the editor's Decorator from the current analysis toggles.
+// (Syntax composes here in the next cycle; for now only spellcheck.)
+func (m *model) applyDecorator() {
+	if m.analysis.spell {
+		m.editor.Decorator = spellDecorator
+	} else {
+		m.editor.Decorator = nil
+	}
 }
 
 // syncGoal rolls the current project's daily baseline over to today on the first
@@ -476,6 +488,20 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if localX >= 0 {
 				if tb, ok := inspectorTabAtX(localX); ok {
 					m.inspector.tab = tb
+					return m, nil
+				}
+			}
+		}
+
+		if showInspector && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && m.inspector.tab == tabAnalysis {
+			localX := msg.X - (m.width - inspectorWidth) - 2
+			if localX >= 0 {
+				if row, ok := inspectorAnalysisRowAtY(msg.Y); ok {
+					if row == 0 {
+						m.analysis.spell = !m.analysis.spell
+						m.applyDecorator()
+					}
+					// row 1 (Syntax) is wired next cycle.
 					return m, nil
 				}
 			}
@@ -792,7 +818,7 @@ func (m model) View() string {
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
 		pg := m.goalsAll[m.files.dir].applyEnvDefaults()
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
-		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir), gs, analysisState{})
+		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
 		cols = append(cols, inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
@@ -1097,6 +1123,7 @@ func (m *model) loadFile(path string) {
 	m.status = "opened " + filepath.Base(path)
 	addRecent(recentPath(), path)
 	m.dirty = false
+	m.applyDecorator()
 }
 
 // confirmCreate turns the typed name into a new file or folder in the current

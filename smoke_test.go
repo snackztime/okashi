@@ -1086,6 +1086,32 @@ func TestCtrlGSetsGoals(t *testing.T) {
 	}
 }
 
+func TestSpellcheckToggleViaAnalysisClick(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.inspector.visible = true
+	m.inspector.tab = tabAnalysis
+	m.layout()
+	if m.analysis.spell {
+		t.Fatal("spellcheck should default off")
+	}
+	// Click the Spellcheck checkbox row in the inspector body.
+	x := m.width - inspectorWidth + 4
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: spellRowY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if !m.analysis.spell {
+		t.Fatal("clicking the Spellcheck row should enable it")
+	}
+	if m.editor.Decorator == nil {
+		t.Fatal("enabling spellcheck should set the editor Decorator")
+	}
+}
+
 func TestInspectorTabClick(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
