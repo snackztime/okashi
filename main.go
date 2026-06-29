@@ -371,6 +371,27 @@ func (m *model) wordUnderCursor() (word string, start, end int, ok bool) {
 	return "", 0, 0, false
 }
 
+// cursorSpellHint returns the misspelled word under the cursor and its suggestions
+// for passive display, or ok=false. Active only when spellcheck is on, on the
+// writing screen, and no modal/prompt is up.
+func (m *model) cursorSpellHint() (word string, suggestions []string, ok bool) {
+	if !m.analysis.spell || m.screen != screenWriting {
+		return "", nil, false
+	}
+	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.previewing || m.exportPrompt {
+		return "", nil, false
+	}
+	w, _, _, found := m.wordUnderCursor()
+	if !found || spellOK(w) {
+		return "", nil, false
+	}
+	sugg := spellSuggest(w, 4)
+	if len(sugg) == 0 {
+		return "", nil, false
+	}
+	return w, sugg, true
+}
+
 // matchCase applies orig's capitalization pattern to sugg.
 func matchCase(orig, sugg string) string {
 	if orig == "" || sugg == "" {
@@ -1562,6 +1583,9 @@ func (m model) statusBar() string {
 			}
 		}
 		return "suggest ▸ " + strings.Join(parts, " · ")
+	}
+	if w, sugg, ok := m.cursorSpellHint(); ok {
+		return "✗ " + w + " → " + strings.Join(sugg, " · ") + "  ·  ^R"
 	}
 	if m.renaming {
 		return "rename ▸ " + m.nameInput.View()

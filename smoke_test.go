@@ -10,6 +10,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestPreviewToggle(t *testing.T) {
@@ -1201,5 +1202,65 @@ func TestSuggestMenuCorrectWordNoMenu(t *testing.T) {
 	m = nm.(model)
 	if m.suggesting {
 		t.Fatal("ctrl+r on a correct word should NOT open the menu")
+	}
+}
+
+func TestCursorSpellHint(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("teh cat"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.editor.MoveToLine(0)
+	m.editor.SetCursor(1) // inside "teh"
+
+	// Spell OFF → no hint.
+	m.analysis.spell = false
+	if _, _, ok := m.cursorSpellHint(); ok {
+		t.Fatal("no hint when spellcheck is off")
+	}
+	// Spell ON, cursor on misspelled word → hint with suggestions.
+	m.analysis.spell = true
+	w, sugg, ok := m.cursorSpellHint()
+	if !ok || w != "teh" || len(sugg) == 0 {
+		t.Fatalf("expected hint for teh, got w=%q sugg=%v ok=%v", w, sugg, ok)
+	}
+	// Cursor on a correct word → no hint.
+	m.editor.SetCursor(5) // inside "cat"
+	if _, _, ok := m.cursorSpellHint(); ok {
+		t.Fatal("no hint on a correctly-spelled word")
+	}
+	// Inside a modal → no hint even on the misspelled word.
+	m.editor.SetCursor(1)
+	m.suggesting = true
+	if _, _, ok := m.cursorSpellHint(); ok {
+		t.Fatal("no hint while the interactive menu is open")
+	}
+	m.suggesting = false
+	m.renaming = true
+	if _, _, ok := m.cursorSpellHint(); ok {
+		t.Fatal("no hint while renaming")
+	}
+	m.renaming = false
+}
+
+func TestStatusShowsSpellHint(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("teh cat"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.analysis.spell = true
+	m.editor.MoveToLine(0)
+	m.editor.SetCursor(1)
+	out := ansi.Strip(m.View())
+	if !strings.Contains(out, "✗ teh") || !strings.Contains(out, "the") {
+		t.Fatalf("status should show the spell hint for teh:\n%s", out)
 	}
 }
