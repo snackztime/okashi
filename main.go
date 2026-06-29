@@ -164,6 +164,9 @@ type model struct {
 
 	exportPrompt bool
 
+	goalsAll        map[string]projectGoals
+	goalPromptField int // 0 off, 1 daily, 2 project
+
 	lastClickRow  int
 	lastClickTime time.Time
 
@@ -213,8 +216,9 @@ func initialModel() model {
 		focus:          focusSidebar,
 		typewriter:     true,
 		dimEnabled:     true,
-		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+k binder · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+y inspector · ctrl+c quit",
+		status:         "ctrl+b sidebar · esc switch · ctrl+n new · r rename · ctrl+l outline · ctrl+k binder · ctrl+e export · ctrl+p preview · ctrl+t typewriter · ctrl+d dim · ctrl+s save · ctrl+y inspector · ctrl+g goals · ctrl+c quit",
 		icons:          resolveIcons(),
+		goalsAll:       loadGoals(goalsPath()),
 	}
 }
 
@@ -309,6 +313,21 @@ func (m *model) syncDim() {
 	m.editor.Dim = m.typewriter && m.dimEnabled
 }
 
+// syncGoal rolls the current project's daily baseline over to today on the first
+// writing activity each day, persisting only on change.
+func (m *model) syncGoal() {
+	pg := m.goalsAll[m.files.dir].applyEnvDefaults()
+	total := computeProjStats(m.files.dir, m.files.view, m.files.wc).words
+	pg, changed := rolloverIfNeeded(pg, total, today())
+	if m.goalsAll == nil {
+		m.goalsAll = map[string]projectGoals{}
+	}
+	m.goalsAll[m.files.dir] = pg
+	if changed {
+		saveGoals(goalsPath(), m.goalsAll)
+	}
+}
+
 func (m model) Init() tea.Cmd {
 	return autosaveTick()
 }
@@ -400,6 +419,46 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.goalPromptField != 0 {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.goalPromptField = 0
+				m.nameInput.Blur()
+				return m, nil
+			case "enter":
+				n, _ := strconv.Atoi(strings.TrimSpace(m.nameInput.Value()))
+				if m.goalsAll == nil {
+					m.goalsAll = map[string]projectGoals{}
+				}
+				pg := m.goalsAll[m.files.dir]
+				if m.goalPromptField == 1 {
+					if n >= 0 {
+						pg.DailyGoal = n
+					}
+					m.goalsAll[m.files.dir] = pg
+					m.goalPromptField = 2
+					m.nameInput.SetValue(strconv.Itoa(pg.applyEnvDefaults().ProjectGoal))
+					return m, nil
+				}
+				if n >= 0 {
+					pg.ProjectGoal = n
+				}
+				m.goalsAll[m.files.dir] = pg
+				saveGoals(goalsPath(), m.goalsAll)
+				m.goalPromptField = 0
+				m.nameInput.Blur()
+				m.status = "goals saved"
+				return m, nil
+			}
+		}
+		var cmd tea.Cmd
+		m.nameInput, cmd = m.nameInput.Update(msg)
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -486,6 +545,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		m.syncGoal()
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -569,6 +629,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+y":
 			m.inspector.cycle()
 			m.layout()
+			return m, nil
+		case "ctrl+g":
+			pg := m.goalsAll[m.files.dir].applyEnvDefaults()
+			m.goalPromptField = 1
+			m.nameInput.SetValue(strconv.Itoa(pg.DailyGoal))
+			m.nameInput.Focus()
 			return m, nil
 		case "esc":
 			if m.previewing {
@@ -713,7 +779,9 @@ func (m model) View() string {
 	if showInspector {
 		doc := computeDocStats(m.editor.Value())
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
-		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir), goalStats{})
+		pg := m.goalsAll[m.files.dir].applyEnvDefaults()
+		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
+		insInner := m.inspector.View(inspectorWidth-3, doc, proj, readOutlineDoc(m.files.dir), gs)
 		cols = append(cols, inspectorStyle.Width(inspectorWidth-1).Height(bodyH-2).Render(insInner))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
@@ -1324,6 +1392,12 @@ func (m model) statusBar() string {
 	}
 	if m.renaming {
 		return "rename ▸ " + m.nameInput.View()
+	}
+	if m.goalPromptField == 1 {
+		return "daily goal ▸ " + m.nameInput.View()
+	}
+	if m.goalPromptField == 2 {
+		return "project goal ▸ " + m.nameInput.View()
 	}
 	if m.exportPrompt {
 		return "export: m manuscript · t tufte · esc cancel"
