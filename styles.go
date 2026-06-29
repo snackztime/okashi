@@ -31,6 +31,11 @@ var sidebarStyle = lipgloss.NewStyle().
 	BorderForeground(subtle).
 	Padding(0, 1)
 
+var inspectorStyle = lipgloss.NewStyle().
+	Border(lipgloss.RoundedBorder(), false, false, false, true).
+	BorderForeground(subtle).
+	Padding(0, 1)
+
 var statusStyle = lipgloss.NewStyle().
 	Foreground(subtle).
 	Padding(0, 1)
