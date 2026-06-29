@@ -700,6 +700,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Click in the editor area positions the cursor (enables click-to-suggest).
+		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress {
+			showSidebar, showInspector, editorArea := m.effectivePanels()
+			editorStart := 0
+			if showSidebar {
+				editorStart = sidebarWidth
+			}
+			inEditor := msg.X >= editorStart && (!showInspector || msg.X < m.width-inspectorWidth) && msg.Y < m.height-1
+			if inEditor && !m.previewing {
+				cw := min(m.colWidth, editorArea-2)
+				textLeft := editorStart + (editorArea-cw)/2
+				m.editor.ClickTo(msg.Y, msg.X-textLeft)
+				m.focus = focusEditor
+				m.editor.Focus()
+				return m, nil
+			}
+		}
+
 		// Click selection / open is file-pane only.
 		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 			return m, nil

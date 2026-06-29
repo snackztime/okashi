@@ -1397,6 +1397,31 @@ func TestF1HelpToggle(t *testing.T) {
 	}
 }
 
+func TestEditorClickShowsSpellHint(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("the teh cat"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.analysis.spell = true
+	m.sidebarVisible = false
+	m.inspector.visible = false
+	m.layout()
+	// "the teh cat": "teh" is runes 4..7 on row 0. Editor text starts at editorStart + (editorArea-cw)/2.
+	_, _, editorArea := m.effectivePanels()
+	cw := min(m.colWidth, editorArea-2)
+	textLeft := (editorArea - cw) / 2 // editorStart 0 (no sidebar)
+	nm, _ = m.Update(tea.MouseMsg{X: textLeft + 5, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	w, _, ok := m.cursorSpellHint()
+	if !ok || w != "teh" {
+		t.Fatalf("clicking 'teh' should land the cursor in it; hint word=%q ok=%v (col=%d)", w, ok, m.editor.CursorColumn())
+	}
+}
+
 func TestPanelsFullHeight(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
