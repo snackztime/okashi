@@ -941,7 +941,7 @@ func (m model) View() string {
 		if m.files.dir == "" {
 			title = "Files"
 		}
-		cols = append(cols, framedPanel(title, m.files.View(), sidebarWidth, bodyH-2))
+		cols = append(cols, framedPanel(title, m.files.View(), sidebarWidth, bodyH))
 	}
 	cols = append(cols, lipgloss.Place(editorArea, bodyH, lipgloss.Center, lipgloss.Top, pane))
 	if showInspector {
@@ -951,7 +951,7 @@ func (m model) View() string {
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
 		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
 		title := inspectorTabLabels()[m.inspector.tab]
-		cols = append(cols, framedPanel(title, insInner, inspectorWidth, bodyH-2))
+		cols = append(cols, framedPanel(title, insInner, inspectorWidth, bodyH))
 	}
 	body := lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 
@@ -994,7 +994,7 @@ func (m *model) layout() {
 	showSidebar, _, editorArea := m.effectivePanels()
 	cw := min(m.colWidth, editorArea-2)
 	if showSidebar {
-		m.files.height = bodyH - 4 // framed: content height (panel bodyH-2 minus top+bottom border)
+		m.files.height = bodyH - 2 // framed: content height (panel bodyH minus top+bottom border)
 		m.files.width = sidebarWidth - 4
 	}
 	m.editor.SetWidth(cw)

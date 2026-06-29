@@ -1337,3 +1337,25 @@ func TestSidebarFramedClickAlignment(t *testing.T) {
 		t.Fatalf("clicking the on-screen %q row (y=%d) selected %q instead — geometry misaligned", target, wantRow, sel)
 	}
 }
+
+func TestPanelsFullHeight(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 30})
+	m = nm.(model)
+	m.sidebarVisible = true
+	m.inspector.visible = true
+	m.layout()
+	bodyH := m.height - 1
+	lines := strings.Split(ansi.Strip(m.View()), "\n")
+	// The sidebar's bottom border (╰) must be on the last body row (bodyH-1), i.e. flush with the editor.
+	if !strings.Contains(lines[bodyH-1], "╰") {
+		t.Fatalf("panels should be full height — bottom border expected on row %d:\n%s", bodyH-1, lines[bodyH-1])
+	}
+	if m.files.height != bodyH-2 {
+		t.Fatalf("files.height = %d, want bodyH-2 = %d", m.files.height, bodyH-2)
+	}
+}
