@@ -17,10 +17,90 @@ type homeKind int
 const (
 	homeRecentFile homeKind = iota
 	homeProject
+	homeFolder
 	homeNewDocument
 	homeNewProject
 	homeOpenOther
 )
+
+// homeFileItem is one document in the FILES column: display name, path, word count, and a
+// one-line opening snippet.
+type homeFileItem struct {
+	name, path, snippet string
+	words               int
+}
+
+// classifyLibrary splits the workspace's top-level subdirs into manuscripts (projects) and
+// plain category folders, alpha-sorted, excluding hidden dirs.
+func classifyLibrary(workspace string) (projects, folders []homeItem) {
+	entries, err := os.ReadDir(workspace)
+	if err != nil {
+		return
+	}
+	var names []string
+	for _, e := range entries {
+		if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+			names = append(names, e.Name())
+		}
+	}
+	sort.Strings(names)
+	for _, n := range names {
+		dir := filepath.Join(workspace, n)
+		if dirIsManuscript(dir) {
+			projects = append(projects, homeItem{kind: homeProject, label: n, path: dir})
+		} else {
+			folders = append(folders, homeItem{kind: homeFolder, label: n, path: dir})
+		}
+	}
+	return
+}
+
+// dirIsManuscript reports whether dir resolves as an ordered manuscript (manifest or legacy
+// numbered files) vs. a plain category folder.
+func dirIsManuscript(dir string) bool {
+	sub, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	var fes []fileEntry
+	for _, e := range sub {
+		if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+			fes = append(fes, fileEntry{name: e.Name()})
+		}
+	}
+	return resolveManuscript(dir, fes).ordered()
+}
+
+// homeFilesFor resolves a project/folder dir into its ordered documents (chapters in view
+// order then loose, or a category's docs), each with word count + snippet.
+func (m *model) homeFilesFor(dir string) []homeFileItem {
+	sub, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+	var fes []fileEntry
+	for _, e := range sub {
+		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if m.files.allowed[strings.ToLower(filepath.Ext(e.Name()))] {
+			fes = append(fes, fileEntry{name: e.Name()})
+		}
+	}
+	view := resolveManuscript(dir, fes)
+	mk := func(name, file string) homeFileItem {
+		p := filepath.Join(dir, file)
+		return homeFileItem{name: name, path: p, words: m.files.wc.count(p), snippet: m.snippets.get(p)}
+	}
+	var out []homeFileItem
+	for _, ch := range view.chapters {
+		out = append(out, mk(ch.title, ch.file))
+	}
+	for _, l := range view.loose {
+		out = append(out, mk(l.name, l.name))
+	}
+	return out
+}
 
 // homeRegion identifies a navigable group on the launch screen: the Projects
 // column, the Recent column, or the centered Actions below them.

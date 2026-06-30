@@ -118,3 +118,32 @@ func TestHomeContentAndHitTest(t *testing.T) {
 		t.Fatal("click at (0,0) should miss")
 	}
 }
+
+func TestClassifyLibraryAndFiles(t *testing.T) {
+	ws := t.TempDir()
+	os.MkdirAll(filepath.Join(ws, "my-novel"), 0o755)
+	os.WriteFile(filepath.Join(ws, "my-novel", "manifest.json"),
+		[]byte(`{"schemaVersion":1,"title":"My Novel","items":[{"file":"01-open.md","title":"Opening"}]}`), 0o644)
+	os.WriteFile(filepath.Join(ws, "my-novel", "01-open.md"), []byte("# Opening\n\nThe fog rolled in off the bay.\n"), 0o644)
+	os.WriteFile(filepath.Join(ws, "my-novel", "notes.md"), []byte("Loose notes.\n"), 0o644)
+	os.MkdirAll(filepath.Join(ws, "research"), 0o755)
+	os.WriteFile(filepath.Join(ws, "research", "sources.md"), []byte("Sources to read.\n"), 0o644)
+	os.MkdirAll(filepath.Join(ws, ".hidden"), 0o755)
+
+	projects, folders := classifyLibrary(ws)
+	if len(projects) != 1 || projects[0].label != "my-novel" || projects[0].kind != homeProject {
+		t.Fatalf("projects: %+v", projects)
+	}
+	if len(folders) != 1 || folders[0].label != "research" || folders[0].kind != homeFolder {
+		t.Fatalf("folders: %+v", folders)
+	}
+	m := initialModel()
+	files := m.homeFilesFor(filepath.Join(ws, "my-novel"))
+	if len(files) != 2 || files[0].name != "Opening" || files[0].words == 0 || files[0].snippet == "" {
+		t.Fatalf("project files: %+v", files)
+	}
+	cat := m.homeFilesFor(filepath.Join(ws, "research"))
+	if len(cat) != 1 || cat[0].name != "sources.md" {
+		t.Fatalf("category files: %+v", cat)
+	}
+}

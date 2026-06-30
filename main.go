@@ -155,11 +155,14 @@ type model struct {
 	nameInput textinput.Model
 	preview   viewport.Model
 
-	screen      screen
-	homeItems   []homeItem
-	homeRegion  homeRegion // launch screen: which column/group
-	homeIndex   int        // index within the region
-	homeLastCol homeRegion // last column visited (for up-out-of-Actions)
+	screen          screen
+	homeItems       []homeItem
+	homeRegion      homeRegion     // launch screen: which column/group
+	homeIndex       int            // index within the region
+	homeLastCol     homeRegion     // last column visited (for up-out-of-Actions)
+	homeFiles       []homeFileItem // FILES column: the selected library item's documents
+	librarySelected int            // index into projects+folders driving FILES
+	snippets        *snippetCache
 
 	sidebarVisible bool
 	inspector      inspectorModel
@@ -265,6 +268,7 @@ func initialModel() model {
 		goalsAll:       loadGoals(goalsPath()),
 		grammarChecker: newGrammarChecker(),
 		appleFindings:  map[string][]grammarFinding{},
+		snippets:       newSnippetCache(),
 	}
 	m.resetHomeSelection()
 	return m
