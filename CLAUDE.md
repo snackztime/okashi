@@ -153,6 +153,14 @@ both repos.
   (raised by the pure-Go PDF dep). **On this dev machine `go` is not on PATH — invoke it as
   `/opt/homebrew/bin/go`** (and `gofmt` likewise).
 - Build: `go build ./...`  ·  Run: `go run .`  ·  Test: `go test ./...`  ·  Vet: `go vet ./...`
+- **The default build is PURE-GO** (no cgo). An OPTIONAL on-device grammar backend (Tier 2:
+  NSSpellChecker + Apple Intelligence/Foundation Models) lives behind `//go:build darwin && cgo
+  && applegrammar` — `grammar_apple.{m,h}`, `grammar_apple_fm.swift`, `grammar_apple_darwin.go`;
+  a pure-Go stub (`grammar_apple_stub.go`) keeps the default build cgo-free. Build it with
+  `make apple` (compiles the Swift static lib + `go build -tags applegrammar`); macOS + Xcode
+  only. NEVER let cgo leak into the default build — everything routes through the `grammarChecker`
+  interface + the `newGrammarChecker` var. Distribution: pure-Go bottle everywhere + an
+  Apple-silicon bottle (Foundation Models gates at runtime via `okashi_fm_available`).
 - Key deps (all pure Go): `bubbletea`, `bubbles`, `lipgloss`, `glamour`, `x/ansi`,
   `yuin/goldmark` (parsing — shared-contract governed, pin it), `codeberg.org/go-pdf/fpdf`
   (PDF export — the maintained fork, NOT the archived `github.com/go-pdf/fpdf`), `x/text`
