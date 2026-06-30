@@ -1707,7 +1707,7 @@ func TestRightClickBlankRowDoesNothing(t *testing.T) {
 
 func TestGrammarCursorLineTracksLiveCursor(t *testing.T) {
 	old := lipgloss.ColorProfile()
-	lipgloss.SetColorProfile(0) // truecolor: grammar magenta emits an exact 38;2;255;121;198
+	lipgloss.SetColorProfile(0) // truecolor: grammar green emits an exact 38;2;80;250;123
 	t.Cleanup(func() { lipgloss.SetColorProfile(old) })
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("first line no period\nsecond line no period"), 0o644)
@@ -1719,12 +1719,12 @@ func TestGrammarCursorLineTracksLiveCursor(t *testing.T) {
 	m.loadFile(filepath.Join(dir, "01-a.md"))
 	m.analysis.grammar = true
 	m.applyDecorator()
-	// A row is "flagged" iff it carries the grammar magenta (38;2;255;121;198) —
-	// not just any SGR, since the cursor row always has the cursor's reverse video.
+	// A row is "flagged" iff it carries the grammar green (38;2;80;250;123) — not just
+	// any SGR, since the cursor row always has the cursor's reverse video.
 	flagged := func(view, lineText string) bool {
 		for _, row := range strings.Split(view, "\n") {
 			if strings.Contains(ansi.Strip(row), lineText) {
-				return strings.Contains(row, "255;121;198")
+				return strings.Contains(row, "80;250;123")
 			}
 		}
 		return false

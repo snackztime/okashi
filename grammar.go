@@ -9,7 +9,7 @@ import (
 	"okashi/internal/textarea"
 )
 
-var grammarStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff79c6")).Underline(true) // magenta
+var grammarStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#50fa7b")).Underline(true) // green — distinct from the red spellcheck underline
 
 var (
 	gramWord        = regexp.MustCompile(`\p{L}+`)
