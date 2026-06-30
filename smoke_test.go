@@ -1564,3 +1564,34 @@ func TestPlusStartsInPlaceCreate(t *testing.T) {
 		t.Fatal("clicking + should start an in-pane create")
 	}
 }
+
+func TestDeleteWithConfirm(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "doomed.md")
+	os.WriteFile(p, []byte("x"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	m.focus = focusSidebar
+	m.files.selectName("doomed.md")
+	// Delete key → confirm prompt, file still there.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	m = nm.(model)
+	if !m.deleting {
+		t.Fatal("Delete should open a confirm")
+	}
+	if _, err := os.Stat(p); err != nil {
+		t.Fatal("file must not be deleted before confirm")
+	}
+	// y confirms.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = nm.(model)
+	if _, err := os.Stat(p); !os.IsNotExist(err) {
+		t.Fatal("file should be gone after y")
+	}
+	if m.deleting {
+		t.Fatal("confirm should close after y")
+	}
+}

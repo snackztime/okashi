@@ -183,6 +183,9 @@ type model struct {
 	creatingInPane bool
 	renameTarget   renameTarget
 
+	deleting     bool
+	deleteTarget string
+
 	exportPrompt bool
 
 	goalsAll        map[string]projectGoals
@@ -538,6 +541,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.nameInput, cmd = m.nameInput.Update(msg)
 		return m, cmd
+	}
+
+	if m.deleting {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "y":
+				m.confirmDelete()
+				return m, nil
+			default:
+				m.deleting = false
+				m.status = "delete cancelled"
+				return m, nil
+			}
+		}
+		return m, nil
 	}
 
 	if m.exportPrompt {
@@ -968,21 +988,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 	} else if m.focus == focusSidebar && m.sidebarVisible {
 		if key, ok := msg.(tea.KeyMsg); ok {
-			switch key.String() {
-			case "up", "k":
-				m.files.moveBy(-1)
-			case "down", "j":
-				m.files.moveBy(1)
-			case "enter", "right", "l":
-				if path, ok := m.files.activate(); ok {
-					m.loadFile(path)
-					m.focus = focusEditor
-					m.editor.Focus()
+			if key.Type == tea.KeyDelete {
+				m.startDelete()
+			} else {
+				switch key.String() {
+				case "up", "k":
+					m.files.moveBy(-1)
+				case "down", "j":
+					m.files.moveBy(1)
+				case "enter", "right", "l":
+					if path, ok := m.files.activate(); ok {
+						m.loadFile(path)
+						m.focus = focusEditor
+						m.editor.Focus()
+					}
+				case "left", "h", "backspace":
+					m.files.SetDir(filepath.Dir(m.files.dir))
+				case "r":
+					m.startRename()
 				}
-			case "left", "h", "backspace":
-				m.files.SetDir(filepath.Dir(m.files.dir))
-			case "r":
-				m.startRename()
 			}
 		}
 	} else {
@@ -1517,6 +1541,54 @@ func (m *model) startRename() {
 	m.renamingInPane = true
 	m.nameInput.Width = m.files.width
 	m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir}, e.name)
+}
+
+// startDelete begins a delete confirmation for the selected sidebar entry.
+// Silently skips ".." and manifest.json; blocks manifest chapters.
+func (m *model) startDelete() {
+	if len(m.files.entries) == 0 {
+		return
+	}
+	e := m.files.entries[m.files.selected]
+	if e.name == ".." {
+		return
+	}
+	if e.name == manifestName {
+		m.status = "manifest.json is managed by wicklight"
+		return
+	}
+	v := m.files.view
+	if isChapterOf(v, e.name) && v.source == sourceManifest {
+		m.status = "chapter files are managed by wicklight"
+		return
+	}
+	m.deleting = true
+	m.deleteTarget = e.name
+	m.status = "delete '" + e.name + "'? [y]es · esc cancel"
+}
+
+// confirmDelete removes the deleteTarget file or folder and refreshes the sidebar.
+func (m *model) confirmDelete() {
+	path := filepath.Join(m.files.dir, m.deleteTarget)
+	info, err := os.Lstat(path)
+	if err == nil {
+		if info.IsDir() {
+			err = os.RemoveAll(path)
+		} else {
+			err = os.Remove(path)
+		}
+	}
+	m.deleting = false
+	m.deleteTarget = ""
+	if err != nil {
+		m.status = "couldn't delete: " + err.Error()
+		return
+	}
+	m.files.SetDir(m.files.dir)
+	if m.files.selected >= len(m.files.entries) && len(m.files.entries) > 0 {
+		m.files.selected = len(m.files.entries) - 1
+	}
+	m.status = "deleted"
 }
 
 // startRenameOutline begins renaming the selected outline row (section title or
