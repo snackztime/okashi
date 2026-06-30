@@ -56,7 +56,7 @@ func TestHomeViewUsesPerExtensionIconForRecents(t *testing.T) {
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
 	m.homeItems = []homeItem{{kind: homeRecentFile, label: "chapter.md", path: "/x/chapter.md"}}
-	m.homeSelected = 0
+	m.resetHomeSelection()
 	want := resolveIcons().icon(fileEntry{name: "chapter.md"})
 	if !strings.Contains(m.homeView(), want) {
 		t.Fatalf("recent row should use the .md glyph %q", want)
@@ -85,30 +85,36 @@ func TestBuildHomeItemsHasActions(t *testing.T) {
 	}
 }
 
-func TestHomeRowsAndHitTest(t *testing.T) {
-	items := []homeItem{
+func TestHomeContentAndHitTest(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "plain")
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 40})
+	m = nm.(model)
+	m.homeItems = []homeItem{
 		{kind: homeProject, label: "novel", path: "/p/novel"},
+		{kind: homeRecentFile, label: "ch.md", path: "/r/ch.md"},
 		{kind: homeNewDocument, label: "New document"},
 	}
-	ic := resolveIcons()
-	lines, itemRow, h := homeRows(items, 0, ic)
-	if h != len(lines) {
-		t.Fatalf("height %d != len(lines) %d", h, len(lines))
+	m.resetHomeSelection()
+
+	lines, cells, blockW := m.homeContent()
+	if blockW <= 0 || len(lines) == 0 {
+		t.Fatalf("homeContent: blockW=%d lines=%d", blockW, len(lines))
 	}
-	if len(itemRow) != len(items) {
-		t.Fatalf("itemRow should have one entry per item, got %d", len(itemRow))
+	// One clickable cell per item (project, recent, action).
+	if len(cells) != 3 {
+		t.Fatalf("want 3 cells, got %d", len(cells))
 	}
-	if itemRow[0] >= itemRow[1] {
-		t.Fatal("item rows should be strictly increasing")
+	// Each cell's screen coords must hit-test back to itself (render == hit-test).
+	for _, c := range cells {
+		x, y := homeCellXY(m, c.region, c.index)
+		r, idx, ok := m.homeItemAt(x, y)
+		if !ok || r != c.region || idx != c.index {
+			t.Fatalf("hit-test of (region %d, idx %d) → (%d,%d,%v)", c.region, c.index, r, idx, ok)
+		}
 	}
-	// A click on item 0's content row (centered in a tall screen) hits item 0.
-	screenH := 40
-	off := (screenH - h) / 2
-	if got := homeItemAtY(items, 0, ic, screenH, off+itemRow[0]); got != 0 {
-		t.Fatalf("hit-test at item 0's row = %d, want 0", got)
-	}
-	// A click on a non-item row (row 0 of content = a header/logo area) misses.
-	if got := homeItemAtY(items, 0, ic, screenH, off+0); got == 0 && itemRow[0] != 0 {
-		t.Fatal("hit-test on a non-item row should not return item 0")
+	// Top-left (logo area) misses.
+	if _, _, ok := m.homeItemAt(0, 0); ok {
+		t.Fatal("click at (0,0) should miss")
 	}
 }

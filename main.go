@@ -155,9 +155,11 @@ type model struct {
 	nameInput textinput.Model
 	preview   viewport.Model
 
-	screen       screen
-	homeItems    []homeItem
-	homeSelected int
+	screen      screen
+	homeItems   []homeItem
+	homeRegion  homeRegion // launch screen: which column/group
+	homeIndex   int        // index within the region
+	homeLastCol homeRegion // last column visited (for up-out-of-Actions)
 
 	sidebarVisible bool
 	inspector      inspectorModel
@@ -242,7 +244,7 @@ func initialModel() model {
 
 	vp := viewport.New(defaultColumnWidth, 1) // real size set in layout()
 
-	return model{
+	m := model{
 		files:          fl,
 		editor:         ta,
 		nameInput:      ti,
@@ -262,6 +264,8 @@ func initialModel() model {
 		grammarChecker: newGrammarChecker(),
 		appleFindings:  map[string][]grammarFinding{},
 	}
+	m.resetHomeSelection()
+	return m
 }
 
 // previewStyle picks the glamour theme for the markdown preview. It's resolved
@@ -1004,7 +1008,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.previewing = false
 			m.screen = screenHome
 			m.homeItems = buildHomeItems(loadRecents(recentPath()), writingDir())
-			m.homeSelected = 0
+			m.resetHomeSelection()
 			return m, nil
 		case "ctrl+n":
 			m.startInPaneCreate()

@@ -307,7 +307,7 @@ func TestHomeOpenProjectAndCtrlOReturns(t *testing.T) {
 	// Create a project path within the workspace root.
 	projPath := filepath.Join(m.files.root, "testproject")
 	m.homeItems = []homeItem{{kind: homeProject, label: "testproject", path: projPath}}
-	m.homeSelected = 0
+	m.resetHomeSelection()
 
 	// Enter on a project → writing mode, sidebar displays the project.
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -415,12 +415,13 @@ func TestLaunchStartsOnHomeAndNavigates(t *testing.T) {
 		{kind: homeProject, label: "novel", path: "/p/novel"},
 		{kind: homeOpenOther, label: "Open another folder…"},
 	}
-	m.homeSelected = 0
+	m.resetHomeSelection()
 
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = nm.(model)
-	if m.homeSelected != 1 {
-		t.Fatalf("down should move selection to 1, got %d", m.homeSelected)
+	// Down from the single project flows into the Actions block below.
+	if m.homeRegion != regionActions || m.homeIndex != 0 {
+		t.Fatalf("down should move into Actions, got region=%d index=%d", m.homeRegion, m.homeIndex)
 	}
 	view := m.View()
 	if !strings.Contains(view, "novel") {
@@ -664,7 +665,7 @@ func TestHubNewProjectOpensFolderPrompt(t *testing.T) {
 	t.Setenv("OKASHI_DIR", t.TempDir())
 	m := initialModel()
 	m.homeItems = []homeItem{{kind: homeNewProject, label: "New project"}}
-	m.homeSelected = 0
+	m.resetHomeSelection()
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(model)
 	if m.screen != screenWriting {
@@ -679,7 +680,7 @@ func TestHubNewDocumentOpensFilePrompt(t *testing.T) {
 	t.Setenv("OKASHI_DIR", t.TempDir())
 	m := initialModel()
 	m.homeItems = []homeItem{{kind: homeNewDocument, label: "New document"}}
-	m.homeSelected = 0
+	m.resetHomeSelection()
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(model)
 	if !m.creatingFile || m.creatingFolder {
@@ -699,11 +700,30 @@ func TestOpenProjectKeepsWorkspaceRoot(t *testing.T) {
 	}
 	proj := filepath.Join(want, "someproject")
 	m.homeItems = []homeItem{{kind: homeProject, label: "someproject", path: proj}}
-	m.homeSelected = 0
+	m.resetHomeSelection()
 	m.openHomeSelection()
 	if m.files.root != want {
 		t.Fatalf("opening a project must keep the workspace root %q, got %q", want, m.files.root)
 	}
+}
+
+// homeCellXY returns the absolute screen (x,y) of a launch cell, mirroring homeItemAt.
+func homeCellXY(m model, r homeRegion, idx int) (int, int) {
+	lines, cells, blockW := m.homeContent()
+	xoff := (m.width - blockW) / 2
+	yoff := (m.height - len(lines)) / 2
+	if xoff < 0 {
+		xoff = 0
+	}
+	if yoff < 0 {
+		yoff = 0
+	}
+	for _, c := range cells {
+		if c.region == r && c.index == idx {
+			return xoff + c.x0, yoff + c.row
+		}
+	}
+	return -1, -1
 }
 
 func TestHomeMouseWheelMovesSelection(t *testing.T) {
@@ -714,17 +734,17 @@ func TestHomeMouseWheelMovesSelection(t *testing.T) {
 		{kind: homeProject, label: "novel", path: "/p/novel"},
 		{kind: homeNewDocument, label: "New document"},
 	}
-	m.homeSelected = 0
+	m.resetHomeSelection() // → Projects[0]
 
 	nm, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
 	m = nm.(model)
-	if m.homeSelected != 1 {
-		t.Fatalf("wheel down should move selection to 1, got %d", m.homeSelected)
+	if m.homeRegion != regionActions || m.homeIndex != 0 {
+		t.Fatalf("wheel down should flow into Actions, got region=%d index=%d", m.homeRegion, m.homeIndex)
 	}
 	nm, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
 	m = nm.(model)
-	if m.homeSelected != 0 {
-		t.Fatalf("wheel up should move selection back to 0, got %d", m.homeSelected)
+	if m.homeRegion != regionProjects || m.homeIndex != 0 {
+		t.Fatalf("wheel up should return to the project, got region=%d index=%d", m.homeRegion, m.homeIndex)
 	}
 }
 
@@ -737,18 +757,14 @@ func TestHomeMouseClickSelectsItem(t *testing.T) {
 		{kind: homeProject, label: "novel", path: "/p/novel"},
 		{kind: homeNewDocument, label: "New document"},
 	}
-	m.homeSelected = 0
+	m.resetHomeSelection()
 
-	// Compute the Y coordinate for item 1 using homeRows, as the handler does.
-	_, itemRow, h := homeRows(m.homeItems, m.homeSelected, m.icons)
-	off := (m.height - h) / 2
-
-	// Single click on item 1 should select it without activating.
-	click := tea.MouseMsg{X: 10, Y: off + itemRow[1], Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
-	nm, _ = m.Update(click)
+	// Single click on the New-document action (Actions[0]) selects it without activating.
+	x, y := homeCellXY(m, regionActions, 0)
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = nm.(model)
-	if m.homeSelected != 1 {
-		t.Fatalf("click should select item 1, got %d", m.homeSelected)
+	if m.homeRegion != regionActions || m.homeIndex != 0 {
+		t.Fatalf("click should select Actions[0], got region=%d index=%d", m.homeRegion, m.homeIndex)
 	}
 	if m.screen != screenHome {
 		t.Fatal("single click should not leave the home screen")
@@ -764,19 +780,17 @@ func TestHomeMouseDoubleClickActivates(t *testing.T) {
 		{kind: homeProject, label: "novel", path: t.TempDir()},
 		{kind: homeNewDocument, label: "New document"},
 	}
-	m.homeSelected = 0
+	m.resetHomeSelection()
 
-	// Compute the Y coordinate for item 0 using homeRows.
-	_, itemRow, h := homeRows(m.homeItems, m.homeSelected, m.icons)
-	off := (m.height - h) / 2
-
-	click := tea.MouseMsg{X: 10, Y: off + itemRow[0], Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
+	// Click coordinates for the project cell (Projects[0]).
+	x, y := homeCellXY(m, regionProjects, 0)
+	click := tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 
 	// First click selects but doesn't activate.
 	nm, _ = m.Update(click)
 	m = nm.(model)
-	if m.homeSelected != 0 {
-		t.Fatalf("first click should select item 0, got %d", m.homeSelected)
+	if m.homeRegion != regionProjects || m.homeIndex != 0 {
+		t.Fatalf("first click should select Projects[0], got region=%d index=%d", m.homeRegion, m.homeIndex)
 	}
 	if m.screen != screenHome {
 		t.Fatal("first click should stay on home")
