@@ -54,6 +54,7 @@ ctrl+d   focus dim
 ctrl+s   save
 ctrl+g   set goals
 ctrl+r   spelling suggestions
+ctrl+f   search
 ctrl+o   home
 esc      switch focus / back
 ctrl+c   quit`
@@ -134,7 +135,15 @@ const (
 	screenWriting
 	screenOutline
 	screenManuscript
+	screenSearch
 )
+
+const (
+	scopeProject = iota
+	scopeDocument
+)
+
+const searchLimit = 200
 
 // renameTarget is the item a pending rename prompt will rename.
 type renameTarget struct {
@@ -163,6 +172,14 @@ type model struct {
 	homeFiles       []homeFileItem // FILES column: the selected library item's documents
 	librarySelected int            // index into projects+folders driving FILES
 	snippets        *snippetCache
+
+	searchInput     textinput.Model
+	searchScope     int // scopeProject | scopeDocument
+	searchHits      []searchHit
+	searchSel       int
+	searchOffset    int
+	searchHighlight string // transient: highlight this query on the editor's visible lines
+	searchReturn    screen // where ctrl+f was invoked from (esc returns here)
 
 	sidebarVisible bool
 	inspector      inspectorModel
@@ -269,6 +286,7 @@ func initialModel() model {
 		grammarChecker: newGrammarChecker(),
 		appleFindings:  map[string][]grammarFinding{},
 		snippets:       newSnippetCache(),
+		searchInput:    newSearchInput(),
 	}
 	m.resetHomeSelection()
 	return m
@@ -428,9 +446,12 @@ func (m *model) applyDecorator() {
 		if posOn {
 			d = append(d, posDecorator(line, a.adverb, a.adjective, a.passive)...)
 		}
+		if m.searchHighlight != "" {
+			d = append(d, searchDecorator(line, m.searchHighlight)...)
+		}
 		return d
 	}
-	if a.spell || grammarOn || posOn {
+	if a.spell || grammarOn || posOn || m.searchHighlight != "" {
 		m.editor.Decorator = build
 	} else {
 		m.editor.Decorator = nil
@@ -440,8 +461,12 @@ func (m *model) applyDecorator() {
 // invalidateAppleFindings drops the cached Apple (Tier 2) findings for the current file;
 // their rune offsets no longer match once the text changes. Re-run "Check grammar" to refresh.
 func (m *model) invalidateAppleFindings() {
-	if len(m.appleFindings[m.currentFile]) > 0 {
-		delete(m.appleFindings, m.currentFile)
+	// The on-edit hook: drop stale Apple findings AND the transient search highlight, then
+	// refresh the decorator if either was active.
+	had := len(m.appleFindings[m.currentFile]) > 0 || m.searchHighlight != ""
+	delete(m.appleFindings, m.currentFile)
+	m.searchHighlight = ""
+	if had {
 		m.applyDecorator()
 	}
 }
@@ -669,6 +694,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenManuscript {
 		return m.updateManuscript(msg)
+	}
+
+	if m.screen == screenSearch {
+		return m.updateSearch(msg)
 	}
 
 	// While naming a new file, the prompt captures all input.
@@ -1047,6 +1076,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.homeItems = buildHomeItems(loadRecents(recentPath()), writingDir())
 			m.resetHomeSelection()
 			return m, nil
+		case "ctrl+f":
+			m.searchReturn = m.screen
+			m.screen = screenSearch
+			m.searchScope = scopeProject
+			m.searchInput.SetValue(m.wordUnderCursorOrEmpty())
+			m.searchInput.CursorEnd()
+			m.searchInput.Focus()
+			m.recomputeSearch()
+			return m, textinput.Blink
 		case "ctrl+n":
 			m.startInPaneCreate()
 			return m, textinput.Blink
@@ -1269,6 +1307,10 @@ func (m model) View() string {
 
 	if m.screen == screenManuscript {
 		return m.pagerView()
+	}
+
+	if m.screen == screenSearch {
+		return m.searchView()
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone
