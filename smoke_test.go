@@ -1872,3 +1872,25 @@ func TestAppleFindingsInvalidatedOnEdit(t *testing.T) {
 		t.Fatal("editing the text should invalidate Apple findings")
 	}
 }
+
+func TestAppleFindingsInvalidatedOnListContinuation(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("- item one"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 10})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.analysis.grammar = true
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.editor.MoveToLine(0)
+	m.editor.SetCursor(len([]rune("- item one"))) // line end → list continuation fires
+	m.appleFindings[m.currentFile] = []grammarFinding{{Line: 0, Start: 2, End: 6, Message: "x"}}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if len(m.appleFindings[m.currentFile]) != 0 {
+		t.Fatal("list auto-continuation must invalidate Apple findings (offsets shift)")
+	}
+}

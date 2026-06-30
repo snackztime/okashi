@@ -288,11 +288,14 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 		b.WriteString("  " + checkbox(analysis.adjective) + adjStyle.Render("Adjective") + "\n")
 		b.WriteString("  " + checkbox(analysis.passive) + passiveStyle.Render("Passive/weak"))
 		if analysis.grammar && in.grammarBackend != "" {
-			action := "▸ Check grammar (" + in.grammarBackend + ")"
 			if in.grammarChecking {
-				action = "checking grammar…"
+				b.WriteString("\n\n  checking grammar…")
+			} else {
+				// Action row at analysisActionRowY; backend name on a dim line below so
+				// a long name ("Apple Intelligence") never overflows the panel/action row.
+				b.WriteString("\n\n  ▸ Check grammar\n  " +
+					lipgloss.NewStyle().Foreground(subtle).Render(in.grammarBackend))
 			}
-			b.WriteString("\n\n  " + action)
 		}
 	case tabOutline:
 		b.WriteString(sectionHeader("Outline", width) + "\n\n")

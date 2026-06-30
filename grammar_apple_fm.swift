@@ -44,6 +44,6 @@ public func okashi_fm_proofread(_ ctext: UnsafePointer<CChar>) -> UnsafeMutableP
         }
         sem.signal()
     }
-    sem.wait()
+    _ = sem.wait(timeout: .now() + 30) // bound a hung model; empty result on timeout
     return strdup(json)
 }

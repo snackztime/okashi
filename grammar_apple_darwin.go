@@ -34,6 +34,7 @@ func (spellChecker) Available() bool { return true }
 
 func (spellChecker) Check(text string) ([]grammarFinding, error) {
 	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	cs := C.CString(text)
 	defer C.free(unsafe.Pointer(cs))
 	var n C.int
@@ -70,6 +71,7 @@ func (fmChecker) Available() bool { return C.okashi_fm_available() == 1 }
 
 func (fmChecker) Check(text string) ([]grammarFinding, error) {
 	runtime.LockOSThread()
+	defer runtime.UnlockOSThread()
 	cs := C.CString(text)
 	defer C.free(unsafe.Pointer(cs))
 	out := C.okashi_fm_proofread(cs)
@@ -78,23 +80,37 @@ func (fmChecker) Check(text string) ([]grammarFinding, error) {
 	}
 	defer C.free(unsafe.Pointer(out))
 	var parsed struct {
-		Issues []struct{ Wrong, Fix, Reason string } `json:"issues"`
+		Issues []struct {
+			Wrong  string `json:"wrong"`
+			Fix    string `json:"fix"`
+			Reason string `json:"reason"`
+		} `json:"issues"`
 	}
 	if err := json.Unmarshal([]byte(C.GoString(out)), &parsed); err != nil {
 		return nil, err
 	}
 	lines := strings.Split(text, "\n")
 	var findings []grammarFinding
+	// The model returns the wrong substring verbatim, not an offset. Locate each in
+	// document order, claiming successive occurrences so a word repeated on a line maps
+	// to distinct spans. LIMITATION: if the model reorders issues, or the same substring
+	// occurs before the flagged instance, the underline may land on the wrong occurrence;
+	// re-running the check refines it.
+	claimedFrom := map[int]int{} // line index → byte offset to resume searching from
 	for _, is := range parsed.Issues {
 		if is.Wrong == "" {
 			continue
 		}
-		// The model returns the wrong substring verbatim; locate it for offsets.
 		for li, ln := range lines {
-			idx := strings.Index(ln, is.Wrong)
-			if idx < 0 {
+			from := claimedFrom[li]
+			if from > len(ln) {
 				continue
 			}
+			rel := strings.Index(ln[from:], is.Wrong)
+			if rel < 0 {
+				continue
+			}
+			idx := from + rel
 			sc := len([]rune(ln[:idx]))
 			ec := sc + len([]rune(is.Wrong))
 			findings = append(findings, grammarFinding{
@@ -102,6 +118,7 @@ func (fmChecker) Check(text string) ([]grammarFinding, error) {
 				Message:      is.Reason,
 				Replacements: []string{is.Fix},
 			})
+			claimedFrom[li] = idx + len(is.Wrong)
 			break
 		}
 	}

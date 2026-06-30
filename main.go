@@ -888,7 +888,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editor.ClickTo(msg.Y, msg.X-textLeft)
 				m.focus = focusEditor
 				m.editor.Focus()
-				m.maybeOpenAppleSuggestion() // click an Apple-flagged span → suggestion bar
+				if !m.maybeOpenAppleSuggestion() { // click a flagged span → suggestion bar;
+					m.suggesting = false // otherwise dismiss any open bar
+				}
 				return m, nil
 			}
 		}
@@ -1129,6 +1131,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.dirty = true
 				m.lastEditAt = time.Now()
+				m.invalidateAppleFindings() // buffer mutated — offsets/line indices shift
 				return m, nil
 			}
 		}
