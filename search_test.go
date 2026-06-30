@@ -107,3 +107,15 @@ func TestSearchScreenFlow(t *testing.T) {
 		t.Fatal("editing should clear the search highlight")
 	}
 }
+
+func TestSearchExpandingFold(t *testing.T) {
+	// Ⱥ (U+023A, 2 bytes) folds to ⱥ (U+2C65, 3 bytes): byte offsets from the fold must
+	// NOT index the original — previously panicked.
+	hits := searchText("a.md", "/p/a.md", "ȺȺx here", "x", 10)
+	if len(hits) != 1 || hits[0].col != 2 { // rune index of 'x' after two Ⱥ
+		t.Fatalf("expanding-fold column wrong: %+v", hits)
+	}
+	// the decorator + highlighter must not panic on the same input
+	_ = searchDecorator("ȺȺx", "x")
+	_ = highlightQuery("ȺȺx and X again", "x", 40)
+}

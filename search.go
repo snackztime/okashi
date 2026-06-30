@@ -41,7 +41,9 @@ func searchText(name, path, text, query string, limit int) []searchHit {
 			byteCol := from + idx
 			hits = append(hits, searchHit{
 				file: path, name: name, line: li,
-				col:     len([]rune(line[:byteCol])),
+				// Rune index is invariant under ToLower, but byte length is NOT (Ⱥ→ⱥ grows
+				// 2→3 bytes), so derive the column from the folded string, never `line`.
+				col:     len([]rune(low[:byteCol])),
 				context: strings.TrimSpace(line),
 			})
 			if len(hits) >= limit {
@@ -131,8 +133,9 @@ func searchDecorator(line, query string) []textarea.Decoration {
 			break
 		}
 		bc := from + idx
-		rs := len([]rune(line[:bc]))
-		re := rs + len([]rune(line[bc:bc+len(q)]))
+		// Rune indices from the folded string (ToLower preserves rune count, not bytes).
+		rs := len([]rune(low[:bc]))
+		re := rs + len([]rune(low[bc:bc+len(q)]))
 		d = append(d, textarea.Decoration{Start: rs, End: re, Style: searchHitStyle})
 		from = bc + len(q)
 	}
@@ -303,18 +306,24 @@ func highlightQuery(context, q string, w int) string {
 	}
 	low := strings.ToLower(context)
 	lq := strings.ToLower(strings.TrimSpace(q))
+	cr := []rune(context) // emit ORIGINAL-case text, sliced by rune index
 	var b strings.Builder
+	prev := 0
 	for from := 0; ; {
 		idx := strings.Index(low[from:], lq)
 		if idx < 0 {
-			b.WriteString(context[from:])
 			break
 		}
 		bc := from + idx
-		b.WriteString(context[from:bc])
-		b.WriteString(searchHitStyle.Render(context[bc : bc+len(lq)]))
+		// Byte offsets in `low` → rune indices (invariant under ToLower); slice `cr` by rune.
+		start := len([]rune(low[:bc]))
+		end := start + len([]rune(low[bc:bc+len(lq)]))
+		b.WriteString(string(cr[prev:start]))
+		b.WriteString(searchHitStyle.Render(string(cr[start:end])))
+		prev = end
 		from = bc + len(lq)
 	}
+	b.WriteString(string(cr[prev:]))
 	return b.String()
 }
 

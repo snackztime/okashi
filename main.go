@@ -1085,6 +1085,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resetHomeSelection()
 			return m, nil
 		case "ctrl+f":
+			m.previewing = false // leave preview if active
 			m.searchReturn = m.screen
 			m.screen = screenSearch
 			m.searchScope = scopeProject
