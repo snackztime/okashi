@@ -2047,3 +2047,35 @@ func TestHomeEdgeStatesAndResponsive(t *testing.T) {
 		}
 	}
 }
+
+func TestHomeFocusFollowsVisibleColumns(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	items := []homeItem{
+		{kind: homeRecentFile, label: "a.md", path: "/x/a.md"},
+		{kind: homeProject, label: "novel", path: t.TempDir()},
+		{kind: homeNewDocument, label: "New document"},
+	}
+	// Reset on a narrow terminal that drops RECENT → focus must be a visible column.
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 70, Height: 24})
+	m = nm.(model)
+	m.homeItems = items
+	m.resetHomeSelection()
+	if !m.regionVisible(m.homeRegion) {
+		t.Fatalf("narrow reset focused a hidden region %d (visible=%v)", m.homeRegion, m.visibleRegions())
+	}
+	// Resizing wide→narrow must refocus off a now-hidden column.
+	m2 := initialModel()
+	nm, _ = m2.Update(tea.WindowSizeMsg{Width: 90, Height: 24})
+	m2 = nm.(model)
+	m2.homeItems = items
+	m2.resetHomeSelection() // RECENT focused at width 90
+	if m2.homeRegion != regionRecent {
+		t.Fatalf("wide reset should focus RECENT, got %d", m2.homeRegion)
+	}
+	nm, _ = m2.Update(tea.WindowSizeMsg{Width: 70, Height: 24})
+	m2 = nm.(model)
+	if !m2.regionVisible(m2.homeRegion) {
+		t.Fatal("resize left focus on a hidden region")
+	}
+}

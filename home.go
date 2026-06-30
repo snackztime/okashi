@@ -65,7 +65,10 @@ func dirIsManuscript(dir string) bool {
 	}
 	var fes []fileEntry
 	for _, e := range sub {
-		if !e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if allowedDocExts[strings.ToLower(filepath.Ext(e.Name()))] { // match homeFilesFor
 			fes = append(fes, fileEntry{name: e.Name()})
 		}
 	}
@@ -201,6 +204,37 @@ func (m model) regionCount(r homeRegion) int {
 	}
 }
 
+// visibleRegions returns the regions actually rendered at the current width (per
+// homeColumns) plus Actions — the single source nav and reset both consult so they can
+// never focus a column the render dropped. Width 0 (unsized) treats all as visible.
+func (m model) visibleRegions() []homeRegion {
+	if m.width <= 0 {
+		return []homeRegion{regionRecent, regionLibrary, regionFiles, regionActions}
+	}
+	regs, _, _ := m.homeColumns()
+	return append(regs, regionActions)
+}
+
+// visibleCols is visibleRegions without Actions (the rendered columns).
+func (m model) visibleCols() []homeRegion {
+	var out []homeRegion
+	for _, r := range m.visibleRegions() {
+		if r != regionActions {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func (m model) regionVisible(r homeRegion) bool {
+	for _, v := range m.visibleRegions() {
+		if v == r {
+			return true
+		}
+	}
+	return false
+}
+
 // recomputeHomeFiles fills the FILES column from the selected library item.
 func (m *model) recomputeHomeFiles() {
 	lib := m.library()
@@ -218,21 +252,38 @@ func (m *model) resetHomeSelection() {
 		m.librarySelected = 0
 	}
 	m.recomputeHomeFiles()
-	switch {
-	case m.regionCount(regionRecent) > 0:
-		m.homeRegion = regionRecent
-	case m.regionCount(regionLibrary) > 0:
-		m.homeRegion = regionLibrary
-	case m.regionCount(regionFiles) > 0:
-		m.homeRegion = regionFiles
-	default:
-		m.homeRegion = regionActions
+	m.homeRegion = regionActions
+	for _, r := range m.visibleRegions() {
+		if m.regionCount(r) > 0 {
+			m.homeRegion = r
+			break
+		}
 	}
 	m.homeLastCol = regionLibrary
+	if vc := m.visibleCols(); len(vc) > 0 {
+		m.homeLastCol = vc[0]
+	}
+	if m.homeRegion != regionActions {
+		m.homeLastCol = m.homeRegion
+	}
 	if m.homeRegion == regionLibrary {
 		m.homeIndex = m.librarySelected
 	} else {
 		m.homeIndex = 0
+	}
+}
+
+// ensureVisibleFocus refocuses to the first visible non-empty region if the current focus
+// became hidden (e.g. after a resize dropped its column).
+func (m *model) ensureVisibleFocus() {
+	if m.regionVisible(m.homeRegion) {
+		return
+	}
+	for _, r := range m.visibleRegions() {
+		if m.regionCount(r) > 0 {
+			m.focusAt(r, m.indexIn(r))
+			return
+		}
 	}
 }
 
@@ -241,6 +292,7 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
+		m.ensureVisibleFocus() // a narrower width may have dropped the focused column
 		return m, nil
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -326,7 +378,6 @@ func (m *model) focusAt(r homeRegion, idx int) {
 // homeMove navigates the launcher: up/down within a column (flowing into Actions),
 // left/right across Recent ↔ Library ↔ Files.
 func (m *model) homeMove(dx, dy int) {
-	cols := []homeRegion{regionRecent, regionLibrary, regionFiles}
 	if dy != 0 {
 		n := m.regionCount(m.homeRegion)
 		if dy > 0 {
@@ -343,7 +394,13 @@ func (m *model) homeMove(dx, dy int) {
 			return
 		}
 		if m.homeRegion == regionActions && m.homeIndex == 0 {
-			m.focusAt(m.homeLastCol, m.regionCount(m.homeLastCol)-1)
+			target := m.homeLastCol
+			if !m.regionVisible(target) {
+				if vc := m.visibleCols(); len(vc) > 0 {
+					target = vc[len(vc)-1]
+				}
+			}
+			m.focusAt(target, m.regionCount(target)-1)
 			return
 		}
 		if m.homeIndex > 0 {
@@ -351,7 +408,8 @@ func (m *model) homeMove(dx, dy int) {
 		}
 		return
 	}
-	// Horizontal.
+	// Horizontal — only across the columns actually rendered at this width.
+	cols := m.visibleCols()
 	cur := indexOfRegion(cols, m.homeRegion)
 	if m.homeRegion == regionActions {
 		cur = indexOfRegion(cols, m.homeLastCol)
@@ -378,7 +436,7 @@ func indexOfRegion(cols []homeRegion, r homeRegion) int {
 
 // homeCycleRegion moves to the next/previous non-empty region.
 func (m *model) homeCycleRegion(dir int) {
-	order := []homeRegion{regionRecent, regionLibrary, regionFiles, regionActions}
+	order := m.visibleRegions()
 	start := indexOfRegion(order, m.homeRegion)
 	if start < 0 {
 		start = 0

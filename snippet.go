@@ -96,6 +96,13 @@ func cleanSnippet(raw string) string {
 	s := strings.Join(prose, " ")
 	s = snipLink.ReplaceAllString(s, "$1")
 	s = snipInline.ReplaceAllString(s, "")
+	// Drop control bytes and invalid UTF-8 so a stray binary byte can't garble the line.
+	s = strings.Map(func(r rune) rune {
+		if r == utf8.RuneError || (r < 0x20 && r != '\t') || r == 0x7f {
+			return -1
+		}
+		return r
+	}, s)
 	s = strings.TrimSpace(snipWS.ReplaceAllString(s, " "))
 	if utf8.RuneCountInString(s) > snippetMaxRunes {
 		s = strings.TrimSpace(string([]rune(s)[:snippetMaxRunes])) + "…"
