@@ -20,21 +20,49 @@ var (
 )
 
 // doubledWordOK lists words that legitimately repeat in correct English
-// ("I had had enough", "he knew that that was wrong"). They are exempt from the
-// doubled-word rule to avoid false positives on valid prose.
+// ("I had had enough", "he knew that that was wrong"). Exempt from the doubled-word rule.
 var doubledWordOK = map[string]bool{
 	"had": true, "that": true, "is": true, "do": true, "who": true,
 }
 
-// grammarDecorator flags safe mechanical grammar/spacing issues on one line.
-// isCursorLine suppresses the missing-terminal-punctuation rule (you're typing it).
-func grammarDecorator(line string, isCursorLine bool) []textarea.Decoration {
+// grammarPhrase is a case-insensitive pattern → replacement (regexp template, so $1 can
+// echo a captured group) with a reason. Covers verb-of slips, redundancies, and common
+// nonstandard forms — ported in spirit from write-good/proselint rule sets.
+type grammarPhrase struct {
+	pat  *regexp.Regexp
+	repl string
+	msg  string
+}
+
+var grammarPhrases = []grammarPhrase{
+	{regexp.MustCompile(`(?i)\b(could|would|should|must|might|may) of\b`), "$1 have", "should be “have”"},
+	{regexp.MustCompile(`(?i)\bvery unique\b`), "unique", "redundant — “unique” is absolute"},
+	{regexp.MustCompile(`(?i)\bend result\b`), "result", "redundant"},
+	{regexp.MustCompile(`(?i)\bpast history\b`), "history", "redundant"},
+	{regexp.MustCompile(`(?i)\bfree gift\b`), "gift", "redundant"},
+	{regexp.MustCompile(`(?i)\badded bonus\b`), "bonus", "redundant"},
+	{regexp.MustCompile(`(?i)\bclose proximity\b`), "proximity", "redundant"},
+	{regexp.MustCompile(`(?i)\bPIN number\b`), "PIN", "redundant"},
+	{regexp.MustCompile(`(?i)\bATM machine\b`), "ATM", "redundant"},
+	{regexp.MustCompile(`(?i)\balot\b`), "a lot", "nonstandard — two words"},
+	{regexp.MustCompile(`(?i)\birregardless\b`), "regardless", "nonstandard"},
+}
+
+// closingQuote reports whether r is a closing quote/paren that may follow end punctuation.
+func closingQuote(r rune) bool {
+	return r == '"' || r == '\'' || r == ')' || r == '”' || r == '’'
+}
+
+// grammarFindings returns heuristic grammar/spacing findings for ONE line: rune-range
+// offsets within that line, each with a clickable replacement and a reason. isCursorLine
+// suppresses the missing-terminal-punctuation rule (you are still typing the line).
+// grammarDecorator (underlines) and the passive hint / click-to-fix all share this.
+func grammarFindings(line string, isCursorLine bool) []grammarFinding {
 	runes := []rune(line)
 	occupied := make([]bool, len(runes))
-	var decos []textarea.Decoration
-	// b2r maps a byte offset in line to a rune index.
+	var out []grammarFinding
 	b2r := func(b int) int { return len([]rune(line[:b])) }
-	add := func(rs, re int) {
+	add := func(rs, re int, msg string, repl string) {
 		if rs < 0 || re > len(runes) || rs >= re {
 			return
 		}
@@ -46,54 +74,76 @@ func grammarDecorator(line string, isCursorLine bool) []textarea.Decoration {
 		for i := rs; i < re; i++ {
 			occupied[i] = true
 		}
-		decos = append(decos, textarea.Decoration{Start: rs, End: re, Style: grammarStyle})
+		out = append(out, grammarFinding{Start: rs, End: re, Message: msg, Replacements: []string{repl}})
 	}
 
-	// Doubled word: flag a word that equals its predecessor (case-insensitive,
-	// only whitespace between). Scanning adjacent word pairs catches duplicates at
-	// any position — Go's RE2 has no backreferences, so a \1 regex won't work.
+	// Doubled word: underline both words, fix → the single word.
 	words := gramWord.FindAllStringIndex(line, -1)
 	for i := 1; i < len(words); i++ {
 		between := line[words[i-1][1]:words[i][0]]
-		cur := line[words[i][0]:words[i][1]]
-		if strings.TrimSpace(between) == "" &&
-			strings.EqualFold(line[words[i-1][0]:words[i-1][1]], cur) &&
-			!doubledWordOK[strings.ToLower(cur)] {
-			add(b2r(words[i][0]), b2r(words[i][1]))
+		w1 := line[words[i-1][0]:words[i-1][1]]
+		w2 := line[words[i][0]:words[i][1]]
+		if strings.TrimSpace(between) == "" && strings.EqualFold(w1, w2) && !doubledWordOK[strings.ToLower(w2)] {
+			add(b2r(words[i-1][0]), b2r(words[i][1]), "repeated word", w1)
 		}
 	}
-	// a → an before a vowel: flag the "a".
+	// a → an before a vowel sound.
 	for _, m := range gramAVowel.FindAllStringSubmatchIndex(line, -1) {
-		add(b2r(m[0]), b2r(m[0])+1)
+		s := b2r(m[0])
+		fix := "an"
+		if runes[s] == 'A' {
+			fix = "An"
+		}
+		add(s, s+1, "use “an” before a vowel sound", fix)
 	}
-	// an → a before a consonant: flag the "an".
+	// an → a before a consonant sound.
 	for _, m := range gramAnConsonant.FindAllStringSubmatchIndex(line, -1) {
-		add(b2r(m[0]), b2r(m[0])+2)
+		s := b2r(m[0])
+		fix := "a"
+		if runes[s] == 'A' {
+			fix = "A"
+		}
+		add(s, s+2, "use “a” before a consonant sound", fix)
 	}
-	// Double space between non-space chars: flag the run of spaces.
+	// Double space → single space.
 	for _, m := range gramDoubleSpc.FindAllStringSubmatchIndex(line, -1) {
-		add(b2r(m[2]), b2r(m[3]))
+		add(b2r(m[2]), b2r(m[3]), "double space", " ")
 	}
-	// Space before punctuation.
+	// Space before punctuation → remove the space.
 	for _, m := range gramSpaceBefore.FindAllStringSubmatchIndex(line, -1) {
-		add(b2r(m[2]), b2r(m[3]))
+		add(b2r(m[2]), b2r(m[3]), "space before punctuation", "")
+	}
+	// Phrase rules (verb-of, redundancies, common slips).
+	for _, p := range grammarPhrases {
+		for _, m := range p.pat.FindAllStringIndex(line, -1) {
+			matched := line[m[0]:m[1]]
+			add(b2r(m[0]), b2r(m[1]), p.msg, p.pat.ReplaceAllString(matched, p.repl))
+		}
 	}
 	// Missing terminal punctuation (non-cursor paragraph lines only).
 	if !isCursorLine {
 		t := strings.TrimRight(line, " \t")
 		tr := []rune(t)
 		if len(tr) > 0 && !strings.HasPrefix(strings.TrimSpace(t), "#") && !listItemRe.MatchString(line) {
-			li := len(tr) - 1 // rune index (into t, == into line's prefix) of the char to test
+			li := len(tr) - 1
 			last := tr[li]
-			// a closing quote/paren may follow terminal punctuation — test the char before it
-			if (last == '"' || last == '\'' || last == ')' || last == '”' || last == '’') && len(tr) > 1 {
+			if closingQuote(last) && len(tr) > 1 {
 				li = len(tr) - 2
 				last = tr[li]
 			}
 			if !strings.ContainsRune(".!?:…", last) && unicode.IsLetter(last) {
-				add(li, li+1) // underline the offending letter, not the trailing quote
+				add(li, li+1, "missing end punctuation", string(last)+".")
 			}
 		}
+	}
+	return out
+}
+
+// grammarDecorator flags heuristic grammar issues on one line as green underlines.
+func grammarDecorator(line string, isCursorLine bool) []textarea.Decoration {
+	var decos []textarea.Decoration
+	for _, f := range grammarFindings(line, isCursorLine) {
+		decos = append(decos, textarea.Decoration{Start: f.Start, End: f.End, Style: grammarStyle})
 	}
 	return decos
 }

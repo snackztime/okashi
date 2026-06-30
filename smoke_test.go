@@ -1851,7 +1851,7 @@ func TestAppleClickToFix(t *testing.T) {
 	// Cursor inside the finding → opens the suggestion bar.
 	m.editor.MoveToLine(0)
 	m.editor.SetCursor(9)
-	if !m.maybeOpenAppleSuggestion() {
+	if !m.maybeOpenGrammarSuggestion() {
 		t.Fatal("expected a suggestion to open for the finding under the cursor")
 	}
 	if !m.suggesting || len(m.suggestions) == 0 || m.suggestions[0] != "is" {
@@ -1939,5 +1939,27 @@ func TestCursorGrammarHint(t *testing.T) {
 	}
 	if len(m.appleFindings[m.currentFile]) != 0 {
 		t.Fatal("apply should invalidate findings")
+	}
+}
+
+func TestGrammarHeuristicHintAndFix(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("I could of gone home"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 12})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.analysis.grammar = true // no Apple findings — heuristic only
+	m.editor.MoveToLine(0)
+	m.editor.SetCursor(5) // inside "could of"
+	w, sugg, reason, ok := m.cursorGrammarHint()
+	if !ok || len(sugg) == 0 || sugg[0] != "could have" || reason == "" {
+		t.Fatalf("heuristic hint: ok=%v w=%q sugg=%v reason=%q", ok, w, sugg, reason)
+	}
+	m.applyGrammarHint(0)
+	if got := m.editor.CurrentLine(); got != "I could have gone home" {
+		t.Fatalf("apply heuristic fix: %q", got)
 	}
 }

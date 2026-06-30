@@ -16,9 +16,9 @@ func hasGSpan(d []textarea.Decoration, s, e int) bool {
 }
 
 func TestGrammarDecorator(t *testing.T) {
-	// Doubled word: "the the cat" → the 2nd "the" (runes 4..7).
-	if d := grammarDecorator("the the cat", false); !hasGSpan(d, 4, 7) {
-		t.Fatalf("doubled-word span [4,7) missing: %+v", d)
+	// Doubled word: "the the cat" → both words "the the" (runes 0..7), fix → "the".
+	if d := grammarDecorator("the the cat", false); !hasGSpan(d, 0, 7) {
+		t.Fatalf("doubled-word span [0,7) missing: %+v", d)
 	}
 	// a/an: "a apple" → the "a" (runes 0..1).
 	if d := grammarDecorator("a apple", false); !hasGSpan(d, 0, 1) {
@@ -58,21 +58,19 @@ func TestGrammarTerminalPunctuation(t *testing.T) {
 
 func TestGrammarDoubledWordMidSentence(t *testing.T) {
 	// "He went to the the store": the doubled "the" is at an odd word position —
-	// must still be flagged (regression: RE2 has no backreferences).
-	d := grammarDecorator("He went to the the store", false)
-	runes := []rune("He went to the the store")
+	// must still be flagged with the single-word fix (regression: RE2 has no backrefs).
 	found := false
-	for _, x := range d {
-		if string(runes[x.Start:x.End]) == "the" {
+	for _, f := range grammarFindings("He went to the the store", false) {
+		if f.Message == "repeated word" && len(f.Replacements) > 0 && f.Replacements[0] == "the" {
 			found = true
 		}
 	}
 	if !found {
-		t.Fatalf("doubled 'the the' mid-sentence not flagged: %+v", d)
+		t.Fatal("doubled 'the the' mid-sentence not flagged with fix 'the'")
 	}
 	// No false positive when the words differ.
-	for _, x := range grammarDecorator("the cat the dog", false) {
-		if string([]rune("the cat the dog")[x.Start:x.End]) == "the" {
+	for _, f := range grammarFindings("the cat the dog", false) {
+		if f.Message == "repeated word" {
 			t.Fatal("non-adjacent 'the' must not be flagged as doubled")
 		}
 	}
@@ -81,17 +79,16 @@ func TestGrammarDoubledWordMidSentence(t *testing.T) {
 func TestGrammarDoubledWordWhitelist(t *testing.T) {
 	// Legitimately-doubled words must NOT be flagged...
 	for _, s := range []string{"I had had enough.", "He knew that that was wrong."} {
-		for _, x := range grammarDecorator(s, false) {
-			w := string([]rune(s)[x.Start:x.End])
-			if w == "had" || w == "that" {
-				t.Fatalf("%q: valid doubled %q must not be flagged", s, w)
+		for _, f := range grammarFindings(s, false) {
+			if f.Message == "repeated word" {
+				t.Fatalf("%q: valid doubled word must not be flagged: %+v", s, f)
 			}
 		}
 	}
-	// ...but an accidental double still is.
+	// ...but an accidental double still is, with the single-word fix.
 	flagged := false
-	for _, x := range grammarDecorator("the the cat", false) {
-		if string([]rune("the the cat")[x.Start:x.End]) == "the" {
+	for _, f := range grammarFindings("the the cat", false) {
+		if f.Message == "repeated word" && len(f.Replacements) > 0 && f.Replacements[0] == "the" {
 			flagged = true
 		}
 	}
@@ -113,5 +110,36 @@ func TestGrammarClosingQuoteRune(t *testing.T) {
 	// Terminal punctuation before the quote → no flag.
 	if d := grammarDecorator(`She said hello."`, false); len(d) != 0 {
 		t.Fatalf("terminal punct before closing quote should not flag: %+v", d)
+	}
+}
+
+func TestGrammarRulesHaveFixes(t *testing.T) {
+	want := []struct {
+		line, span, fix, msg string
+	}{
+		{"I could of gone", "could of", "could have", "should be “have”"},
+		{"that is very unique", "very unique", "unique", "redundant — “unique” is absolute"},
+		{"I have alot", "alot", "a lot", "nonstandard — two words"},
+		{"a apple", "a", "an", "use “an” before a vowel sound"},
+		{"an cat here", "an", "a", "use “a” before a consonant sound"},
+		{"the the cat", "the the", "the", "repeated word"},
+	}
+	for _, w := range want {
+		var got *grammarFinding
+		for i := range grammarFindings(w.line, false) {
+			f := grammarFindings(w.line, false)[i]
+			if string([]rune(w.line)[f.Start:f.End]) == w.span {
+				got = &f
+				break
+			}
+		}
+		if got == nil {
+			t.Errorf("%q: no finding spanning %q", w.line, w.span)
+			continue
+		}
+		if got.Replacements[0] != w.fix || got.Message != w.msg {
+			t.Errorf("%q span %q → fix %q msg %q, want fix %q msg %q",
+				w.line, w.span, got.Replacements[0], got.Message, w.fix, w.msg)
+		}
 	}
 }

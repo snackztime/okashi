@@ -427,26 +427,19 @@ func (m *model) invalidateAppleFindings() {
 
 // maybeOpenAppleSuggestion opens the suggestion bar when an Apple (Tier 2) finding with
 // replacements covers the cursor (set by a preceding click). Returns true if it opened one.
-func (m *model) maybeOpenAppleSuggestion() bool {
-	if !m.analysis.grammar {
+func (m *model) maybeOpenGrammarSuggestion() bool {
+	f, ok := m.grammarFindingUnderCursor()
+	if !ok || len(f.Replacements) == 0 {
 		return false
 	}
-	line := m.editor.Line()
-	col := m.editor.CursorColumn()
 	runes := []rune(m.editor.CurrentLine())
-	for _, f := range m.appleFindings[m.currentFile] {
-		if f.Line == line && col >= f.Start && col <= f.End &&
-			f.Start < f.End && f.End <= len(runes) && len(f.Replacements) > 0 {
-			m.suggesting = true
-			m.suggestions = f.Replacements
-			m.suggestIndex = 0
-			m.suggestWord = string(runes[f.Start:f.End])
-			m.suggestStart, m.suggestEnd = f.Start, f.End
-			m.status = f.Message
-			return true
-		}
-	}
-	return false
+	m.suggesting = true
+	m.suggestions = f.Replacements
+	m.suggestIndex = 0
+	m.suggestWord = string(runes[f.Start:f.End])
+	m.suggestStart, m.suggestEnd = f.Start, f.End
+	m.status = f.Message
+	return true
 }
 
 // syncGoal rolls the current project's daily baseline over to today on the first
@@ -498,21 +491,32 @@ func (m *model) cursorSpellHint() (word string, suggestions []string, ok bool) {
 	return w, sugg, true
 }
 
-// appleFindingUnderCursor returns the Apple (Tier 2) grammar finding spanning the cursor.
-func (m *model) appleFindingUnderCursor() (grammarFinding, bool) {
+// grammarFindingUnderCursor returns the grammar finding spanning the cursor: an Apple
+// (Tier 2) finding if one covers it, else a live heuristic (Tier 1) finding on the line.
+func (m *model) grammarFindingUnderCursor() (grammarFinding, bool) {
+	if !m.analysis.grammar {
+		return grammarFinding{}, false
+	}
 	line := m.editor.Line()
 	col := m.editor.CursorColumn()
-	nr := len([]rune(m.editor.CurrentLine()))
+	cur := m.editor.CurrentLine()
+	nr := len([]rune(cur))
 	for _, f := range m.appleFindings[m.currentFile] {
 		if f.Line == line && col >= f.Start && col <= f.End && f.Start < f.End && f.End <= nr {
+			return f, true
+		}
+	}
+	for _, f := range grammarFindings(cur, true) { // cursor line → terminal-punct suppressed
+		if col >= f.Start && col <= f.End && f.Start < f.End && len(f.Replacements) > 0 {
+			f.Line = line
 			return f, true
 		}
 	}
 	return grammarFinding{}, false
 }
 
-// cursorGrammarHint returns the wrong text, its fix(es), and the reason for the Apple
-// grammar finding under the cursor — the passive bottom-bar hint, mirroring the spell one.
+// cursorGrammarHint returns the wrong text, its fix(es), and the reason for the grammar
+// finding under the cursor — the passive bottom-bar hint, mirroring the spell one.
 func (m *model) cursorGrammarHint() (word string, suggestions []string, reason string, ok bool) {
 	if !m.analysis.grammar || m.screen != screenWriting {
 		return "", nil, "", false
@@ -520,7 +524,7 @@ func (m *model) cursorGrammarHint() (word string, suggestions []string, reason s
 	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.previewing || m.exportPrompt || m.creatingFile {
 		return "", nil, "", false
 	}
-	f, found := m.appleFindingUnderCursor()
+	f, found := m.grammarFindingUnderCursor()
 	if !found || len(f.Replacements) == 0 {
 		return "", nil, "", false
 	}
@@ -530,7 +534,7 @@ func (m *model) cursorGrammarHint() (word string, suggestions []string, reason s
 
 // applyGrammarHint applies the i-th replacement for the grammar finding under the cursor.
 func (m *model) applyGrammarHint(i int) {
-	f, ok := m.appleFindingUnderCursor()
+	f, ok := m.grammarFindingUnderCursor()
 	if !ok || len(f.Replacements) == 0 {
 		return
 	}
@@ -947,7 +951,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editor.ClickTo(msg.Y, msg.X-textLeft)
 				m.focus = focusEditor
 				m.editor.Focus()
-				if !m.maybeOpenAppleSuggestion() { // click a flagged span → suggestion bar;
+				if !m.maybeOpenGrammarSuggestion() { // click a flagged span → suggestion bar;
 					m.suggesting = false // otherwise dismiss any open bar
 				}
 				return m, nil
