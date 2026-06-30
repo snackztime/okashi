@@ -1894,3 +1894,36 @@ func TestAppleFindingsInvalidatedOnListContinuation(t *testing.T) {
 		t.Fatal("list auto-continuation must invalidate Apple findings (offsets shift)")
 	}
 }
+
+func TestCursorGrammarHint(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("The cat are sleeping now"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 12})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.analysis.grammar = true
+	m.appleFindings[m.currentFile] = []grammarFinding{{Line: 0, Start: 8, End: 11, Message: "'cat' is singular", Replacements: []string{"is"}}}
+	m.editor.MoveToLine(0)
+	// Cursor off the finding → no hint.
+	m.editor.SetCursor(0)
+	if _, _, _, ok := m.cursorGrammarHint(); ok {
+		t.Fatal("no hint expected when the cursor is off the finding")
+	}
+	// Cursor on the finding → passive hint with fix + reason.
+	m.editor.SetCursor(9)
+	bar := ansi.Strip(m.statusBar())
+	if !strings.Contains(bar, "are → is") || !strings.Contains(bar, "singular") {
+		t.Fatalf("passive hint should show fix + reason, got %q", bar)
+	}
+	// Applying it replaces the text and invalidates the findings.
+	m.applyGrammarHint(0)
+	if got := m.editor.CurrentLine(); got != "The cat is sleeping now" {
+		t.Fatalf("apply failed: %q", got)
+	}
+	if len(m.appleFindings[m.currentFile]) != 0 {
+		t.Fatal("apply should invalidate findings")
+	}
+}

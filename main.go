@@ -494,6 +494,49 @@ func (m *model) cursorSpellHint() (word string, suggestions []string, ok bool) {
 	return w, sugg, true
 }
 
+// appleFindingUnderCursor returns the Apple (Tier 2) grammar finding spanning the cursor.
+func (m *model) appleFindingUnderCursor() (grammarFinding, bool) {
+	line := m.editor.Line()
+	col := m.editor.CursorColumn()
+	nr := len([]rune(m.editor.CurrentLine()))
+	for _, f := range m.appleFindings[m.currentFile] {
+		if f.Line == line && col >= f.Start && col <= f.End && f.Start < f.End && f.End <= nr {
+			return f, true
+		}
+	}
+	return grammarFinding{}, false
+}
+
+// cursorGrammarHint returns the wrong text, its fix(es), and the reason for the Apple
+// grammar finding under the cursor — the passive bottom-bar hint, mirroring the spell one.
+func (m *model) cursorGrammarHint() (word string, suggestions []string, reason string, ok bool) {
+	if !m.analysis.grammar || m.screen != screenWriting {
+		return "", nil, "", false
+	}
+	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.previewing || m.exportPrompt || m.creatingFile {
+		return "", nil, "", false
+	}
+	f, found := m.appleFindingUnderCursor()
+	if !found || len(f.Replacements) == 0 {
+		return "", nil, "", false
+	}
+	runes := []rune(m.editor.CurrentLine())
+	return string(runes[f.Start:f.End]), f.Replacements, f.Message, true
+}
+
+// applyGrammarHint applies the i-th replacement for the grammar finding under the cursor.
+func (m *model) applyGrammarHint(i int) {
+	f, ok := m.appleFindingUnderCursor()
+	if !ok || len(f.Replacements) == 0 {
+		return
+	}
+	runes := []rune(m.editor.CurrentLine())
+	m.suggestions = f.Replacements
+	m.suggestWord = string(runes[f.Start:f.End])
+	m.suggestStart, m.suggestEnd = f.Start, f.End
+	m.applySuggestion(i)
+}
+
 // matchCase applies orig's capitalization pattern to sugg.
 func matchCase(orig, sugg string) string {
 	if orig == "" || sugg == "" {
@@ -869,6 +912,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if i, hit := spellHintSuggestionAtX(w, sugg, msg.X-editorStart-1); hit {
 					m.openSpellMenuAndApply(i, sugg)
+					return m, nil
+				}
+			}
+			// Same row for a grammar finding's fix (the reason after it isn't clickable).
+			if w, sugg, _, ok := m.cursorGrammarHint(); ok {
+				showSidebar, _, _ := m.effectivePanels()
+				editorStart := 0
+				if showSidebar {
+					editorStart = sidebarWidth
+				}
+				if i, hit := spellHintSuggestionAtX(w, sugg, msg.X-editorStart-1); hit {
+					m.applyGrammarHint(i)
 					return m, nil
 				}
 			}
@@ -1989,6 +2044,14 @@ func (m model) statusBar() string {
 	}
 	if w, sugg, ok := m.cursorSpellHint(); ok {
 		return "✗ " + w + " → " + strings.Join(sugg, " · ") + "  ·  ^R"
+	}
+	if w, sugg, reason, ok := m.cursorGrammarHint(); ok {
+		_, _, editorArea := m.effectivePanels()
+		hint := "✗ " + w + " → " + strings.Join(sugg, " · ")
+		if reason != "" {
+			hint += " · " + reason
+		}
+		return ansi.Truncate(hint, max(10, editorArea-2), "…") // keep the fix visible; trim the reason
 	}
 	if m.renaming && (!m.renamingInPane || !showSidebar) {
 		return "rename ▸ " + m.nameInput.View()
