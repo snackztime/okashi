@@ -317,3 +317,16 @@ func TestFramedPanelAction(t *testing.T) {
 		t.Fatal("no action → no + in the border")
 	}
 }
+
+func TestFramedPanelActionNoOverflow(t *testing.T) {
+	// A title longer than the panel + an action must not overflow the width.
+	for _, w := range []int{18, 34, 40} {
+		top := strings.Split(ansi.Strip(framedPanel(strings.Repeat("x", w+8), "y", w, 4, "+")), "\n")[0]
+		if lipgloss.Width(top) != w {
+			t.Fatalf("framedPanel(width %d, long title, action) top width = %d, want %d", w, lipgloss.Width(top), w)
+		}
+		if !strings.Contains(top, "+") {
+			t.Fatalf("width %d dropped the action", w)
+		}
+	}
+}

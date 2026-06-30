@@ -1620,3 +1620,23 @@ func TestDuplicateFile(t *testing.T) {
 		t.Fatalf("second duplicate should be 'draft copy 2.md': %v", err)
 	}
 }
+
+func TestCreatePromptVisibleWhenSidebarHidden(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.md"), []byte("x"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 16})
+	m = nm.(model)
+	m.sidebarVisible = false
+	m.layout()
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("new.md")})
+	m = nm.(model)
+	// The typed name must be visible somewhere (in-pane row or bottom bar), never invisible.
+	if !strings.Contains(ansi.Strip(m.View()), "new.md") && !strings.Contains(ansi.Strip(m.statusBar()), "new.md") {
+		t.Fatal("create prompt is invisible when the sidebar was hidden")
+	}
+}

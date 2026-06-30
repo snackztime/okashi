@@ -1504,6 +1504,7 @@ func (m *model) beginRename(t renameTarget, prefill string) {
 // startInPaneCreate begins an in-place new-document prompt in the sidebar.
 func (m *model) startInPaneCreate() {
 	m.previewing = false
+	m.sidebarVisible = true // the field renders in the file pane — make sure it shows
 	m.creatingFile = true
 	m.creatingInPane = true
 	m.creatingFolder = false
@@ -1520,6 +1521,7 @@ func (m *model) startRename() {
 	if len(m.files.entries) == 0 {
 		return
 	}
+	m.sidebarVisible = true // the field renders in the file pane — make sure it shows
 	e := m.files.entries[m.files.selected]
 	if e.name == ".." {
 		return
@@ -1824,7 +1826,11 @@ func (m model) statsText() string {
 // whole bar; on a terminal too narrow for both, the stats drop out rather than
 // truncate. Width is the bar minus statusStyle's 1-col padding each side.
 func (m model) statusBar() string {
-	if m.creatingFile && !m.creatingInPane {
+	// An in-pane rename/create renders in the file row — but only if the sidebar
+	// is actually drawn this frame; otherwise fall back to the bottom-bar prompt
+	// so the field is never invisible.
+	showSidebar, _, _ := m.effectivePanels()
+	if m.creatingFile && (!m.creatingInPane || !showSidebar) {
 		folderMode := m.creatingFolder || strings.HasSuffix(m.nameInput.Value(), "/")
 		label := "new file ▸ "
 		if folderMode {
@@ -1855,7 +1861,7 @@ func (m model) statusBar() string {
 	if w, sugg, ok := m.cursorSpellHint(); ok {
 		return "✗ " + w + " → " + strings.Join(sugg, " · ") + "  ·  ^R"
 	}
-	if m.renaming && !m.renamingInPane {
+	if m.renaming && (!m.renamingInPane || !showSidebar) {
 		return "rename ▸ " + m.nameInput.View()
 	}
 	if m.goalPromptField == 1 {

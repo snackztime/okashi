@@ -36,14 +36,14 @@ func framedPanel(title, inner string, width, height int, action string) string {
 	ts := lipgloss.NewStyle().Foreground(accent).Bold(true)
 	contentW := width - 4 // │ <space> content <space> │
 
-	titleStr := title
-	maxTitle := width - 4 // ╭, " ", at least one ─, " " is folded into title segment, ╮
-	if lipgloss.Width(titleStr) > maxTitle {
-		titleStr = ansi.Truncate(titleStr, maxTitle, "")
-	}
 	rightSeg := ""
 	if action != "" {
 		rightSeg = " " + action
+	}
+	titleStr := title
+	maxTitle := width - 4 - lipgloss.Width(rightSeg) // leave room for ╭╮, the title spaces, and the action
+	if lipgloss.Width(titleStr) > maxTitle {
+		titleStr = ansi.Truncate(titleStr, maxTitle, "")
 	}
 	fill := width - 2 - (lipgloss.Width(titleStr) + 2) - lipgloss.Width(rightSeg) // minus ╭╮, minus the two spaces around the title, minus action
 	if fill < 0 {
