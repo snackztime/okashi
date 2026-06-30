@@ -1595,3 +1595,28 @@ func TestDeleteWithConfirm(t *testing.T) {
 		t.Fatal("confirm should close after y")
 	}
 }
+
+func TestDuplicateFile(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "draft.md"), []byte("hello"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	m.focus = focusSidebar
+	m.files.selectName("draft.md")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = nm.(model)
+	b, err := os.ReadFile(filepath.Join(dir, "draft copy.md"))
+	if err != nil || string(b) != "hello" {
+		t.Fatalf("duplicate should create 'draft copy.md' with the same bytes: err=%v", err)
+	}
+	// A second duplicate → "draft copy 2.md".
+	m.files.selectName("draft.md")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(dir, "draft copy 2.md")); err != nil {
+		t.Fatalf("second duplicate should be 'draft copy 2.md': %v", err)
+	}
+}

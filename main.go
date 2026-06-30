@@ -41,8 +41,10 @@ const defaultColumnWidth = 72
 
 const helpText = `ctrl+b   toggle sidebar
 ctrl+y   inspector tabs
-ctrl+n   new file
-r        rename (sidebar)
+ctrl+n   new file (+  new, right-click / F2  rename)
+r        rename file
+del      delete file
+d        duplicate file
 ctrl+l   outline
 ctrl+k   binder
 ctrl+e   export
@@ -1006,6 +1008,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.files.SetDir(filepath.Dir(m.files.dir))
 				case "r":
 					m.startRename()
+				case "d":
+					m.duplicateSelected()
 				}
 			}
 		}
@@ -1589,6 +1593,48 @@ func (m *model) confirmDelete() {
 		m.files.selected = len(m.files.entries) - 1
 	}
 	m.status = "deleted"
+}
+
+// duplicateSelected copies the selected file to a free "name copy.ext" (then
+// "name copy 2.ext", …) and selects the new file. Dirs and ".." are skipped.
+func (m *model) duplicateSelected() {
+	if len(m.files.entries) == 0 {
+		return
+	}
+	e := m.files.entries[m.files.selected]
+	if e.name == ".." || e.isDir {
+		m.status = "duplicate: files only"
+		return
+	}
+	ext := filepath.Ext(e.name)
+	stem := strings.TrimSuffix(e.name, ext)
+	target := copyFreeName(m.files.dir, stem, ext)
+	data, err := os.ReadFile(filepath.Join(m.files.dir, e.name))
+	if err != nil {
+		m.status = "duplicate failed: " + err.Error()
+		return
+	}
+	if err := atomicWrite(filepath.Join(m.files.dir, target), data, 0o644); err != nil {
+		m.status = "duplicate failed: " + err.Error()
+		return
+	}
+	m.files.SetDir(m.files.dir)
+	m.files.selectName(target)
+	m.status = "duplicated → " + target
+}
+
+// copyFreeName returns "stem copy.ext", then "stem copy 2.ext", … that doesn't exist in dir.
+func copyFreeName(dir, stem, ext string) string {
+	name := stem + " copy" + ext
+	if _, err := os.Stat(filepath.Join(dir, name)); os.IsNotExist(err) {
+		return name
+	}
+	for i := 2; ; i++ {
+		name = fmt.Sprintf("%s copy %d%s", stem, i, ext)
+		if _, err := os.Stat(filepath.Join(dir, name)); os.IsNotExist(err) {
+			return name
+		}
+	}
 }
 
 // startRenameOutline begins renaming the selected outline row (section title or
