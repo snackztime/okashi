@@ -825,7 +825,7 @@ func TestCtrlNResetsFolderMode(t *testing.T) {
 func TestSidebarFrameFitsAndAligns(t *testing.T) {
 	// framedPanel: 2 borders + 2 padding cols = 4; inner width = sidebarWidth-4.
 	inner := strings.Repeat("x", sidebarWidth-4)
-	out := framedPanel("Files", inner, sidebarWidth, 4)
+	out := framedPanel("Files", inner, sidebarWidth, 4, "")
 	if w := lipgloss.Width(out); w != sidebarWidth {
 		t.Fatalf("sidebar framedPanel total width = %d, want %d", w, sidebarWidth)
 	}
@@ -1534,5 +1534,33 @@ func TestRightClickAndF2Rename(t *testing.T) {
 	m = nm.(model)
 	if !m.renaming || !m.renamingInPane {
 		t.Fatal("F2 should start an in-pane rename")
+	}
+}
+
+func TestPlusStartsInPlaceCreate(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	m.sidebarVisible = true
+	m.layout()
+	// Find the '+' column on the sidebar's top border (row 0) and click it.
+	top := strings.Split(ansi.Strip(m.View()), "\n")[0]
+	plus := -1
+	for i, r := range []rune(top) {
+		if r == '+' && i < sidebarWidth {
+			plus = i
+		}
+	}
+	if plus < 0 {
+		t.Fatalf("no + on the sidebar top border: %q", top)
+	}
+	nm, _ = m.Update(tea.MouseMsg{X: plus, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if !m.creatingFile || !m.creatingInPane {
+		t.Fatal("clicking + should start an in-pane create")
 	}
 }

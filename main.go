@@ -503,6 +503,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "esc":
 				m.creatingFile = false
+				m.creatingInPane = false
 				m.creatingFolder = false
 				m.nameInput.Blur()
 				m.status = "create cancelled"
@@ -775,6 +776,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Click the '+' in the sidebar title bar starts an in-pane create.
+		// The '+' is rendered at column sidebarWidth-2 (right side of top border, before ╮).
+		if inSidebar && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress &&
+			msg.Y == 0 && msg.X == sidebarWidth-2 {
+			m.startInPaneCreate()
+			return m, textinput.Blink
+		}
+
 		// Click selection / open is file-pane only.
 		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 			return m, nil
@@ -813,13 +822,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.homeSelected = 0
 			return m, nil
 		case "ctrl+n":
-			m.previewing = false
-			m.creatingFile = true
-			m.creatingFolder = false
-			m.nameInput.SetValue("")
-			m.nameInput.Focus()
-			m.editor.Blur()
-			m.status = ""
+			m.startInPaneCreate()
 			return m, textinput.Blink
 		case "f2":
 			m.focus = focusSidebar
@@ -1039,7 +1042,7 @@ func (m model) View() string {
 	}
 
 	if m.showHelp {
-		card := framedPanel("Keys", helpText, 36, min(bodyH, lipgloss.Height(helpText)+2))
+		card := framedPanel("Keys", helpText, 36, min(bodyH, lipgloss.Height(helpText)+2), "")
 		body := lipgloss.Place(m.width, bodyH, lipgloss.Center, lipgloss.Center, card)
 		return lipgloss.JoinVertical(lipgloss.Left, body, statusStyle.Width(m.width).Render("F1/esc close"))
 	}
@@ -1069,7 +1072,7 @@ func (m model) View() string {
 		} else if m.creatingFile && m.creatingInPane {
 			editRow, editField = createRowSentinel, m.nameInput.View()
 		}
-		cols = append(cols, framedPanel(title, m.files.View(editRow, editField), sidebarWidth, m.height))
+		cols = append(cols, framedPanel(title, m.files.View(editRow, editField), sidebarWidth, m.height, "+"))
 	}
 	// Editor column: the editor pane, a blank line break, then the status bar —
 	// all at the editor width, so the side panels render truly full height and the
@@ -1089,7 +1092,7 @@ func (m model) View() string {
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
 		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
 		title := inspectorTabLabels()[m.inspector.tab]
-		cols = append(cols, framedPanel(title, insInner, inspectorWidth, m.height))
+		cols = append(cols, framedPanel(title, insInner, inspectorWidth, m.height, ""))
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 }
@@ -1406,6 +1409,7 @@ func (m *model) confirmCreate() {
 	name := strings.TrimSpace(m.nameInput.Value())
 	explicitFolder := m.creatingFolder
 	m.creatingFile = false
+	m.creatingInPane = false
 	m.creatingFolder = false
 	m.nameInput.Blur()
 	if name == "" {
@@ -1466,6 +1470,20 @@ func (m *model) beginRename(t renameTarget, prefill string) {
 	m.nameInput.CursorEnd()
 	m.nameInput.Focus()
 	m.editor.Blur()
+	m.status = ""
+}
+
+// startInPaneCreate begins an in-place new-document prompt in the sidebar.
+func (m *model) startInPaneCreate() {
+	m.previewing = false
+	m.creatingFile = true
+	m.creatingInPane = true
+	m.creatingFolder = false
+	m.nameInput.SetValue("")
+	m.nameInput.Width = m.files.width
+	m.nameInput.Focus()
+	m.editor.Blur()
+	m.focus = focusSidebar
 	m.status = ""
 }
 

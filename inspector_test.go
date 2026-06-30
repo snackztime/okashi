@@ -253,7 +253,7 @@ func TestAnalysisRowAtY(t *testing.T) {
 }
 
 func TestFramedPanel(t *testing.T) {
-	out := framedPanel("Words", "alpha\nbeta", 20, 6)
+	out := framedPanel("Words", "alpha\nbeta", 20, 6, "")
 	lines := strings.Split(ansi.Strip(out), "\n")
 	if len(lines) != 6 {
 		t.Fatalf("framedPanel height: want 6 lines, got %d", len(lines))
@@ -292,7 +292,7 @@ func TestFramedPanelTruncatesLongLine(t *testing.T) {
 	// An inner line wider than the content area must be truncated, not wrapped —
 	// every output line stays exactly `width` and there are exactly `height` lines.
 	long := "Words Outline Goals Analysis Extra Overflowing Tabs"
-	out := framedPanel("X", long, 20, 4)
+	out := framedPanel("X", long, 20, 4, "")
 	lines := strings.Split(ansi.Strip(out), "\n")
 	if len(lines) != 4 {
 		t.Fatalf("over-long inner line wrapped: want 4 lines, got %d:\n%s", len(lines), ansi.Strip(out))
@@ -304,5 +304,16 @@ func TestFramedPanelTruncatesLongLine(t *testing.T) {
 		if i > 0 && i < 3 && (!strings.HasPrefix(ln, "│") || !strings.HasSuffix(ln, "│")) {
 			t.Fatalf("content line %d lost its border (wrap): %q", i, ln)
 		}
+	}
+}
+
+func TestFramedPanelAction(t *testing.T) {
+	out := ansi.Strip(framedPanel("Files", "x", 20, 4, "+"))
+	top := strings.Split(out, "\n")[0]
+	if !strings.Contains(top, "+") || !strings.HasPrefix(top, "╭") || !strings.HasSuffix(top, "╮") {
+		t.Fatalf("top border should carry the + action: %q", top)
+	}
+	if strings.Contains(strings.Split(ansi.Strip(framedPanel("Files", "x", 20, 4, "")), "\n")[0], "+") {
+		t.Fatal("no action → no + in the border")
 	}
 }

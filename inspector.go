@@ -24,7 +24,8 @@ func sectionHeader(label string, width int) string {
 
 // framedPanel wraps inner (multi-line) in a rounded box of the given total width/height,
 // with title injected into the top border. Inner lines are padded/truncated ansi-aware.
-func framedPanel(title, inner string, width, height int) string {
+// action, when non-empty, is rendered right-aligned in the top border before ╮.
+func framedPanel(title, inner string, width, height int, action string) string {
 	if width < 6 {
 		width = 6
 	}
@@ -40,11 +41,15 @@ func framedPanel(title, inner string, width, height int) string {
 	if lipgloss.Width(titleStr) > maxTitle {
 		titleStr = ansi.Truncate(titleStr, maxTitle, "")
 	}
-	fill := width - 2 - (lipgloss.Width(titleStr) + 2) // minus ╭╮, minus the two spaces around the title
+	rightSeg := ""
+	if action != "" {
+		rightSeg = " " + action
+	}
+	fill := width - 2 - (lipgloss.Width(titleStr) + 2) - lipgloss.Width(rightSeg) // minus ╭╮, minus the two spaces around the title, minus action
 	if fill < 0 {
 		fill = 0
 	}
-	top := bs.Render("╭") + ts.Render(" "+titleStr+" ") + bs.Render(strings.Repeat("─", fill)+"╮")
+	top := bs.Render("╭") + ts.Render(" "+titleStr+" ") + bs.Render(strings.Repeat("─", fill)) + ts.Render(rightSeg) + bs.Render("╮")
 
 	// Pad to contentW; truncate FIRST (ansi-aware) so an over-long line never
 	// wraps and breaks the frame.
