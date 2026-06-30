@@ -24,7 +24,7 @@ func TestResolveIconsPlainViaEnv(t *testing.T) {
 }
 
 func TestIconForGlyphAndColor(t *testing.T) {
-	t.Setenv("OKASHI_ICONS", "") // nerd set
+	t.Setenv("OKASHI_ICONS", "nerd") // force nerd (empty now auto-detects)
 	s := resolveIcons()
 	cases := []struct {
 		e     fileEntry
@@ -55,7 +55,7 @@ func TestIconForGlyphAndColor(t *testing.T) {
 // glyph in the nerd set must be a real Nerd Font glyph (Private Use Area,
 // >= U+E000), never a plain space.
 func TestNerdIconsAreRealGlyphs(t *testing.T) {
-	t.Setenv("OKASHI_ICONS", "") // nerd set
+	t.Setenv("OKASHI_ICONS", "nerd") // force nerd (empty now auto-detects)
 	s := resolveIcons()
 	all := []glyph{s.folder, s.parent, s.file, s.action}
 	for _, g := range s.byExt {
@@ -65,5 +65,39 @@ func TestNerdIconsAreRealGlyphs(t *testing.T) {
 		if r := firstRune(g.ch); r < 0xE000 {
 			t.Fatalf("nerd glyph %q starts with U+%04X, want a PUA glyph (>= U+E000) — collapsed to a plain char?", g.ch, r)
 		}
+	}
+}
+
+func TestIconAutoDetect(t *testing.T) {
+	isPlain := func() bool { return firstRune(resolveIcons().folder.ch) == 0x25B8 } // ▸
+	// Terminal.app (Menlo, no Nerd Font) → plain.
+	t.Setenv("OKASHI_ICONS", "")
+	t.Setenv("TERM", "")
+	t.Setenv("TERM_PROGRAM", "Apple_Terminal")
+	if !isPlain() {
+		t.Error("Apple_Terminal should auto-select plain icons")
+	}
+	// Linux VT console → plain.
+	t.Setenv("TERM_PROGRAM", "")
+	t.Setenv("TERM", "linux")
+	if !isPlain() {
+		t.Error("TERM=linux should auto-select plain icons")
+	}
+	// A power-user terminal → nerd.
+	t.Setenv("TERM", "xterm-256color")
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	if isPlain() {
+		t.Error("iTerm should keep nerd icons")
+	}
+	// Override wins both ways.
+	t.Setenv("TERM_PROGRAM", "Apple_Terminal")
+	t.Setenv("OKASHI_ICONS", "nerd")
+	if isPlain() {
+		t.Error("OKASHI_ICONS=nerd must force nerd even on Apple_Terminal")
+	}
+	t.Setenv("TERM_PROGRAM", "iTerm.app")
+	t.Setenv("OKASHI_ICONS", "plain")
+	if !isPlain() {
+		t.Error("OKASHI_ICONS=plain must force plain")
 	}
 }

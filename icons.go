@@ -23,10 +23,26 @@ type iconSet struct {
 	byExt                        map[string]glyph
 }
 
-// resolveIcons picks the glyph set once at startup. OKASHI_ICONS=plain (or
-// ascii) avoids Nerd Font glyphs (and color) for terminals without a patched font.
+// autoIconMode guesses whether the terminal likely has a Nerd Font. We cannot detect
+// the font itself, only the terminal — so default to "plain" for the environments that
+// ship a non-patched font (Terminal.app's Menlo/SF Mono, the Linux VT console), where
+// Nerd Font PUA glyphs render as tofu and their inconsistent width breaks box alignment.
+// Power-user terminals (iTerm, WezTerm, kitty, …) keep "nerd"; OKASHI_ICONS overrides.
+func autoIconMode() string {
+	if os.Getenv("TERM_PROGRAM") == "Apple_Terminal" || os.Getenv("TERM") == "linux" {
+		return "plain"
+	}
+	return "nerd"
+}
+
+// resolveIcons picks the glyph set once at startup. OKASHI_ICONS=plain (or ascii) forces
+// safe glyphs; =nerd forces Nerd Font glyphs; unset or =auto auto-detects the terminal.
 func resolveIcons() iconSet {
-	switch strings.ToLower(os.Getenv("OKASHI_ICONS")) {
+	mode := strings.ToLower(os.Getenv("OKASHI_ICONS"))
+	if mode == "" || mode == "auto" {
+		mode = autoIconMode()
+	}
+	switch mode {
 	case "plain", "ascii":
 		return iconSet{
 			folder: glyph{ch: "▸ "},

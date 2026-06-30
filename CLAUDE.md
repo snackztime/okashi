@@ -87,7 +87,9 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   numbered chapters, loose files, Resources, and folders); markdown **preview** (`ctrl+p`,
   glamour).
 - Env knobs: `OKASHI_DIR`, `OKASHI_WIDTH`, `OKASHI_SMARTQUOTES`, `OKASHI_THEME`,
-  `OKASHI_ICONS`, `OKASHI_AUTHOR` (export header).
+  `OKASHI_ICONS` (`nerd`/`plain`/`auto`; unset = auto — Nerd Font glyphs except on
+  Terminal.app / Linux VT console, which get plain glyphs since the font isn't patched),
+  `OKASHI_AUTHOR` (export header).
 
 ### Scope discipline
 - **okashi defines the lean feature set — keep it lean.** New surface area here propagates to
