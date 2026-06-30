@@ -10,7 +10,6 @@ package main
 import "C"
 
 import (
-	"encoding/json"
 	"runtime"
 	"strings"
 	"unsafe"
@@ -79,48 +78,6 @@ func (fmChecker) Check(text string) ([]grammarFinding, error) {
 		return nil, nil
 	}
 	defer C.free(unsafe.Pointer(out))
-	var parsed struct {
-		Issues []struct {
-			Wrong  string `json:"wrong"`
-			Fix    string `json:"fix"`
-			Reason string `json:"reason"`
-		} `json:"issues"`
-	}
-	if err := json.Unmarshal([]byte(C.GoString(out)), &parsed); err != nil {
-		return nil, err
-	}
-	lines := strings.Split(text, "\n")
-	var findings []grammarFinding
-	// The model returns the wrong substring verbatim, not an offset. Locate each in
-	// document order, claiming successive occurrences so a word repeated on a line maps
-	// to distinct spans. LIMITATION: if the model reorders issues, or the same substring
-	// occurs before the flagged instance, the underline may land on the wrong occurrence;
-	// re-running the check refines it.
-	claimedFrom := map[int]int{} // line index → byte offset to resume searching from
-	for _, is := range parsed.Issues {
-		if is.Wrong == "" {
-			continue
-		}
-		for li, ln := range lines {
-			from := claimedFrom[li]
-			if from > len(ln) {
-				continue
-			}
-			rel := strings.Index(ln[from:], is.Wrong)
-			if rel < 0 {
-				continue
-			}
-			idx := from + rel
-			sc := len([]rune(ln[:idx]))
-			ec := sc + len([]rune(is.Wrong))
-			findings = append(findings, grammarFinding{
-				Line: li, Start: sc, End: ec,
-				Message:      is.Reason,
-				Replacements: []string{is.Fix},
-			})
-			claimedFrom[li] = idx + len(is.Wrong)
-			break
-		}
-	}
-	return findings, nil
+	// Parse + locate is pure-Go (unit-tested in grammar_backend_test.go).
+	return fmFindings(C.GoString(out), text)
 }

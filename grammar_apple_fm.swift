@@ -34,7 +34,7 @@ public func okashi_fm_proofread(_ ctext: UnsafePointer<CChar>) -> UnsafeMutableP
     var json = empty
     Task {
         do {
-            let s = LanguageModelSession(instructions: "You are a proofreader. Find grammar and spelling errors in the user's prose.")
+            let s = LanguageModelSession(instructions: "You are a proofreader. List ONLY genuine grammar and spelling errors in the user's text. For each error, copy the wrong word or phrase verbatim and give its correction. Never list a word that is already correct, and never repeat the wrong text unchanged as the fix. Return no issues if the text is correct.")
             let r = try await s.respond(to: text, generating: FMResult.self)
             let issues = r.content.issues.map { ["wrong": $0.wrong, "fix": $0.fix, "reason": $0.reason] }
             let data = try JSONSerialization.data(withJSONObject: ["issues": issues])

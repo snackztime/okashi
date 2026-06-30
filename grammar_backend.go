@@ -1,5 +1,10 @@
 package main
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 // grammarFinding is one issue located within a source line (RUNE offsets within that
 // line), produced by an optional on-device "deep grammar" backend (Tier 2). Rune
 // offsets let findings slot straight into the editor's per-line Decorator + click-to-fix.
@@ -21,6 +26,68 @@ type grammarChecker interface {
 // newGrammarChecker is the constructor the model calls at startup. It is a package var
 // so tests in the pure-Go build can inject a fake without cgo.
 var newGrammarChecker = appleGrammarChecker
+
+// fmIssue is one issue as reported by the Foundation Models bridge (the wrong substring
+// verbatim + a correction); JSON-decoded from the Swift side.
+type fmIssue struct {
+	Wrong  string `json:"wrong"`
+	Fix    string `json:"fix"`
+	Reason string `json:"reason"`
+}
+
+// fmFindings parses the Foundation Models JSON ({"issues":[...]}) and locates each issue
+// in text. Pure-Go (no cgo) so it is unit-testable in the default build.
+func fmFindings(jsonStr, text string) ([]grammarFinding, error) {
+	var parsed struct {
+		Issues []fmIssue `json:"issues"`
+	}
+	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
+		return nil, err
+	}
+	return locateFMFindings(text, parsed.Issues), nil
+}
+
+// locateFMFindings maps model-reported (wrong, fix) pairs to per-line rune-range findings.
+// The model returns the wrong substring, not an offset, so each is located in document
+// order, claiming successive occurrences (a word repeated on a line maps to distinct
+// spans). Matching is case-INSENSITIVE because the model frequently changes the case of
+// `wrong`; no-op echoes (wrong==fix) are skipped. LIMITATION: a substring occurring before
+// the flagged instance, or reordered issues, can mislocate; re-running refines it.
+func locateFMFindings(text string, issues []fmIssue) []grammarFinding {
+	lines := strings.Split(text, "\n")
+	var findings []grammarFinding
+	claimedFrom := map[int]int{} // line index → byte offset to resume searching from
+	for _, is := range issues {
+		if is.Wrong == "" || strings.EqualFold(strings.TrimSpace(is.Wrong), strings.TrimSpace(is.Fix)) {
+			continue
+		}
+		for li, ln := range lines {
+			from := claimedFrom[li]
+			if from > len(ln) {
+				continue
+			}
+			hay, needle := strings.ToLower(ln), strings.ToLower(is.Wrong)
+			if len(hay) != len(ln) { // ToLower changed byte length → match exactly instead
+				hay, needle = ln, is.Wrong
+			}
+			rel := strings.Index(hay[from:], needle)
+			if rel < 0 {
+				continue
+			}
+			idx := from + rel
+			sc := len([]rune(ln[:idx]))
+			ec := sc + len([]rune(is.Wrong))
+			findings = append(findings, grammarFinding{
+				Line: li, Start: sc, End: ec,
+				Message:      is.Reason,
+				Replacements: []string{is.Fix},
+			})
+			claimedFrom[li] = idx + len(is.Wrong)
+			break
+		}
+	}
+	return findings
+}
 
 // utf16ToRune converts a UTF-16 code-unit offset into a rune offset in s. NSSpellChecker
 // reports ranges in UTF-16 code units; the editor works in runes.
