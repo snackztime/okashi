@@ -21,7 +21,7 @@ func TestDecoratorStylesRange(t *testing.T) {
 	m.Focus()
 	m.SetValue("alpha bravo charlie")
 	// Underline "bravo" (runes 6..11).
-	m.Decorator = func(line string) []Decoration {
+	m.Decorator = func(line string, _ int) []Decoration {
 		i := strings.Index(line, "bravo")
 		if i < 0 {
 			return nil
@@ -73,7 +73,7 @@ func TestDecorationMidSegmentAnyCursor(t *testing.T) {
 		m.Focus()
 		m.SetValue("alpha bravo charlie delta")
 		m.SetCursor(cur)
-		m.Decorator = func(line string) []Decoration {
+		m.Decorator = func(line string, _ int) []Decoration {
 			i := strings.Index(line, "charlie")
 			if i < 0 {
 				return nil

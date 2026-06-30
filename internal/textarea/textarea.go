@@ -234,10 +234,10 @@ type Model struct {
 	Dim      bool
 	DimStyle lipgloss.Style
 
-	// Decorator, when set, is called once per visible source line during View and
-	// returns rune-range decorations to style (spellcheck/syntax). nil → no
-	// decorations (render unchanged). okashi:decorations
-	Decorator func(line string) []Decoration
+	// Decorator, when set, is called once per visible source line during View with
+	// the line text and its source-line index, and returns rune-range decorations to
+	// style (spellcheck/syntax/grammar). nil → no decorations. okashi:decorations
+	Decorator func(line string, lineIndex int) []Decoration
 
 	// CharLimit is the maximum number of characters this input element will
 	// accept. If 0 or less, there's no limit.
@@ -1332,7 +1332,7 @@ func (m Model) View() string {
 		// line-relative offsets to absolute buffer rune offsets. okashi:decorations
 		var lineDecos []Decoration
 		if m.Decorator != nil {
-			for _, d := range m.Decorator(string(line)) {
+			for _, d := range m.Decorator(string(line), l) {
 				lineDecos = append(lineDecos, Decoration{Start: lineOffset + d.Start, End: lineOffset + d.End, Style: d.Style})
 			}
 		}

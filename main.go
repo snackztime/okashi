@@ -383,13 +383,22 @@ func (m *model) applyDecorator() {
 	posOn := a.adverb || a.adjective || a.passive
 	grammarOn := a.grammar
 	cursorLine := m.editor.CurrentLine()
-	build := func(line string) []textarea.Decoration {
+	apple := m.appleFindings[m.currentFile] // Tier 2 (Apple) findings, gated by grammar
+	build := func(line string, idx int) []textarea.Decoration {
 		var d []textarea.Decoration
 		if a.spell {
 			d = append(d, spellDecorator(line)...)
 		}
 		if grammarOn {
 			d = append(d, grammarDecorator(line, line == cursorLine)...)
+			// Apple findings share the green grammar underline; keyed by line index,
+			// clamped against stale offsets (cleared on edit, but guard anyway).
+			nr := len([]rune(line))
+			for _, f := range apple {
+				if f.Line == idx && f.Start >= 0 && f.Start < f.End && f.End <= nr {
+					d = append(d, textarea.Decoration{Start: f.Start, End: f.End, Style: grammarStyle})
+				}
+			}
 		}
 		if posOn {
 			d = append(d, posDecorator(line, a.adverb, a.adjective, a.passive)...)
@@ -401,6 +410,39 @@ func (m *model) applyDecorator() {
 	} else {
 		m.editor.Decorator = nil
 	}
+}
+
+// invalidateAppleFindings drops the cached Apple (Tier 2) findings for the current file;
+// their rune offsets no longer match once the text changes. Re-run "Check grammar" to refresh.
+func (m *model) invalidateAppleFindings() {
+	if len(m.appleFindings[m.currentFile]) > 0 {
+		delete(m.appleFindings, m.currentFile)
+		m.applyDecorator()
+	}
+}
+
+// maybeOpenAppleSuggestion opens the suggestion bar when an Apple (Tier 2) finding with
+// replacements covers the cursor (set by a preceding click). Returns true if it opened one.
+func (m *model) maybeOpenAppleSuggestion() bool {
+	if !m.analysis.grammar {
+		return false
+	}
+	line := m.editor.Line()
+	col := m.editor.CursorColumn()
+	runes := []rune(m.editor.CurrentLine())
+	for _, f := range m.appleFindings[m.currentFile] {
+		if f.Line == line && col >= f.Start && col <= f.End &&
+			f.Start < f.End && f.End <= len(runes) && len(f.Replacements) > 0 {
+			m.suggesting = true
+			m.suggestions = f.Replacements
+			m.suggestIndex = 0
+			m.suggestWord = string(runes[f.Start:f.End])
+			m.suggestStart, m.suggestEnd = f.Start, f.End
+			m.status = f.Message
+			return true
+		}
+	}
+	return false
 }
 
 // syncGoal rolls the current project's daily baseline over to today on the first
@@ -479,6 +521,7 @@ func (m *model) applySuggestion(i int) {
 	m.editor.ReplaceRange(m.suggestStart, m.suggestEnd, chosen)
 	m.status = "'" + m.suggestWord + "' → '" + chosen + "'"
 	m.suggesting = false
+	m.invalidateAppleFindings() // the edit shifts offsets; refresh via Check grammar
 }
 
 // spellHintSuggestionAtX maps a content column on the spell-hint status row to a
@@ -845,6 +888,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.editor.ClickTo(msg.Y, msg.X-textLeft)
 				m.focus = focusEditor
 				m.editor.Focus()
+				m.maybeOpenAppleSuggestion() // click an Apple-flagged span → suggestion bar
 				return m, nil
 			}
 		}
@@ -1095,6 +1139,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.editor.InsertString(string(smartQuote(prev, hasPrev, km.Runes[0])))
 			m.dirty = true
 			m.lastEditAt = time.Now()
+			m.invalidateAppleFindings()
 			return m, nil
 		}
 		before := m.editor.Value()
@@ -1103,6 +1148,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.editor.Value() != before {
 			m.dirty = true
 			m.lastEditAt = time.Now()
+			m.invalidateAppleFindings() // offsets are stale once the text changes
 		}
 	}
 

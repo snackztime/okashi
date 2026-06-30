@@ -1822,3 +1822,53 @@ func TestGrammarCursorLineTracksLiveCursor(t *testing.T) {
 		t.Fatal("after moving, line 0 should now be flagged")
 	}
 }
+
+func TestAppleClickToFix(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("The cat are sleeping now"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 10})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.analysis.grammar = true
+	m.appleFindings[m.currentFile] = []grammarFinding{{Line: 0, Start: 8, End: 11, Message: "agreement", Replacements: []string{"is"}}}
+	// Cursor inside the finding → opens the suggestion bar.
+	m.editor.MoveToLine(0)
+	m.editor.SetCursor(9)
+	if !m.maybeOpenAppleSuggestion() {
+		t.Fatal("expected a suggestion to open for the finding under the cursor")
+	}
+	if !m.suggesting || len(m.suggestions) == 0 || m.suggestions[0] != "is" {
+		t.Fatalf("suggestion not set up: suggesting=%v sugg=%v", m.suggesting, m.suggestions)
+	}
+	m.applySuggestion(0)
+	if got := m.editor.CurrentLine(); got != "The cat is sleeping now" {
+		t.Fatalf("apply failed: %q", got)
+	}
+	if len(m.appleFindings[m.currentFile]) != 0 {
+		t.Fatal("findings should be invalidated after applying a fix")
+	}
+}
+
+func TestAppleFindingsInvalidatedOnEdit(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("hello world"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 10})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.analysis.grammar = true
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.appleFindings[m.currentFile] = []grammarFinding{{Line: 0, Start: 0, End: 5, Message: "x"}}
+	// Type a character → the edit invalidates the cached findings.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'z'}})
+	m = nm.(model)
+	if len(m.appleFindings[m.currentFile]) != 0 {
+		t.Fatal("editing the text should invalidate Apple findings")
+	}
+}
