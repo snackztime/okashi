@@ -743,7 +743,7 @@ func TestHomeMouseWheelMovesSelection(t *testing.T) {
 	}
 	nm, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelUp, Action: tea.MouseActionPress})
 	m = nm.(model)
-	if m.homeRegion != regionProjects || m.homeIndex != 0 {
+	if m.homeRegion != regionLibrary || m.homeIndex != 0 {
 		t.Fatalf("wheel up should return to the project, got region=%d index=%d", m.homeRegion, m.homeIndex)
 	}
 }
@@ -783,13 +783,13 @@ func TestHomeMouseDoubleClickActivates(t *testing.T) {
 	m.resetHomeSelection()
 
 	// Click coordinates for the project cell (Projects[0]).
-	x, y := homeCellXY(m, regionProjects, 0)
+	x, y := homeCellXY(m, regionLibrary, 0)
 	click := tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress}
 
 	// First click selects but doesn't activate.
 	nm, _ = m.Update(click)
 	m = nm.(model)
-	if m.homeRegion != regionProjects || m.homeIndex != 0 {
+	if m.homeRegion != regionLibrary || m.homeIndex != 0 {
 		t.Fatalf("first click should select Projects[0], got region=%d index=%d", m.homeRegion, m.homeIndex)
 	}
 	if m.screen != screenHome {
@@ -2008,5 +2008,42 @@ func TestAutoRecheckToggleAndDue(t *testing.T) {
 	}
 	if m.autoRecheckDue(now) {
 		t.Fatal("after firing, auto-recheck must not be due again until the next edit")
+	}
+}
+
+func TestHomeEdgeStatesAndResponsive(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 26})
+	m = nm.(model)
+	// Empty workspace (actions only) — nav + render must not panic.
+	m.homeItems = buildHomeItems(nil, t.TempDir())
+	m.resetHomeSelection()
+	if m.homeRegion != regionActions {
+		t.Fatalf("empty workspace should focus Actions, got %d", m.homeRegion)
+	}
+	for _, k := range []tea.KeyType{tea.KeyUp, tea.KeyDown, tea.KeyLeft, tea.KeyRight, tea.KeyTab} {
+		nm, _ = m.Update(tea.KeyMsg{Type: k})
+		m = nm.(model)
+	}
+	_ = m.homeView()
+	// Populated, across widths: cells must round-trip the hit-test at every width.
+	m.homeItems = []homeItem{
+		{kind: homeRecentFile, label: "a.md", path: "/x/a.md"},
+		{kind: homeProject, label: "novel", path: t.TempDir()},
+		{kind: homeNewDocument, label: "New document"},
+	}
+	m.resetHomeSelection()
+	for _, w := range []int{120, 80, 60, 40, 20} {
+		nm, _ = m.Update(tea.WindowSizeMsg{Width: w, Height: 24})
+		mm := nm.(model)
+		_, cells, _ := mm.homeContent()
+		for _, c := range cells {
+			x, y := homeCellXY(mm, c.region, c.index)
+			r, idx, ok := mm.homeItemAt(x, y)
+			if !ok || r != c.region || idx != c.index {
+				t.Fatalf("w=%d: cell (%d,%d) hit-test → (%d,%d,%v)", w, c.region, c.index, r, idx, ok)
+			}
+		}
 	}
 }

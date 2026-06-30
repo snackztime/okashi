@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestBuildHomeItems(t *testing.T) {
@@ -30,8 +31,9 @@ func TestBuildHomeItems(t *testing.T) {
 	if items[0].label != "chapter-03.md" {
 		t.Fatalf("recent label should be the basename, got %q", items[0].label)
 	}
-	if items[2].kind != homeProject || items[2].label != "journal" {
-		t.Fatalf("projects should be alpha-sorted after recents, got %+v", items[2])
+	// Plain dirs (no manifest / no numbered files) classify as FOLDERS now.
+	if items[2].kind != homeFolder || items[2].label != "journal" {
+		t.Fatalf("folders should be alpha-sorted after recents, got %+v", items[2])
 	}
 	if items[4].kind != homeNewDocument {
 		t.Fatalf("5th item should be new document action, got %+v", items[4])
@@ -50,16 +52,14 @@ func TestBuildHomeItemsEmpty(t *testing.T) {
 	}
 }
 
-func TestHomeViewUsesPerExtensionIconForRecents(t *testing.T) {
-	t.Setenv("OKASHI_ICONS", "") // nerd set so .md has a distinct glyph
+func TestHomeViewShowsRecentName(t *testing.T) {
 	m := initialModel()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
 	m.homeItems = []homeItem{{kind: homeRecentFile, label: "chapter.md", path: "/x/chapter.md"}}
 	m.resetHomeSelection()
-	want := resolveIcons().icon(fileEntry{name: "chapter.md"})
-	if !strings.Contains(m.homeView(), want) {
-		t.Fatalf("recent row should use the .md glyph %q", want)
+	if !strings.Contains(ansi.Strip(m.homeView()), "chapter.md") {
+		t.Fatal("RECENT column should list the recent file name")
 	}
 }
 
