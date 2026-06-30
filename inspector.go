@@ -91,6 +91,12 @@ func inspectorTabLabels() []string { return []string{"Words", "Outline", "Goals"
 type inspectorModel struct {
 	visible bool
 	tab     inspectorTab
+
+	// grammarBackend is the Name() of the active grammarChecker, or "" if none.
+	// grammarChecking is true while an async grammar pass is in flight.
+	// Both are set in the model's View() just before rendering the inspector.
+	grammarBackend  string
+	grammarChecking bool
 }
 
 // cycle advances the inspector: hidden → Words → Outline → … → hidden.
@@ -281,6 +287,13 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 		b.WriteString("  " + checkbox(analysis.adverb) + adverbStyle.Render("Adverb") + "\n")
 		b.WriteString("  " + checkbox(analysis.adjective) + adjStyle.Render("Adjective") + "\n")
 		b.WriteString("  " + checkbox(analysis.passive) + passiveStyle.Render("Passive/weak"))
+		if analysis.grammar && in.grammarBackend != "" {
+			action := "▸ Check grammar (" + in.grammarBackend + ")"
+			if in.grammarChecking {
+				action = "checking grammar…"
+			}
+			b.WriteString("\n\n  " + action)
+		}
 	case tabOutline:
 		b.WriteString(sectionHeader("Outline", width) + "\n\n")
 		outLines := strings.Split(renderOutline(outline, width-2), "\n")

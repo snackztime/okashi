@@ -195,6 +195,10 @@ type model struct {
 
 	analysis analysisState
 
+	grammarChecker  grammarChecker
+	appleFindings   map[string][]grammarFinding
+	checkingGrammar bool
+
 	lastClickRow  int
 	lastClickTime time.Time
 
@@ -255,6 +259,8 @@ func initialModel() model {
 		status:         "",
 		icons:          resolveIcons(),
 		goalsAll:       loadGoals(goalsPath()),
+		grammarChecker: newGrammarChecker(),
+		appleFindings:  map[string][]grammarFinding{},
 	}
 }
 
@@ -325,6 +331,27 @@ type autosaveTickMsg time.Time
 // lifetime, started in Init.
 func autosaveTick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return autosaveTickMsg(t) })
+}
+
+// analysisActionRowY is the inspector body row (content-relative, 0 = tab bar)
+// for the "Check grammar" action button — rendered below the Passive row (10),
+// after a blank row (11), at row 12. Does NOT shift the 5 checkbox rows.
+const analysisActionRowY = 12
+
+// grammarResultMsg is returned by checkGrammarCmd when the backend finishes.
+type grammarResultMsg struct {
+	file     string
+	findings []grammarFinding
+	err      error
+}
+
+// checkGrammarCmd runs c.Check asynchronously and returns the result as a
+// grammarResultMsg. Called by the action row click handler.
+func checkGrammarCmd(c grammarChecker, file, text string) tea.Cmd {
+	return func() tea.Msg {
+		f, err := c.Check(text)
+		return grammarResultMsg{file, f, err}
+	}
 }
 
 // autosaveDue reports whether the buffer should be flushed: there are unsaved
@@ -492,6 +519,23 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.save()
 		}
 		return m, autosaveTick()
+	}
+
+	if msg, ok := msg.(grammarResultMsg); ok {
+		m.appleFindings[msg.file] = msg.findings
+		m.checkingGrammar = false
+		if msg.err == nil {
+			m.applyDecorator()
+			n := len(msg.findings)
+			if n == 1 {
+				m.status = "1 grammar note"
+			} else {
+				m.status = fmt.Sprintf("%d grammar notes", n)
+			}
+		} else {
+			m.status = "grammar check failed"
+		}
+		return m, nil
 	}
 
 	if m.screen == screenHome {
@@ -722,6 +766,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.applyDecorator()
 					return m, nil
 				}
+			}
+		}
+
+		// Action row: "Check grammar" — only when grammar is on and a backend is available.
+		if showInspector && msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && m.inspector.tab == tabAnalysis {
+			localX := msg.X - (m.width - inspectorWidth) - 2
+			if m.analysis.grammar && m.grammarChecker != nil && !m.checkingGrammar && localX >= 0 && msg.Y-1 == analysisActionRowY {
+				m.checkingGrammar = true
+				m.status = "checking grammar…"
+				return m, checkGrammarCmd(m.grammarChecker, m.currentFile, m.editor.Value())
 			}
 		}
 
@@ -1135,6 +1189,11 @@ func (m model) View() string {
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
 		pg := m.goalsAll[m.files.dir].applyEnvDefaults()
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
+		m.inspector.grammarBackend = ""
+		if m.grammarChecker != nil {
+			m.inspector.grammarBackend = m.grammarChecker.Name()
+		}
+		m.inspector.grammarChecking = m.checkingGrammar
 		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
 		title := inspectorTabLabels()[m.inspector.tab]
 		cols = append(cols, framedPanel(title, insInner, inspectorWidth, m.height, ""))

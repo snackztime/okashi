@@ -1705,6 +1705,80 @@ func TestRightClickBlankRowDoesNothing(t *testing.T) {
 	}
 }
 
+// fakeChecker is a pure-Go grammarChecker for tests — no cgo, no network.
+type fakeChecker struct{ findings []grammarFinding }
+
+func (f fakeChecker) Name() string                           { return "Fake" }
+func (f fakeChecker) Available() bool                        { return true }
+func (f fakeChecker) Check(string) ([]grammarFinding, error) { return f.findings, nil }
+
+func TestCheckGrammarAction(t *testing.T) {
+	orig := newGrammarChecker
+	newGrammarChecker = func() grammarChecker {
+		return fakeChecker{[]grammarFinding{{Line: 0, Start: 0, End: 3, Message: "x", Replacements: []string{"the"}}}}
+	}
+	defer func() { newGrammarChecker = orig }()
+
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("teh cat"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.inspector.visible = true
+	m.inspector.tab = tabAnalysis
+	m.analysis.grammar = true
+	m.layout()
+
+	// Click the action row at analysisActionRowY+1 (content-relative +1 for top border).
+	x := m.width - inspectorWidth + 4
+	y := analysisActionRowY + 1
+	nm, cmd := m.Update(tea.MouseMsg{X: x, Y: y, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if !m.checkingGrammar {
+		t.Fatal("clicking the action row should set checkingGrammar=true")
+	}
+	if cmd == nil {
+		t.Fatal("clicking the action row should return a non-nil cmd")
+	}
+
+	// Execute the cmd to get the grammarResultMsg, then feed it back.
+	result := cmd()
+	nm, _ = m.Update(result)
+	m = nm.(model)
+	if m.checkingGrammar {
+		t.Fatal("grammarResultMsg should clear checkingGrammar")
+	}
+	findings := m.appleFindings[m.currentFile]
+	if len(findings) != 1 || findings[0].Message != "x" {
+		t.Fatalf("appleFindings should store the fake finding; got %v", findings)
+	}
+}
+
+func TestActionRowHiddenWithoutBackend(t *testing.T) {
+	orig := newGrammarChecker
+	newGrammarChecker = func() grammarChecker { return nil }
+	defer func() { newGrammarChecker = orig }()
+
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.inspector.visible = true
+	m.inspector.tab = tabAnalysis
+	m.analysis.grammar = true
+	m.layout()
+
+	view := ansi.Strip(m.View())
+	if strings.Contains(view, "Check grammar") {
+		t.Fatal("action row should NOT appear when grammarChecker is nil (no backend)")
+	}
+}
+
 func TestGrammarCursorLineTracksLiveCursor(t *testing.T) {
 	old := lipgloss.ColorProfile()
 	lipgloss.SetColorProfile(0) // truecolor: grammar green emits an exact 38;2;80;250;123
