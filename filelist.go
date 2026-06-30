@@ -117,9 +117,15 @@ func (f *filelist) SetDir(dir string) {
 	f.entries = append(f.entries, f.view.loose...)
 }
 
+// createRowSentinel is passed as editRow to View() to prepend a new-file input row.
+const createRowSentinel = -2
+
 // View renders the visible window of entries, highlighting the selection.
-func (f filelist) View() string {
-	if len(f.entries) == 0 {
+// editRow >= 0: render editField at that row index instead of the filename.
+// editRow == createRowSentinel: prepend editField as a new row before the list.
+// editRow == -1 (or any other negative): normal render.
+func (f filelist) View(editRow int, editField string) string {
+	if len(f.entries) == 0 && editRow != createRowSentinel {
 		return lipgloss.NewStyle().Foreground(subtle).Render("(empty)")
 	}
 	end := f.offset + f.height
@@ -132,12 +138,21 @@ func (f filelist) View() string {
 		chapterSet[ch.file] = true
 	}
 
+	editRowStyle := lipgloss.NewStyle().Foreground(accent).Width(f.width)
 	var b strings.Builder
+	if editRow == createRowSentinel {
+		b.WriteString(editRowStyle.Render(ansi.Truncate(" "+editField, f.width, "")))
+		if end > f.offset {
+			b.WriteByte('\n')
+		}
+	}
 	for i := f.offset; i < end; i++ {
 		e := f.entries[i]
 		g := f.icons.iconFor(e)
 		section := !e.isDir && chapterSet[e.name]
 		switch {
+		case editRow >= 0 && i == editRow:
+			b.WriteString(editRowStyle.Render(ansi.Truncate(" "+editField, f.width, "")))
 		case i == f.selected:
 			var content string
 			if section {

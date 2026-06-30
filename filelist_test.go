@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func TestFilelistReadsFiltersSorts(t *testing.T) {
@@ -133,7 +134,7 @@ func TestFilelistViewShowsIconsNoSlash(t *testing.T) {
 	f.height = 5
 	f.entries = []fileEntry{{name: "proj", isDir: true}, {name: "a.md"}}
 
-	view := f.View()
+	view := f.View(-1, "")
 	if strings.Contains(view, "proj/") {
 		t.Fatal("dir should not get a trailing slash (the icon conveys it)")
 	}
@@ -193,7 +194,7 @@ func TestFilelistGutterAndDimExtension(t *testing.T) {
 	f.selected = -1 // nothing selected → file uses the dim-extension path
 	f.entries = []fileEntry{{name: "chapter.md"}}
 
-	view := f.View()
+	view := f.View(-1, "")
 	if !strings.HasPrefix(view, " ") {
 		t.Fatal("rows should start with a one-column gutter")
 	}
@@ -285,7 +286,7 @@ func TestSidebarShowsTitlesAndCounts(t *testing.T) {
 	f.height = 10
 	f.SetDir(dir)
 
-	view := f.View()
+	view := f.View(-1, "")
 	if !strings.Contains(view, "opening") || strings.Contains(view, "01-opening") {
 		t.Fatalf("manuscript pane should show stripped title 'opening', not raw filename:\n%s", view)
 	}
@@ -306,7 +307,7 @@ func TestSidebarRendersManifestTitleAndOrder(t *testing.T) {
 	f.root = ""
 	f.width, f.height = 60, 12
 	f.SetDir(dir)
-	view := f.View()
+	view := f.View(-1, "")
 	if !strings.Contains(view, "The Letter") || !strings.Contains(view, "Chapter One") {
 		t.Fatalf("sidebar should show manifest titles:\n%s", view)
 	}
@@ -334,5 +335,33 @@ func TestSidebarOrdersSectionsNumerically(t *testing.T) {
 	}
 	if strings.Join(names, ",") != "2-two.md,10-ten.md" {
 		t.Fatalf("sections should sort numerically (2 before 10): %v", names)
+	}
+}
+
+func TestFileListInlineEditRow(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "plain")
+	f := filelist{width: 20, height: 10, icons: resolveIcons()}
+	f.entries = []fileEntry{{name: "alpha.md"}, {name: "bravo.md"}}
+	f.selected = 1
+	out := ansi.Strip(f.View(1, "EDITING_HERE"))
+	if !strings.Contains(out, "EDITING_HERE") {
+		t.Fatalf("editRow should render the field:\n%s", out)
+	}
+	if strings.Contains(out, "bravo.md") {
+		t.Fatalf("the edited row should show the field, not the filename:\n%s", out)
+	}
+	// Normal render (editRow -1) is unchanged.
+	if !strings.Contains(ansi.Strip(f.View(-1, "")), "bravo.md") {
+		t.Fatal("normal render should show filenames")
+	}
+}
+
+func TestFileListInlineCreateRow(t *testing.T) {
+	t.Setenv("OKASHI_ICONS", "plain")
+	f := filelist{width: 20, height: 10, icons: resolveIcons()}
+	f.entries = []fileEntry{{name: "alpha.md"}}
+	out := ansi.Strip(f.View(createRowSentinel, "NEWFILE"))
+	if !strings.Contains(out, "NEWFILE") || !strings.Contains(out, "alpha.md") {
+		t.Fatalf("create row should add the field AND keep existing entries:\n%s", out)
 	}
 }

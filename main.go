@@ -178,8 +178,10 @@ type model struct {
 
 	pager pagerModel
 
-	renaming     bool
-	renameTarget renameTarget
+	renaming       bool
+	renamingInPane bool
+	creatingInPane bool
+	renameTarget   renameTarget
 
 	exportPrompt bool
 
@@ -522,6 +524,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, tea.Quit
 			case "esc":
 				m.renaming = false
+				m.renamingInPane = false
 				m.nameInput.Blur()
 				m.status = "rename cancelled"
 				m.refreshAfterRename()
@@ -1044,7 +1047,13 @@ func (m model) View() string {
 		if m.files.dir == "" {
 			title = "Files"
 		}
-		cols = append(cols, framedPanel(title, m.files.View(), sidebarWidth, m.height))
+		editRow, editField := -1, ""
+		if m.renaming && m.renamingInPane {
+			editRow, editField = m.files.selected, m.nameInput.View()
+		} else if m.creatingFile && m.creatingInPane {
+			editRow, editField = createRowSentinel, m.nameInput.View()
+		}
+		cols = append(cols, framedPanel(title, m.files.View(editRow, editField), sidebarWidth, m.height))
 	}
 	// Editor column: the editor pane, a blank line break, then the status bar —
 	// all at the editor width, so the side panels render truly full height and the
@@ -1133,6 +1142,7 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// esc cancels with no rename, so there is nothing to refresh.
 			case "esc":
 				m.renaming = false
+				m.renamingInPane = false
 				m.nameInput.Blur()
 				m.status = "rename cancelled"
 				return m, nil
@@ -1464,10 +1474,14 @@ func (m *model) startRename() {
 			return
 		}
 		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
+		m.renamingInPane = true
+		m.nameInput.Width = m.files.width
 		m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir, section: true},
 			sectionTitle(e.name))
 		return
 	}
+	m.renamingInPane = true
+	m.nameInput.Width = m.files.width
 	m.beginRename(renameTarget{dir: m.files.dir, name: e.name, isDir: e.isDir}, e.name)
 }
 
@@ -1506,6 +1520,7 @@ func (m *model) startRenameOutline() {
 // refuses a collision, renames on disk, follows the open file, and refreshes.
 func (m *model) confirmRename() {
 	m.renaming = false
+	m.renamingInPane = false
 	m.nameInput.Blur()
 	typed := strings.TrimSpace(m.nameInput.Value())
 	t := m.renameTarget
@@ -1657,7 +1672,7 @@ func (m model) statsText() string {
 // whole bar; on a terminal too narrow for both, the stats drop out rather than
 // truncate. Width is the bar minus statusStyle's 1-col padding each side.
 func (m model) statusBar() string {
-	if m.creatingFile {
+	if m.creatingFile && !m.creatingInPane {
 		folderMode := m.creatingFolder || strings.HasSuffix(m.nameInput.Value(), "/")
 		label := "new file ▸ "
 		if folderMode {
@@ -1688,7 +1703,7 @@ func (m model) statusBar() string {
 	if w, sugg, ok := m.cursorSpellHint(); ok {
 		return "✗ " + w + " → " + strings.Join(sugg, " · ") + "  ·  ^R"
 	}
-	if m.renaming {
+	if m.renaming && !m.renamingInPane {
 		return "rename ▸ " + m.nameInput.View()
 	}
 	if m.goalPromptField == 1 {

@@ -1482,3 +1482,23 @@ func TestPanelsFullHeight(t *testing.T) {
 		t.Fatalf("files.height = %d, want m.height-2 = %d", m.files.height, m.height-2)
 	}
 }
+
+func TestRenameRendersInRow(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	m.focus = focusSidebar
+	m.files.selectName("01-a.md")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.renaming || !m.renamingInPane {
+		t.Fatal("r should start an in-pane rename")
+	}
+	if strings.Contains(ansi.Strip(m.statusBar()), "rename ▸") {
+		t.Fatal("in-pane rename must NOT use the bottom bar")
+	}
+}
