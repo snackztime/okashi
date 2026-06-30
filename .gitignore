@@ -9,3 +9,8 @@
 
 # exported manuscripts
 **/export/
+
+# Apple grammar build artifacts
+/okashi
+/okashi-apple
+/libokashifm.a
