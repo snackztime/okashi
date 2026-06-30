@@ -142,23 +142,31 @@ type styledRun struct {
 // choosing each rune's style by precedence: a covering decoration > dim > normal.
 // decos are ABSOLUTE-offset ranges (the View converts line-relative → absolute).
 func splitStyledRuns(seg []rune, absStart, span0, span1 int, dimOn bool, normal, dimStyle lipgloss.Style, decos []Decoration) []styledRun {
-	styleAt := func(off int) lipgloss.Style {
-		for _, d := range decos {
+	// styleAt returns the style AND a stable grouping key. Runs must be grouped by
+	// this key, NOT by lipgloss.Style.String(): String() renders the EMPTY string,
+	// which is "" for every style, so comparing it merges the whole segment into one
+	// run — decorations vanish unless they begin the segment. Key: decoration index
+	// ≥0, -1 dim, -2 normal.
+	styleAt := func(off int) (lipgloss.Style, int) {
+		for i, d := range decos {
 			if off >= d.Start && off < d.End {
-				return d.Style
+				return d.Style, i
 			}
 		}
 		if dimOn && (off < span0 || off >= span1) {
-			return dimStyle
+			return dimStyle, -1
 		}
-		return normal
+		return normal, -2
 	}
 	var runs []styledRun
 	i := 0
 	for i < len(seg) {
-		st := styleAt(absStart + i)
+		st, key := styleAt(absStart + i)
 		j := i + 1
-		for j < len(seg) && styleAt(absStart+j).String() == st.String() {
+		for j < len(seg) {
+			if _, k := styleAt(absStart + j); k != key {
+				break
+			}
 			j++
 		}
 		runs = append(runs, styledRun{text: string(seg[i:j]), style: st})
