@@ -2,6 +2,8 @@ package main
 
 import (
 	_ "embed"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,6 +32,7 @@ var (
 
 func loadSpeller() {
 	speller, _ = gospell.NewGoSpellReader(strings.NewReader(affData), strings.NewReader(dicData))
+	loadPersonalDictionary()
 }
 
 var misspellStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555")).Underline(true)
@@ -38,6 +41,9 @@ var misspellStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#ff5555")).Un
 // contractions, and possessives).
 func spellOK(word string) bool {
 	spellOnce.Do(loadSpeller)
+	if inPersonalDict(word) {
+		return true
+	}
 	if speller == nil {
 		return true
 	}
@@ -123,4 +129,86 @@ func spellDecorator(line string) []textarea.Decoration {
 		}
 	}
 	return decos
+}
+
+// dictItem is the sentinel "suggestion" that adds the word under the cursor to the personal
+// dictionary; it rides in the spell suggestion list so it's discoverable without a new key.
+const dictItem = "＋ add to dict"
+
+var (
+	personalMu     sync.Mutex
+	personalWords  = map[string]bool{}
+	personalLoaded bool
+)
+
+func dictionaryPath() string {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(dir, "okashi", "dictionary.txt")
+}
+
+// loadPersonalDictionary loads the global personal word list (once).
+func loadPersonalDictionary() {
+	personalMu.Lock()
+	defer personalMu.Unlock()
+	if personalLoaded {
+		return
+	}
+	personalLoaded = true
+	p := dictionaryPath()
+	if p == "" {
+		return
+	}
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		w := strings.TrimSpace(line)
+		if w == "" || strings.HasPrefix(w, "#") {
+			continue
+		}
+		personalWords[strings.ToLower(w)] = true
+	}
+}
+
+func inPersonalDict(word string) bool {
+	personalMu.Lock()
+	defer personalMu.Unlock()
+	return personalWords[strings.ToLower(word)]
+}
+
+// addToDictionary adds word to the personal dictionary (memory + ~/.config/okashi/dictionary.txt).
+// Returns true if it was newly added. Skips empty/numeric/all-caps and surrounding punctuation.
+func addToDictionary(word string) bool {
+	word = strings.Trim(strings.TrimSpace(word), "'\"().,;:!?“”’")
+	if word == "" || hasDigit(word) || isAllCaps(word) {
+		return false
+	}
+	personalMu.Lock()
+	if personalWords[strings.ToLower(word)] {
+		personalMu.Unlock()
+		return false
+	}
+	personalWords[strings.ToLower(word)] = true
+	personalMu.Unlock()
+
+	if p := dictionaryPath(); p != "" {
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		out := ""
+		if existing, err := os.ReadFile(p); err == nil {
+			out = string(existing)
+			if out != "" && !strings.HasSuffix(out, "\n") {
+				out += "\n"
+			}
+		}
+		out += word + "\n"
+		atomicWrite(p, []byte(out), 0o644)
+	}
+	suggestMu.Lock()
+	suggestCache = map[string][]string{}
+	suggestMu.Unlock()
+	return true
 }

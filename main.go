@@ -530,10 +530,7 @@ func (m *model) cursorSpellHint() (word string, suggestions []string, ok bool) {
 	if !found || spellOK(w) {
 		return "", nil, false
 	}
-	sugg := spellSuggest(w, 4)
-	if len(sugg) == 0 {
-		return "", nil, false
-	}
+	sugg := append(spellSuggest(w, 4), dictItem) // + add-to-dictionary slot
 	return w, sugg, true
 }
 
@@ -612,6 +609,16 @@ func matchCase(orig, sugg string) string {
 func (m *model) applySuggestion(i int) {
 	if i < 0 || i >= len(m.suggestions) {
 		m.suggesting = false
+		return
+	}
+	if m.suggestions[i] == dictItem { // add the word to the personal dictionary instead
+		m.suggesting = false
+		if addToDictionary(m.suggestWord) {
+			m.status = "added '" + m.suggestWord + "' to dictionary"
+		} else {
+			m.status = "'" + m.suggestWord + "' is already known"
+		}
+		m.applyDecorator() // the word is now known — clear its underline
 		return
 	}
 	chosen := matchCase(m.suggestWord, m.suggestions[i])
@@ -1208,11 +1215,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.status = "'" + w + "' looks correct"
 					return m, nil
 				}
-				sugg := spellSuggest(w, 7)
-				if len(sugg) == 0 {
-					m.status = "no suggestions for '" + w + "'"
-					return m, nil
-				}
+				sugg := append(spellSuggest(w, 7), dictItem) // + add-to-dictionary slot
 				m.suggesting = true
 				m.suggestions = sugg
 				m.suggestIndex = 0
