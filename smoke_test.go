@@ -1640,3 +1640,43 @@ func TestCreatePromptVisibleWhenSidebarHidden(t *testing.T) {
 		t.Fatal("create prompt is invisible when the sidebar was hidden")
 	}
 }
+
+func TestDeleteKeepsAdjacentSelection(t *testing.T) {
+	dir := t.TempDir()
+	for _, n := range []string{"a.md", "b.md", "c.md"} {
+		os.WriteFile(filepath.Join(dir, n), []byte("x"), 0o644)
+	}
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	m.focus = focusSidebar
+	m.files.selectName("b.md") // middle file
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDelete})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = nm.(model)
+	// selection should land on the neighbor that took b's row ("c.md"), not jump to "a.md".
+	if got := m.files.entries[m.files.selected].name; got != "c.md" {
+		t.Fatalf("after deleting b.md, selection = %q, want adjacent 'c.md'", got)
+	}
+}
+
+func TestRightClickBlankRowDoesNothing(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "only.md"), []byte("x"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	m.sidebarVisible = true
+	m.layout()
+	// Right-click well below the single file row (blank area) → no rename starts.
+	nm, _ = m.Update(tea.MouseMsg{X: 3, Y: 20, Button: tea.MouseButtonRight, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if m.renaming {
+		t.Fatal("right-click on a blank row below the list must not start a rename")
+	}
+}

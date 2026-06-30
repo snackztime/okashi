@@ -789,7 +789,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Right-click in the sidebar starts an in-place rename.
 		if inSidebar && msg.Button == tea.MouseButtonRight && msg.Action == tea.MouseActionPress {
-			if row := sidebarRow(msg.Y, 1, m.files.height); row >= 0 {
+			if row := sidebarRow(msg.Y, 1, m.files.height); row >= 0 && row < len(m.files.entries) {
 				m.focus = focusSidebar
 				m.editor.Blur()
 				m.files.selectRow(row)
@@ -812,7 +812,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Framed sidebar: top border occupies row 0; the file list starts at row 1.
 		row := sidebarRow(msg.Y, 1, m.files.height)
-		if row < 0 {
+		if row < 0 || row >= len(m.files.entries) { // ignore clicks on blank rows below the list
 			return m, nil
 		}
 		m.focus = focusSidebar
@@ -1575,6 +1575,7 @@ func (m *model) startDelete() {
 
 // confirmDelete removes the deleteTarget file or folder and refreshes the sidebar.
 func (m *model) confirmDelete() {
+	idx := m.files.selected // keep the position so the selection lands on the adjacent row
 	path := filepath.Join(m.files.dir, m.deleteTarget)
 	info, err := os.Lstat(path)
 	if err == nil {
@@ -1590,9 +1591,12 @@ func (m *model) confirmDelete() {
 		m.status = "couldn't delete: " + err.Error()
 		return
 	}
-	m.files.SetDir(m.files.dir)
-	if m.files.selected >= len(m.files.entries) && len(m.files.entries) > 0 {
-		m.files.selected = len(m.files.entries) - 1
+	m.files.SetDir(m.files.dir) // re-reads entries and resets selection to 0
+	if n := len(m.files.entries); n > 0 {
+		if idx >= n {
+			idx = n - 1
+		}
+		m.files.selectRow(idx) // the row the deleted item occupied (now its neighbor)
 	}
 	m.status = "deleted"
 }
