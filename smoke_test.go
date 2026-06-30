@@ -1963,3 +1963,50 @@ func TestGrammarHeuristicHintAndFix(t *testing.T) {
 		t.Fatalf("apply heuristic fix: %q", got)
 	}
 }
+
+type fakeRecheckCk struct{}
+
+func (fakeRecheckCk) Name() string                           { return "Apple Intelligence" }
+func (fakeRecheckCk) Available() bool                        { return true }
+func (fakeRecheckCk) Check(string) ([]grammarFinding, error) { return nil, nil }
+
+func TestAutoRecheckToggleAndDue(t *testing.T) {
+	old := newGrammarChecker
+	newGrammarChecker = func() grammarChecker { return fakeRecheckCk{} }
+	defer func() { newGrammarChecker = old }()
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("hello"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.analysis.grammar = true
+	m.inspector.visible = true
+	m.inspector.tab = tabAnalysis
+	m.layout()
+
+	// Click the Auto-recheck row (analysisAutoRowY content row → screen analysisAutoRowY+1).
+	x := m.width - inspectorWidth + 4
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: analysisAutoRowY + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if !m.autoRecheck {
+		t.Fatal("clicking the Auto-recheck row should enable it")
+	}
+
+	now := time.Now()
+	m.lastEditAt = now.Add(-3 * time.Second) // idle, edited since last check
+	if !m.autoRecheckDue(now) {
+		t.Fatal("auto-recheck should be due after an idle edit")
+	}
+	// The tick dispatches the check and stamps lastGrammarCheck (so it won't re-fire).
+	nm, cmd := m.Update(autosaveTickMsg(now))
+	m = nm.(model)
+	if !m.checkingGrammar || cmd == nil {
+		t.Fatal("the tick should fire the auto-recheck when due")
+	}
+	if m.autoRecheckDue(now) {
+		t.Fatal("after firing, auto-recheck must not be due again until the next edit")
+	}
+}

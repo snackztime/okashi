@@ -94,9 +94,10 @@ type inspectorModel struct {
 
 	// grammarBackend is the Name() of the active grammarChecker, or "" if none.
 	// grammarChecking is true while an async grammar pass is in flight.
-	// Both are set in the model's View() just before rendering the inspector.
-	grammarBackend  string
-	grammarChecking bool
+	// grammarAutoRecheck mirrors model.autoRecheck. All set in the model's View().
+	grammarBackend     string
+	grammarChecking    bool
+	grammarAutoRecheck bool
 }
 
 // cycle advances the inspector: hidden → Words → Outline → … → hidden.
@@ -288,14 +289,15 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 		b.WriteString("  " + checkbox(analysis.adjective) + adjStyle.Render("Adjective") + "\n")
 		b.WriteString("  " + checkbox(analysis.passive) + passiveStyle.Render("Passive/weak"))
 		if analysis.grammar && in.grammarBackend != "" {
+			// Stable layout so the click rows never shift: action (analysisActionRowY=12),
+			// backend name (13, dim — keeps a long name off the action row), Auto-recheck (14).
+			action := "▸ Check grammar"
 			if in.grammarChecking {
-				b.WriteString("\n\n  checking grammar…")
-			} else {
-				// Action row at analysisActionRowY; backend name on a dim line below so
-				// a long name ("Apple Intelligence") never overflows the panel/action row.
-				b.WriteString("\n\n  ▸ Check grammar\n  " +
-					lipgloss.NewStyle().Foreground(subtle).Render(in.grammarBackend))
+				action = "checking grammar…"
 			}
+			b.WriteString("\n\n  " + action)
+			b.WriteString("\n  " + lipgloss.NewStyle().Foreground(subtle).Render(in.grammarBackend))
+			b.WriteString("\n  " + checkbox(in.grammarAutoRecheck) + "Auto-recheck")
 		}
 	case tabOutline:
 		b.WriteString(sectionHeader("Outline", width) + "\n\n")

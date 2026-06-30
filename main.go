@@ -197,9 +197,11 @@ type model struct {
 
 	analysis analysisState
 
-	grammarChecker  grammarChecker
-	appleFindings   map[string][]grammarFinding
-	checkingGrammar bool
+	grammarChecker   grammarChecker
+	appleFindings    map[string][]grammarFinding
+	checkingGrammar  bool
+	autoRecheck      bool      // re-run the Apple pass after edits settle (opt-in)
+	lastGrammarCheck time.Time // when the last Apple pass was dispatched
 
 	lastClickRow  int
 	lastClickTime time.Time
@@ -340,7 +342,11 @@ func autosaveTick() tea.Cmd {
 // analysisActionRowY is the inspector body row (content-relative, 0 = tab bar)
 // for the "Check grammar" action button — rendered below the Passive row (10),
 // after a blank row (11), at row 12. Does NOT shift the 5 checkbox rows.
-const analysisActionRowY = 12
+// The backend name renders at 13 and the Auto-recheck toggle at 14.
+const (
+	analysisActionRowY = 12
+	analysisAutoRowY   = 14
+)
 
 // grammarResultMsg is returned by checkGrammarCmd when the backend finishes.
 type grammarResultMsg struct {
@@ -362,6 +368,17 @@ func checkGrammarCmd(c grammarChecker, file, text string) tea.Cmd {
 // edits to a real file and the writer has paused for at least 2s.
 func (m model) autosaveDue(now time.Time) bool {
 	return m.dirty && m.currentFile != "" && now.Sub(m.lastEditAt) >= 2*time.Second
+}
+
+// autoRecheckDue reports whether an automatic Apple grammar pass should fire: opt-in,
+// grammar on, a backend present, not already checking, real content, the buffer has been
+// idle ≥1.5s, and there's been an edit since the last check (so it fires once per edit
+// burst, never on clean/unchanged text).
+func (m model) autoRecheckDue(now time.Time) bool {
+	return m.autoRecheck && m.analysis.grammar && m.grammarChecker != nil &&
+		!m.checkingGrammar && m.currentFile != "" && m.editor.Value() != "" &&
+		now.Sub(m.lastEditAt) >= 1500*time.Millisecond &&
+		m.lastEditAt.After(m.lastGrammarCheck)
 }
 
 // sidebarRow maps an absolute mouse Y to a row index within the file list, or
@@ -609,8 +626,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	if t, ok := msg.(autosaveTickMsg); ok {
-		if m.autosaveDue(time.Time(t)) {
+		now := time.Time(t)
+		if m.autosaveDue(now) {
 			m.save()
+		}
+		if m.autoRecheckDue(now) {
+			m.checkingGrammar = true
+			m.lastGrammarCheck = now
+			return m, tea.Batch(checkGrammarCmd(m.grammarChecker, m.currentFile, m.editor.Value()), autosaveTick())
 		}
 		return m, autosaveTick()
 	}
@@ -868,8 +891,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			localX := msg.X - (m.width - inspectorWidth) - 2
 			if m.analysis.grammar && m.grammarChecker != nil && !m.checkingGrammar && localX >= 0 && msg.Y-1 == analysisActionRowY {
 				m.checkingGrammar = true
+				m.lastGrammarCheck = time.Now()
 				m.status = "checking grammar…"
 				return m, checkGrammarCmd(m.grammarChecker, m.currentFile, m.editor.Value())
+			}
+			// Auto-recheck toggle row.
+			if m.analysis.grammar && m.grammarChecker != nil && localX >= 0 && msg.Y-1 == analysisAutoRowY {
+				m.autoRecheck = !m.autoRecheck
+				return m, nil
 			}
 		}
 
@@ -1306,6 +1335,7 @@ func (m model) View() string {
 			m.inspector.grammarBackend = m.grammarChecker.Name()
 		}
 		m.inspector.grammarChecking = m.checkingGrammar
+		m.inspector.grammarAutoRecheck = m.autoRecheck
 		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
 		title := inspectorTabLabels()[m.inspector.tab]
 		cols = append(cols, framedPanel(title, insInner, inspectorWidth, m.height, ""))
