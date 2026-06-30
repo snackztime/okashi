@@ -1083,6 +1083,15 @@ func (m model) View() string {
 		return lipgloss.JoinVertical(lipgloss.Left, body, statusStyle.Width(m.width).Render("F1/esc close"))
 	}
 
+	// Refresh the decorator so the grammar "don't nag the line you're typing" rule
+	// tracks the LIVE cursor line. applyDecorator captures the cursor line by value
+	// and only re-runs on toggle/load, so without this the suppression would freeze
+	// to whatever line was current when Grammar was switched on. Cheap (a closure
+	// rebuild); only when grammar is active.
+	if m.analysis.grammar {
+		m.applyDecorator()
+	}
+
 	// The writing pane shows either the live editor or the rendered preview.
 	pane := m.editor.View()
 	if m.previewing {

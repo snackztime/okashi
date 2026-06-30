@@ -77,3 +77,41 @@ func TestGrammarDoubledWordMidSentence(t *testing.T) {
 		}
 	}
 }
+
+func TestGrammarDoubledWordWhitelist(t *testing.T) {
+	// Legitimately-doubled words must NOT be flagged...
+	for _, s := range []string{"I had had enough.", "He knew that that was wrong."} {
+		for _, x := range grammarDecorator(s, false) {
+			w := string([]rune(s)[x.Start:x.End])
+			if w == "had" || w == "that" {
+				t.Fatalf("%q: valid doubled %q must not be flagged", s, w)
+			}
+		}
+	}
+	// ...but an accidental double still is.
+	flagged := false
+	for _, x := range grammarDecorator("the the cat", false) {
+		if string([]rune("the the cat")[x.Start:x.End]) == "the" {
+			flagged = true
+		}
+	}
+	if !flagged {
+		t.Fatal("'the the' must still be flagged")
+	}
+}
+
+func TestGrammarClosingQuoteRune(t *testing.T) {
+	// A letter followed by a closing quote, no terminal punctuation: flag the LETTER.
+	s := `She said hello"`
+	got := ""
+	for _, x := range grammarDecorator(s, false) {
+		got = string([]rune(s)[x.Start:x.End])
+	}
+	if got != "o" {
+		t.Fatalf("%q: want the letter 'o' flagged, got %q", s, got)
+	}
+	// Terminal punctuation before the quote → no flag.
+	if d := grammarDecorator(`She said hello."`, false); len(d) != 0 {
+		t.Fatalf("terminal punct before closing quote should not flag: %+v", d)
+	}
+}

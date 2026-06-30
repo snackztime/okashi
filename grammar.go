@@ -19,6 +19,13 @@ var (
 	gramAnConsonant = regexp.MustCompile(`(?i)\ban(\s+)[bcdfgjklmnpqrstvwxyz]`)
 )
 
+// doubledWordOK lists words that legitimately repeat in correct English
+// ("I had had enough", "he knew that that was wrong"). They are exempt from the
+// doubled-word rule to avoid false positives on valid prose.
+var doubledWordOK = map[string]bool{
+	"had": true, "that": true, "is": true, "do": true, "who": true,
+}
+
 // grammarDecorator flags safe mechanical grammar/spacing issues on one line.
 // isCursorLine suppresses the missing-terminal-punctuation rule (you're typing it).
 func grammarDecorator(line string, isCursorLine bool) []textarea.Decoration {
@@ -48,8 +55,10 @@ func grammarDecorator(line string, isCursorLine bool) []textarea.Decoration {
 	words := gramWord.FindAllStringIndex(line, -1)
 	for i := 1; i < len(words); i++ {
 		between := line[words[i-1][1]:words[i][0]]
+		cur := line[words[i][0]:words[i][1]]
 		if strings.TrimSpace(between) == "" &&
-			strings.EqualFold(line[words[i-1][0]:words[i-1][1]], line[words[i][0]:words[i][1]]) {
+			strings.EqualFold(line[words[i-1][0]:words[i-1][1]], cur) &&
+			!doubledWordOK[strings.ToLower(cur)] {
 			add(b2r(words[i][0]), b2r(words[i][1]))
 		}
 	}
@@ -74,16 +83,15 @@ func grammarDecorator(line string, isCursorLine bool) []textarea.Decoration {
 		t := strings.TrimRight(line, " \t")
 		tr := []rune(t)
 		if len(tr) > 0 && !strings.HasPrefix(strings.TrimSpace(t), "#") && !listItemRe.MatchString(line) {
-			last := tr[len(tr)-1]
-			// allow a closing quote/paren after terminal punctuation
-			if last == '"' || last == '\'' || last == ')' || last == '”' || last == '’' {
-				if len(tr) > 1 {
-					last = tr[len(tr)-2]
-				}
+			li := len(tr) - 1 // rune index (into t, == into line's prefix) of the char to test
+			last := tr[li]
+			// a closing quote/paren may follow terminal punctuation — test the char before it
+			if (last == '"' || last == '\'' || last == ')' || last == '”' || last == '’') && len(tr) > 1 {
+				li = len(tr) - 2
+				last = tr[li]
 			}
 			if !strings.ContainsRune(".!?:…", last) && unicode.IsLetter(last) {
-				end := len(strings.TrimRight(line, " \t"))
-				add(b2r(end)-1, b2r(end))
+				add(li, li+1) // underline the offending letter, not the trailing quote
 			}
 		}
 	}
