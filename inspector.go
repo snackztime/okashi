@@ -137,21 +137,22 @@ type projStats struct {
 
 type goalStats struct{ today, dailyGoal, project, projectGoal int }
 
-type analysisState struct{ spell, adverb, adjective, passive bool }
+type analysisState struct{ spell, grammar, adverb, adjective, passive bool }
 
 // analysisRowY returns the inspector body row (y from the very top of the
 // inspector, row 0 = tab bar) for each Analysis checkbox:
 //
 //	0 → Spellcheck  (tab-bar(0) + blank(1) + header(2) + blank(3) = 4)
-//	1 → Adverb      (+ blank(5) + Syntax-header(6) = 7)
-//	2 → Adjective   (8)
-//	3 → Passive     (9)
+//	1 → Grammar     (5)
+//	2 → Adverb      (blank(6) + Syntax-header(7) = 8)
+//	3 → Adjective   (9)
+//	4 → Passive     (10)
 func analysisRowY(i int) int {
-	return [4]int{4, 7, 8, 9}[i]
+	return [5]int{4, 5, 8, 9, 10}[i]
 }
 
 func inspectorAnalysisRowAtY(localY int) (int, bool) {
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 5; i++ {
 		if analysisRowY(i) == localY {
 			return i, true
 		}
@@ -274,6 +275,7 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 	case tabAnalysis:
 		b.WriteString(sectionHeader("Analysis", width) + "\n\n")
 		b.WriteString("  " + checkbox(analysis.spell) + "Spellcheck\n")
+		b.WriteString("  " + checkbox(analysis.grammar) + grammarStyle.Render("Grammar") + "\n")
 		b.WriteString("\n")
 		b.WriteString(sectionHeader("Syntax", width) + "\n")
 		b.WriteString("  " + checkbox(analysis.adverb) + adverbStyle.Render("Adverb") + "\n")

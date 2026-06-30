@@ -350,22 +350,28 @@ func (m *model) syncDim() {
 }
 
 // applyDecorator sets the editor's Decorator from the current analysis toggles.
-// Spell decorations are always composed first.
+// Compose order: spell first, then grammar, then POS — so spell underline wins.
 func (m *model) applyDecorator() {
 	a := m.analysis
 	posOn := a.adverb || a.adjective || a.passive
-	switch {
-	case a.spell && posOn:
-		m.editor.Decorator = func(line string) []textarea.Decoration {
-			return append(spellDecorator(line), posDecorator(line, a.adverb, a.adjective, a.passive)...)
+	grammarOn := a.grammar
+	cursorLine := m.editor.CurrentLine()
+	build := func(line string) []textarea.Decoration {
+		var d []textarea.Decoration
+		if a.spell {
+			d = append(d, spellDecorator(line)...)
 		}
-	case a.spell:
-		m.editor.Decorator = spellDecorator
-	case posOn:
-		m.editor.Decorator = func(line string) []textarea.Decoration {
-			return posDecorator(line, a.adverb, a.adjective, a.passive)
+		if grammarOn {
+			d = append(d, grammarDecorator(line, line == cursorLine)...)
 		}
-	default:
+		if posOn {
+			d = append(d, posDecorator(line, a.adverb, a.adjective, a.passive)...)
+		}
+		return d
+	}
+	if a.spell || grammarOn || posOn {
+		m.editor.Decorator = build
+	} else {
 		m.editor.Decorator = nil
 	}
 }
@@ -705,10 +711,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case 0:
 						m.analysis.spell = !m.analysis.spell
 					case 1:
-						m.analysis.adverb = !m.analysis.adverb
+						m.analysis.grammar = !m.analysis.grammar
 					case 2:
-						m.analysis.adjective = !m.analysis.adjective
+						m.analysis.adverb = !m.analysis.adverb
 					case 3:
+						m.analysis.adjective = !m.analysis.adjective
+					case 4:
 						m.analysis.passive = !m.analysis.passive
 					}
 					m.applyDecorator()

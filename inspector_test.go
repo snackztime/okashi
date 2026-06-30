@@ -191,12 +191,12 @@ func TestInspectorAnalysisTab(t *testing.T) {
 }
 
 func TestInspectorAnalysisRowAtY(t *testing.T) {
-	// Spellcheck is at analysisRowY(0); Adverb at analysisRowY(1).
+	// Spellcheck is at analysisRowY(0); Grammar at analysisRowY(1).
 	if r, ok := inspectorAnalysisRowAtY(analysisRowY(0)); !ok || r != 0 {
 		t.Fatalf("Spellcheck row → %d ok=%v, want 0", r, ok)
 	}
 	if r, ok := inspectorAnalysisRowAtY(analysisRowY(1)); !ok || r != 1 {
-		t.Fatalf("Adverb row → %d ok=%v, want 1", r, ok)
+		t.Fatalf("Grammar row → %d ok=%v, want 1", r, ok)
 	}
 	if _, ok := inspectorAnalysisRowAtY(0); ok {
 		t.Fatal("the tab-bar row is not a checkbox row")
@@ -206,7 +206,7 @@ func TestInspectorAnalysisRowAtY(t *testing.T) {
 func TestAnalysisTabPOSList(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabAnalysis}
 	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{spell: true, adverb: true})
-	for _, w := range []string{"Spellcheck", "SYNTAX", "Adverb", "Adjective", "Passive"} {
+	for _, w := range []string{"Spellcheck", "Grammar", "SYNTAX", "Adverb", "Adjective", "Passive"} {
 		if !strings.Contains(out, w) {
 			t.Fatalf("analysis tab missing %q:\n%s", w, out)
 		}
@@ -215,8 +215,9 @@ func TestAnalysisTabPOSList(t *testing.T) {
 		t.Fatalf("toggled-on checkboxes should render [x]:\n%s", out)
 	}
 	// Verify rows render at the expected Y positions.
+	// Row indices: 0=Spellcheck, 1=Grammar, 2=Adverb, 3=Adjective, 4=Passive.
 	lines := strings.Split(out, "\n")
-	for i, label := range []string{"Spellcheck", "Adverb", "Adjective", "Passive"} {
+	for i, label := range []string{"Spellcheck", "Grammar", "Adverb", "Adjective", "Passive"} {
 		y := analysisRowY(i)
 		if y >= len(lines) || !strings.Contains(lines[y], label) {
 			t.Fatalf("row %d (analysisRowY(%d)=%d) should contain %q, got %q", i, i, y, label, func() string {
@@ -244,11 +245,29 @@ func TestAnalysisRowAtY(t *testing.T) {
 	if r, ok := inspectorAnalysisRowAtY(analysisRowY(0)); !ok || r != 0 {
 		t.Fatalf("Spellcheck row → %d ok=%v, want 0", r, ok)
 	}
-	if r, ok := inspectorAnalysisRowAtY(analysisRowY(3)); !ok || r != 3 {
-		t.Fatalf("Passive row → %d ok=%v, want 3", r, ok)
+	if r, ok := inspectorAnalysisRowAtY(analysisRowY(4)); !ok || r != 4 {
+		t.Fatalf("Passive row → %d ok=%v, want 4", r, ok)
 	}
 	if _, ok := inspectorAnalysisRowAtY(0); ok {
 		t.Fatal("the tab-bar row is not a checkbox row")
+	}
+}
+
+func TestAnalysisGrammarRow(t *testing.T) {
+	in := inspectorModel{visible: true, tab: tabAnalysis}
+	out := in.View(inspectorInnerWidth(), docStats{}, projStats{}, "", goalStats{}, analysisState{grammar: true})
+	if !strings.Contains(out, "Grammar") || !strings.Contains(out, "[x] Grammar") {
+		t.Fatalf("Analysis tab should show a checked Grammar row:\n%s", out)
+	}
+}
+
+func TestAnalysisRowYWithGrammar(t *testing.T) {
+	// 5 checkboxes now: Spellcheck, Grammar, Adverb, Adjective, Passive.
+	for i := 0; i < 5; i++ {
+		y := analysisRowY(i)
+		if r, ok := inspectorAnalysisRowAtY(y); !ok || r != i {
+			t.Fatalf("analysisRowY(%d)=%d → inspectorAnalysisRowAtY=%d,%v", i, y, r, ok)
+		}
 	}
 }
 

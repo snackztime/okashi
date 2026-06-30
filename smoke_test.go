@@ -1137,9 +1137,10 @@ func TestPOSToggleViaAnalysisClick(t *testing.T) {
 	m.inspector.visible = true
 	m.inspector.tab = tabAnalysis
 	m.layout()
+	// Adverb is now row index 2 (after Grammar was inserted at index 1).
 	// analysisRowY is content-relative; add 1 for the framed panel's top border.
 	x := m.width - inspectorWidth + 4
-	nm, _ = m.Update(tea.MouseMsg{X: x, Y: analysisRowY(1) + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: analysisRowY(2) + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
 	m = nm.(model)
 	if !m.analysis.adverb {
 		t.Fatal("clicking the Adverb row should enable it")
@@ -1660,6 +1661,29 @@ func TestDeleteKeepsAdjacentSelection(t *testing.T) {
 	// selection should land on the neighbor that took b's row ("c.md"), not jump to "a.md".
 	if got := m.files.entries[m.files.selected].name; got != "c.md" {
 		t.Fatalf("after deleting b.md, selection = %q, want adjacent 'c.md'", got)
+	}
+}
+
+func TestGrammarToggleClick(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("the the cat"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 40})
+	m = nm.(model)
+	m.inspector.visible = true
+	m.inspector.tab = tabAnalysis
+	m.layout()
+	// Click the Grammar row (index 1). analysisRowY is content-relative; add 1 for the framed panel's top border.
+	x := m.width - inspectorWidth + 4
+	nm, _ = m.Update(tea.MouseMsg{X: x, Y: analysisRowY(1) + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if !m.analysis.grammar {
+		t.Fatal("clicking the Grammar row should enable it")
+	}
+	if m.editor.Decorator == nil {
+		t.Fatal("grammar on should set the editor Decorator")
 	}
 }
 
