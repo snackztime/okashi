@@ -1502,3 +1502,37 @@ func TestRenameRendersInRow(t *testing.T) {
 		t.Fatal("in-pane rename must NOT use the bottom bar")
 	}
 }
+
+func TestRightClickAndF2Rename(t *testing.T) {
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "alpha.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "bravo.md"), []byte("x"), 0o644)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 30})
+	m = nm.(model)
+	m.sidebarVisible = true
+	m.layout()
+	// Right-click a file row → that row is selected and an in-pane rename starts.
+	var row int
+	for y, ln := range strings.Split(ansi.Strip(m.View()), "\n") {
+		if strings.Contains(ln, "bravo") {
+			row = y
+			break
+		}
+	}
+	nm, _ = m.Update(tea.MouseMsg{X: 3, Y: row, Button: tea.MouseButtonRight, Action: tea.MouseActionPress})
+	m = nm.(model)
+	if !m.renaming || !m.renamingInPane || !strings.Contains(m.files.entries[m.files.selected].name, "bravo") {
+		t.Fatalf("right-click should select bravo and start in-pane rename; renaming=%v sel=%q", m.renaming, m.files.entries[m.files.selected].name)
+	}
+	// Cancel, then F2 starts rename on the selection.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyF2})
+	m = nm.(model)
+	if !m.renaming || !m.renamingInPane {
+		t.Fatal("F2 should start an in-pane rename")
+	}
+}

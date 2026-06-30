@@ -764,6 +764,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		// Right-click in the sidebar starts an in-place rename.
+		if inSidebar && msg.Button == tea.MouseButtonRight && msg.Action == tea.MouseActionPress {
+			if row := sidebarRow(msg.Y, 1, m.files.height); row >= 0 {
+				m.focus = focusSidebar
+				m.editor.Blur()
+				m.files.selectRow(row)
+				m.startRename()
+				return m, textinput.Blink
+			}
+		}
+
 		// Click selection / open is file-pane only.
 		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 			return m, nil
@@ -809,6 +820,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.nameInput.Focus()
 			m.editor.Blur()
 			m.status = ""
+			return m, textinput.Blink
+		case "f2":
+			m.focus = focusSidebar
+			m.editor.Blur()
+			m.startRename()
 			return m, textinput.Blink
 		case "ctrl+p":
 			m.togglePreview()
