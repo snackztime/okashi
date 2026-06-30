@@ -34,8 +34,11 @@ type grammarPhrase struct {
 	msg  string
 }
 
+// ofHaveRe matches a modal + "of" (the "could of" → "could have" slip). "may"/"might" are
+// excluded (month/“might of course” collisions); "X of course" is rejected in code.
+var ofHaveRe = regexp.MustCompile(`(?i)\b(could|would|should|must) of\b`)
+
 var grammarPhrases = []grammarPhrase{
-	{regexp.MustCompile(`(?i)\b(could|would|should|must|might|may) of\b`), "$1 have", "should be “have”"},
 	{regexp.MustCompile(`(?i)\bvery unique\b`), "unique", "redundant — “unique” is absolute"},
 	{regexp.MustCompile(`(?i)\bend result\b`), "result", "redundant"},
 	{regexp.MustCompile(`(?i)\bpast history\b`), "history", "redundant"},
@@ -51,6 +54,36 @@ var grammarPhrases = []grammarPhrase{
 // closingQuote reports whether r is a closing quote/paren that may follow end punctuation.
 func closingQuote(r rune) bool {
 	return r == '"' || r == '\'' || r == ')' || r == '”' || r == '’'
+}
+
+// The a/an rule keys on the vowel/consonant LETTER, but English keys on SOUND. These
+// exception prefixes cover the common mismatches so the click-to-apply fix isn't wrong:
+//   - vowel letter, consonant sound → keep "a" (a university, a one-time, a euro)
+//   - silent h (consonant letter, vowel sound) → keep "an" (an hour, an honest)
+var aKeepPrefixes = []string{"uni", "use", "usu", "usa", "ubiq", "unan", "eu", "ewe", "one", "once", "u.s"}
+var anKeepPrefixes = []string{"hour", "honest", "honor", "honour", "heir", "homage"}
+
+// nextWordLower returns the lowercased word beginning at/after byte offset from in line.
+func nextWordLower(line string, from int) string {
+	rest := strings.TrimLeft(line[from:], " \t")
+	end := 0
+	for end < len(rest) {
+		r := rune(rest[end])
+		if !unicode.IsLetter(r) && r != '-' && r != '.' {
+			break
+		}
+		end++
+	}
+	return strings.ToLower(rest[:end])
+}
+
+func hasAnyPrefix(s string, prefixes []string) bool {
+	for _, p := range prefixes {
+		if strings.HasPrefix(s, p) {
+			return true
+		}
+	}
+	return false
 }
 
 // grammarFindings returns heuristic grammar/spacing findings for ONE line: rune-range
@@ -87,8 +120,11 @@ func grammarFindings(line string, isCursorLine bool) []grammarFinding {
 			add(b2r(words[i-1][0]), b2r(words[i][1]), "repeated word", w1)
 		}
 	}
-	// a → an before a vowel sound.
+	// a → an before a vowel sound (skip vowel-letter/consonant-sound words: university…).
 	for _, m := range gramAVowel.FindAllStringSubmatchIndex(line, -1) {
+		if hasAnyPrefix(nextWordLower(line, m[3]), aKeepPrefixes) {
+			continue
+		}
 		s := b2r(m[0])
 		fix := "an"
 		if runes[s] == 'A' {
@@ -96,14 +132,25 @@ func grammarFindings(line string, isCursorLine bool) []grammarFinding {
 		}
 		add(s, s+1, "use “an” before a vowel sound", fix)
 	}
-	// an → a before a consonant sound.
+	// an → a before a consonant sound (skip silent-h words: hour, honest…).
 	for _, m := range gramAnConsonant.FindAllStringSubmatchIndex(line, -1) {
+		if hasAnyPrefix(nextWordLower(line, m[3]), anKeepPrefixes) {
+			continue
+		}
 		s := b2r(m[0])
 		fix := "a"
 		if runes[s] == 'A' {
 			fix = "A"
 		}
 		add(s, s+2, "use “a” before a consonant sound", fix)
+	}
+	// Modal + "of" → "have" ("could of gone"), but not "X of course".
+	for _, m := range ofHaveRe.FindAllStringIndex(line, -1) {
+		if strings.HasPrefix(nextWordLower(line, m[1]), "course") {
+			continue
+		}
+		matched := line[m[0]:m[1]]
+		add(b2r(m[0]), b2r(m[1]), "should be “have”", ofHaveRe.ReplaceAllString(matched, "$1 have"))
 	}
 	// Double space → single space.
 	for _, m := range gramDoubleSpc.FindAllStringSubmatchIndex(line, -1) {

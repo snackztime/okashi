@@ -143,3 +143,39 @@ func TestGrammarRulesHaveFixes(t *testing.T) {
 		}
 	}
 }
+
+func TestGrammarNoFalsePositives(t *testing.T) {
+	// Correct prose that earlier rules wrongly flagged with a bad auto-fix.
+	clean := []string{
+		"He may of course be right.",
+		"They could of course do that.",
+		"I will see you in May of 2020.",
+		"a unique opportunity",
+		"a university degree",
+		"a one-time event",
+		"I waited an hour",
+		"an honest answer",
+	}
+	for _, s := range clean {
+		if f := grammarFindings(s, true); len(f) != 0 {
+			t.Errorf("%q should be clean, got %+v", s, f)
+		}
+	}
+	// Real errors must still fire with the right fix.
+	real := []struct{ line, fix string }{
+		{"I could of gone", "could have"},
+		{"a apple", "an"},
+		{"an cat", "a"},
+	}
+	for _, r := range real {
+		ok := false
+		for _, f := range grammarFindings(r.line, true) {
+			if len(f.Replacements) > 0 && f.Replacements[0] == r.fix {
+				ok = true
+			}
+		}
+		if !ok {
+			t.Errorf("%q should flag fix %q", r.line, r.fix)
+		}
+	}
+}
