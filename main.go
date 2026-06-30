@@ -187,6 +187,7 @@ type model struct {
 	creatingFile   bool
 	creatingFolder bool
 	previewing     bool
+	previewTufte   bool
 	typewriter     bool
 	dimEnabled     bool
 
@@ -1231,6 +1232,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// nothing reaches the editor or file list underneath.
 	var cmd tea.Cmd
 	if m.previewing {
+		if key, ok := msg.(tea.KeyMsg); ok && key.String() == "t" {
+			m.previewTufte = !m.previewTufte // toggle Default ⇄ Tufte
+			m.renderPreview()
+			return m, tea.Batch(cmds...)
+		}
 		m.preview, cmd = m.preview.Update(msg)
 		cmds = append(cmds, cmd)
 	} else if m.focus == focusSidebar && m.sidebarVisible {
@@ -1343,7 +1349,11 @@ func (m model) View() string {
 		if m.currentFile == "" {
 			name = "untitled"
 		}
-		header := breadcrumbStyle.Render("▌ PREVIEW · " + name)
+		style := "Default"
+		if m.previewTufte {
+			style = "Tufte"
+		}
+		header := breadcrumbStyle.Render("▌ PREVIEW · "+name) + lipgloss.NewStyle().Foreground(subtle).Render("  · "+style+" (t)")
 		pane = lipgloss.JoinVertical(lipgloss.Left, header, m.preview.View())
 	}
 
@@ -2026,29 +2036,35 @@ func (m *model) togglePreview() {
 		return
 	}
 
+	m.renderPreview()
+	m.preview.GotoTop()
+	m.previewing = true
+	m.editor.Blur()
+	m.status = "preview (read-only) · ctrl+p edit · t style · ↑/↓ scroll"
+}
+
+// renderPreview rebuilds the preview viewport from the buffer: footnotes folded to endnotes
+// (glamour can't render them), styled Default (the detected theme) or Tufte.
+func (m *model) renderPreview() {
 	wrap := m.preview.Width
 	if wrap <= 0 {
 		wrap = m.colWidth
 	}
-	r, err := glamour.NewTermRenderer(
-		glamour.WithStandardStyle(m.mdStyle), // theme detected once at startup
-		glamour.WithWordWrap(wrap),
-	)
+	styleOpt := glamour.WithStandardStyle(m.mdStyle)
+	if m.previewTufte {
+		styleOpt = glamour.WithStyles(tufteGlamourStyle())
+	}
+	r, err := glamour.NewTermRenderer(styleOpt, glamour.WithWordWrap(wrap))
 	if err != nil {
 		m.status = "preview unavailable: " + err.Error()
 		return
 	}
-	out, err := r.Render(m.editor.Value())
+	out, err := r.Render(footnotesToEndnotes(m.editor.Value()))
 	if err != nil {
 		m.status = "preview failed: " + err.Error()
 		return
 	}
-
 	m.preview.SetContent(out)
-	m.preview.GotoTop()
-	m.previewing = true
-	m.editor.Blur()
-	m.status = "preview (read-only) · ctrl+p to edit · ↑/↓ scroll"
 }
 
 // wordCount counts whitespace-separated words.
