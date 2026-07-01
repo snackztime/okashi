@@ -125,6 +125,81 @@ func titles(items []manifestItem) []string {
 }
 func titlesJoined(items []manifestItem) string { return strings.Join(titles(items), "|") }
 
+func TestStructureCommitWritesReorderAndCreatesPending(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "novel")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeManifest(dir, manifest{SchemaVersion: 1, Title: "Novel", Items: []manifestItem{
+		{File: "01-a.md", Title: "A"}, {File: "02-b.md", Title: "B"},
+	}})
+	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644)
+	os.WriteFile(filepath.Join(dir, "02-b.md"), []byte("y"), 0o644)
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	m = nm.(model)
+	m.outline.dir = dir
+	m.enterStructure()
+
+	// Swap A and B (K on the 2nd), add a new blank at the end, then commit.
+	m.structureSel = 1
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}}) // [B, A]
+	m = nm.(model)
+	m.structureSel = 1
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // new blank after A → [B, A, Untitled]
+	m = nm.(model)
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // dirty → confirm
+	m = nm.(model)
+	if !m.structureConfirm {
+		t.Fatal("esc with edits should open the commit confirm")
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}}) // commit
+	m = nm.(model)
+	if m.screen != screenOutline {
+		t.Fatalf("commit should return to the binder, screen=%v", m.screen)
+	}
+	got, _, _ := readManifest(dir)
+	if titlesJoined(got.Items) != "B|A|Untitled" {
+		t.Fatalf("manifest order after commit = %v", titles(got.Items))
+	}
+	// The new blank chapter's file was created on disk.
+	last := got.Items[len(got.Items)-1].File
+	if _, err := os.Stat(filepath.Join(dir, last)); err != nil {
+		t.Fatalf("the new blank chapter's file should exist: %v", err)
+	}
+}
+
+func TestStructureCancelDiscards(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "novel")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeManifest(dir, manifest{SchemaVersion: 1, Title: "Novel", Items: []manifestItem{
+		{File: "01-a.md", Title: "A"}, {File: "02-b.md", Title: "B"},
+	}})
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	m = nm.(model)
+	m.outline.dir = dir
+	m.enterStructure()
+	m.structureSel = 1
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'K'}})
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // confirm
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc}) // esc in the confirm = discard
+	m = nm.(model)
+	got, _, _ := readManifest(dir)
+	if titlesJoined(got.Items) != "A|B" {
+		t.Fatalf("cancel must NOT change the manifest, got %v", titles(got.Items))
+	}
+}
+
 func TestStructureAddNewBlank(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "novel")

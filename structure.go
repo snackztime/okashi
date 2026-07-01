@@ -164,6 +164,28 @@ func (m model) updateStructure(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.structureConfirm {
+			switch msg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "y":
+				if err := m.commitStructure(); err != nil {
+					m.status = "commit failed: " + err.Error()
+					m.structureConfirm = false
+					return m, nil
+				}
+				m.structureConfirm = false
+				m.exitStructure()
+				m.status = "structure saved"
+				return m, nil
+			case "esc", "n":
+				m.structureConfirm = false
+				m.exitStructure()
+				m.status = "structure changes discarded"
+				return m, nil
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -211,7 +233,11 @@ func (m model) updateStructure(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, textinput.Blink
 			}
 		case "esc":
-			m.exitStructure()
+			if m.structureDirty {
+				m.structureConfirm = true
+			} else {
+				m.exitStructure()
+			}
 			return m, nil
 		}
 	}
@@ -248,6 +274,12 @@ func (m model) structureView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, pick))
 		return b.String()
 	}
+	if m.structureConfirm {
+		msg := "Apply changes to " + m.structureTitle() + "?  y apply · esc cancel"
+		bar := lipgloss.NewStyle().Foreground(accent).Render(msg)
+		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
+		return b.String()
+	}
 	if m.structureRenaming {
 		field := "retitle ▸ " + m.nameInput.View()
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, field))
@@ -256,6 +288,33 @@ func (m model) structureView() string {
 		"J/K move · a add · x remove · r retitle · esc commit")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
+}
+
+// commitStructure writes the staged order/membership: it creates any pending new-blank files, then
+// persists the whole buffer via the atomic writeManifest (re-reading the on-disk title first).
+func (m *model) commitStructure() error {
+	for f := range m.structurePendingNew {
+		// only create files that survived to the final buffer
+		inBuf := false
+		for _, it := range m.structureItems {
+			if it.File == f {
+				inBuf = true
+				break
+			}
+		}
+		if !inBuf {
+			continue
+		}
+		if err := atomicWrite(filepath.Join(m.structureDir, f), []byte(""), 0o644); err != nil {
+			return err
+		}
+	}
+	title := m.structureTitle() // re-reads the on-disk manifest title (read-modify-write)
+	return writeManifest(m.structureDir, manifest{
+		SchemaVersion: manifestSchemaVersion,
+		Title:         title,
+		Items:         m.structureItems,
+	})
 }
 
 // fmtNum formats n as a zero-padded 2-digit string.
