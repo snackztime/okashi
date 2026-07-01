@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func writeManifest(t *testing.T, dir, body string) {
+func writeManifestRaw(t *testing.T, dir, body string) {
 	t.Helper()
 	if err := os.WriteFile(filepath.Join(dir, manifestName), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -17,7 +17,7 @@ func TestResolveManifestOrderAndTitles(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "opening.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, "the-letter.md"), []byte("y"), 0o644)
-	writeManifest(t, dir, `{"schemaVersion":1,"title":"Windermere","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":1,"title":"Windermere","items":[
 		{"file":"the-letter.md","title":"The Letter"},
 		{"file":"opening.md","title":"Chapter One"}]}`)
 	entries := readEntries(dir)
@@ -40,7 +40,7 @@ func TestResolveManifestUnlistedIsLoose(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.md"), []byte("x"), 0o644)
 	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("y"), 0o644)
-	writeManifest(t, dir, `{"schemaVersion":1,"title":"N","items":[{"file":"a.md","title":"One"}]}`)
+	writeManifestRaw(t, dir, `{"schemaVersion":1,"title":"N","items":[{"file":"a.md","title":"One"}]}`)
 	v := resolveManuscript(dir, readEntries(dir))
 	if len(v.chapters) != 1 || v.chapters[0].file != "a.md" {
 		t.Fatalf("chapters = %+v, want only a.md", v.chapters)
@@ -53,7 +53,7 @@ func TestResolveManifestUnlistedIsLoose(t *testing.T) {
 func TestResolveManifestAbsentFileOmitted(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "a.md"), []byte("x"), 0o644) // gone.md never written
-	writeManifest(t, dir, `{"schemaVersion":1,"title":"N","items":[
+	writeManifestRaw(t, dir, `{"schemaVersion":1,"title":"N","items":[
 		{"file":"a.md","title":"One"},{"file":"gone.md","title":"Lost"}]}`)
 	v := resolveManuscript(dir, readEntries(dir))
 	if len(v.chapters) != 1 || v.chapters[0].file != "a.md" {
@@ -93,7 +93,7 @@ func TestResolveCategory(t *testing.T) {
 func TestResolveUnreadableManifestRefuses(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("x"), 0o644) // numbered, but...
-	writeManifest(t, dir, `{"schemaVersion":2,"title":"N","items":[]}`)
+	writeManifestRaw(t, dir, `{"schemaVersion":2,"title":"N","items":[]}`)
 	v := resolveManuscript(dir, readEntries(dir))
 	// Refuse to guess: NOT legacy, files shown flat as loose, warning set.
 	if v.source != sourceManifest {

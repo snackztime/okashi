@@ -53,3 +53,63 @@ func readManifest(dir string) (m manifest, present bool, err error) {
 	}
 	return m, true, nil
 }
+
+// writeManifest serializes m to dir/manifest.json atomically, pretty-printed with a
+// trailing newline. okashi owns manifest writes for its own AND the wicklight-shared
+// corpus (design §0); the schema is forced to EXACTLY v1 so wicklight reads it verbatim.
+func writeManifest(dir string, m manifest) error {
+	m.SchemaVersion = manifestSchemaVersion
+	data, err := json.MarshalIndent(m, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicWrite(filepath.Join(dir, manifestName), append(data, '\n'), 0o644)
+}
+
+// createManuscript makes a brand-new manuscript at dir: the folder, an empty first
+// chapter "01-<slug>.md", and a v1 manifest listing it. firstChapter is that chapter's
+// display title. It refuses to clobber an existing manifest and returns the first
+// chapter's filename so the caller can open it.
+func createManuscript(dir, title, firstChapter string) (string, error) {
+	if hasManifest(dir) {
+		return "", fmt.Errorf("a manuscript already exists at %s", dir)
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	file := "01-" + slugify(firstChapter) + ".md"
+	if err := atomicWrite(filepath.Join(dir, file), []byte(""), 0o644); err != nil {
+		return "", err
+	}
+	return file, writeManifest(dir, manifest{
+		SchemaVersion: manifestSchemaVersion,
+		Title:         title,
+		Items:         []manifestItem{{File: file, Title: firstChapter}},
+	})
+}
+
+// renameChapterTitle edits ONLY the items[].title of the chapter file in dir's manifest,
+// preserving order and membership; the filename is birth-stable (design §5.7). It
+// read-modify-writes (re-reads immediately before writing, §0) and refuses a file that is
+// not a listed chapter or a dir without a readable manifest.
+func renameChapterTitle(dir, file, newTitle string) error {
+	m, present, err := readManifest(dir)
+	if err != nil {
+		return err
+	}
+	if !present {
+		return fmt.Errorf("no manifest in %s", dir)
+	}
+	found := false
+	for i := range m.Items {
+		if m.Items[i].File == file {
+			m.Items[i].Title = newTitle
+			found = true
+			break
+		}
+	}
+	if !found {
+		return fmt.Errorf("%s is not a chapter of %s", file, dir)
+	}
+	return writeManifest(dir, m)
+}
