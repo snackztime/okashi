@@ -1,219 +1,189 @@
 # okashi
 
-A minimal, Crush-flavored terminal writing app. ASCII banner up top, a file
-pane on the left, a centered 80-column writing surface on the right. Collapse
-the sidebar and it becomes a full-screen, distraction-free page.
+A terminal writing app for long-form manuscripts and prose. Plain `.md` files, a
+manuscript-aware sidebar, live word counts, RTF + PDF export, and a full-screen
+distraction-free editor — all from the command line.
+
+<!-- screenshot placeholder -->
+
+---
 
 ## Install
 
+### From source (Go 1.25)
+
+```sh
+git clone https://github.com/snackztime/okashi
+cd okashi
+go build ./...          # build the binary
+go run .                # run without installing
+go install .            # or install to $GOBIN
+```
+
 ### Homebrew
 
-```sh
-brew install snackztime/tap/okashi
-```
+_(Planned — not yet available.)_
 
-(Requires a `snackztime/homebrew-tap` repo containing `Formula/okashi.rb`. Until
-then, install straight from this checkout: `brew install --build-from-source ./Formula/okashi.rb`.)
+---
 
-### From source
+## Quick start
 
 ```sh
-go mod tidy   # pulls the Charm libraries
-go run .       # run in place
-go install .   # or install the okashi binary to $GOBIN
+okashi              # open the writing app
+okashi --version    # print the version
+okashi --help       # show help
 ```
 
-Requires Go (see `go.mod` for the minimum). If you want the latest Charm
-releases instead of the pinned ones, run `go get -u ./...` after the first
-`tidy`.
+okashi opens in your writing folder (see [Configuration](#configuration) for
+where that is). The sidebar shows your documents and projects on the left; the
+editor is centered on the right. Collapse the sidebar with `ctrl+b` for a
+full-screen writing surface.
 
-## Releasing
+---
 
-Tag and push — the `release` workflow builds, tests, creates the GitHub Release,
-and prints the `url`/`sha256` to paste into `Formula/okashi.rb`:
+## Keyboard shortcuts
 
-```sh
-git tag v0.1.0 && git push origin v0.1.0
-```
+### Navigation
 
-## Keys
+| Key | Action |
+|-----|--------|
+| `ctrl+b` | Toggle sidebar |
+| `ctrl+y` | Inspector tabs |
+| `ctrl+l` | Outline |
+| `ctrl+k` | Binder |
+| `ctrl+o` | Home (launch screen) |
+| `esc` | Switch focus / back |
 
-| Key      | Action                                  |
-|----------|-----------------------------------------|
-| `ctrl+b` | Toggle the file sidebar (focus mode)    |
-| `esc`    | Switch focus between sidebar and editor (exit preview) |
-| `tab`    | Indent (Shift+Tab to outdent) in the editor             |
-| `ctrl+n` | Create a new file (type a name, Enter)  |
-| `ctrl+p` | Toggle a rendered Markdown preview       |
-| `ctrl+t` | Toggle typewriter scrolling (centered caret) |
-| `ctrl+d` | Toggle focus dimming (dim all but the current sentence) |
-| `ctrl+o` | Back to the launch screen (recent files / projects) |
-| `ctrl+s` | Save the open file                      |
-| `ctrl+c` | Quit                                    |
+### Files
 
-Inside the sidebar, arrow keys + Enter navigate folders and open a file; the
-mouse works too — wheel scrolls, a single click selects (and focuses the pane),
-a double-click opens a file or enters a folder.
-`ctrl+n` opens a blank buffer in the folder you're currently browsing — give it
-a name (a bare name gets `.md`) and `ctrl+s` writes it to disk.
+| Key | Action |
+|-----|--------|
+| `ctrl+n` | New file (`+` new, right-click / F2 rename) |
+| `r` | Rename file |
+| `M` | Move file or folder |
+| `del` | Delete file |
+| `d` | Duplicate file |
 
-### Rename & convert
+### Writing
 
-- In the sidebar (or outline), press **r** to rename the selected item — a loose
-  file (keeps its extension), a folder, or a section *title* (the `NN-` number is
-  kept; only the title changes). Renames refuse to overwrite an existing name.
-- Press **ctrl+l** in a plain folder of chapter files (e.g. `Chapter-00.md`,
-  `Chapter-01.md`) and okashi offers to **make it a manuscript** — it numbers the
-  files (`01-Chapter-00.md`, …) after a `.backup/` snapshot and opens the outline,
-  where you can reorder and retitle.
+| Key | Action |
+|-----|--------|
+| `ctrl+s` | Save |
+| `ctrl+t` | Typewriter scrolling (caret stays centered) |
+| `ctrl+d` | Focus dim (dim everything outside the current sentence) |
+| `ctrl+g` | Set goals |
+| `ctrl+r` | Spelling suggestions |
+| `ctrl+c` | Quit |
 
-### Outline view (manuscripts)
+### Export & preview
 
-Inside a manuscript folder (any folder with numerically-prefixed sections like
-`01-opening.md`), press **ctrl+l** to open the outline:
+| Key | Action |
+|-----|--------|
+| `ctrl+e` | Export (RTF + PDF) |
+| `ctrl+p` | Markdown preview |
+| `t` | Toggle Tufte view (inside preview) |
 
-- `↑ ↓` / `j k` — move the selection; **enter** (or double-click) opens a section.
-- `J K` or `shift+↑ ↓` — reorder the selected section. Reordering is staged; on
-  **esc**/enter you're asked to **apply** (`y`), **discard** (`n`), or keep
-  editing (`esc`). Applying renumbers the files on disk after writing a
-  `.backup/` snapshot.
-- `n` — new section, inserted after the selection (the rest renumber).
-- `esc` — back to the editor.
+### Search
 
-### Export (RTF + PDF)
+| Key | Action |
+|-----|--------|
+| `ctrl+f` | Search (Tab to scope · ctrl+a all sources) |
 
-Press **ctrl+e**, then choose a style — **m** Manuscript (Courier, double-spaced, the
-agent/editor submission format) or **t** Tufte (elegant serif, for a printable/readable
-copy). From the editor it exports the current document; from the outline it exports the
-whole manuscript. Both an editable `.rtf` and a printable `.pdf` are written to
-`<project>/export/`. Set `OKASHI_AUTHOR` for the manuscript running header.
+---
 
-### Manuscript pager (read-through)
+## Project model
 
-From the outline, press **m** for a full-screen read-through of the whole manuscript —
-every chapter concatenated, with `── Title ──` dividers and a `words-so-far / total`
-header so you can see where you are.
+The atom is one `.md` file. Larger structures are plain folders:
 
-- `↑ ↓` / `j k` scroll · `pgup` / `pgdn` page · the cursor line is highlighted.
-- **enter** (or double-click) on any line jumps into the editor at that exact line.
-- `o` back to the outline · `esc` to the editor.
+- **Manuscript** — a folder containing a `manifest.json`. The manifest is the
+  sole source of order and display titles. Files listed in `items` are chapters;
+  unlisted `.md` files are Resources (visible but not part of the ordered view or
+  export). `ctrl+e` exports the whole manuscript.
+- **Category** — a plain folder of unnumbered documents (no manifest). Good for
+  loose notes, research, or reference material.
+- **Resources** — `.md` files inside a manuscript folder that are not listed in
+  `items`, or unnumbered files at the root or in a category.
+- **Legacy manuscripts** — a folder with no manifest but at least one
+  numerically-prefixed file (e.g. `01-opening.md`) is recognized for display
+  only: order by numeric prefix, titles de-slugged from filenames. This is a
+  read-only transitional view; no structural writes are offered.
 
-## Markdown preview
+The **structure mode** (`s` from the binder) lets you reorder, insert, and
+remove chapters in a manifest manuscript. Changes are staged and applied behind
+a single confirmation.
 
-New files default to `.md`, which is just plain text you edit directly — but
-`ctrl+p` renders the current buffer as formatted Markdown (via [glamour], the
-library behind `glow`): headings, **bold**, lists, the lot. It's a read-only
-snapshot — `↑`/`↓` scroll, `ctrl+p` flips back to editing. The theme follows
-your terminal's background (dark/light); override with `OKASHI_THEME=light`.
+---
 
-[glamour]: https://github.com/charmbracelet/glamour
+## Export
 
-## Writing ergonomics
+Press `ctrl+e` to export. Choose a style:
 
-- **Tab / Shift+Tab** indent and outdent (two spaces).
-- **Enter** on a Markdown list line (`- `, `* `, `+ `, `1.`) continues the list;
-  Enter on an empty item ends it.
-- **Smart quotes** turn `'`/`"` into curly quotes as you type (on by default;
-  set `OKASHI_SMARTQUOTES=off` for code-heavy writing).
-- **Column width** defaults to 65; set `OKASHI_WIDTH=<n>` (20–200) to taste.
+| Key | Style | Description |
+|-----|-------|-------------|
+| `m` | Manuscript | Courier, double-spaced — the standard agent/editor submission format |
+| `t` | Tufte | Elegant serif, for a readable or printable copy |
 
-## Focus mode
+Both styles produce a `.rtf` and a `.pdf`, written to `<project>/export/`.
+When invoked from the outline, the full manuscript is exported (all chapters
+concatenated). When invoked from the editor, only the current document is
+exported.
 
-With typewriter on (`ctrl+t`), okashi also dims everything except the sentence
-you're in — your current sentence stays bright and centered, the rest fades.
-`ctrl+d` toggles just the dimming (keeping centered scrolling). Turning
-typewriter off turns both off. (`ctrl+d` takes over the editor's delete-forward;
-use Delete/Backspace instead.)
+Set `OKASHI_AUTHOR` to include your name in the Manuscript running header.
 
-## Launch screen
+---
 
-okashi opens on a launch screen: your **recent files** and your **projects**
-(the folders in your okashi dir), plus "Open another folder…". Pick a recent
-file to jump straight in, or a project to browse it in the sidebar. Once you're
-in a file the logo disappears — a full minimal writing zone. `ctrl+o` returns
-to the launch screen.
+## Preview
 
-From the launch screen you can open a recent file or project, **create a new
-document or project**, or browse all files — by keyboard or mouse (click to
-select, double-click to open). Type a name ending in `/` to make a folder.
+`ctrl+p` opens a rendered Markdown preview of the current document (powered by
+[glamour](https://github.com/charmbracelet/glamour)). The preview is read-only;
+`↑`/`↓` scroll, `ctrl+p` returns to editing.
 
-The file pane is confined to your okashi workspace folder — a breadcrumb at the
-top of the pane (`okashi / Book Name`) shows where you are, and you can't browse
-above the workspace. "Browse all files" on the launch screen returns to the
-workspace root.
+Inside the preview, press `t` to toggle **Tufte view** — a book-style layout
+that floats footnotes into **margin sidenotes** on wide terminals (≥ 90 columns).
+On narrower terminals, footnotes fall back to endnotes at the bottom of the page.
 
-The breadcrumb segments are clickable — click `okashi` or a parent folder to jump
-there. On deep paths it shows `okashi / … / Drafts`, keeping the nearest folders
-clickable. A `3/12` indicator appears when the list is taller than the pane.
+The preview theme follows your terminal background (dark or light). Override
+with `OKASHI_THEME=dark` or `OKASHI_THEME=light`.
 
-## Icons
+---
 
-The file pane and launch lists use Nerd Font glyphs. If your terminal isn't
-using a Nerd Font, set `OKASHI_ICONS=plain` for a plain-Unicode set.
+## Configuration
 
-## Autosave
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OKASHI_DIR` | _(see below)_ | Override the writing folder — set this to point okashi anywhere |
+| `OKASHI_WIDTH` | `72` | Editor column width, 20–200 |
+| `OKASHI_SMARTQUOTES` | `on` | Smart curly quotes as you type; set `off`, `false`, or `0` to disable |
+| `OKASHI_THEME` | _(auto)_ | Force `dark` or `light` for the Markdown preview |
+| `OKASHI_ICONS` | _(auto)_ | Glyph set: `nerd` (Nerd Font glyphs), `plain` (Unicode only), or unset for auto-detect |
+| `OKASHI_AUTHOR` | _(none)_ | Author name for the Manuscript export running header |
 
-Your work saves automatically a couple seconds after you stop typing (for any
-file with a name — `ctrl+n` names it up front). The `●`/`✓` mark by the word
-count shows unsaved vs saved. `ctrl+s` still saves on demand.
+### Writing folder
 
-## Where your files live
+okashi opens in a writing folder resolved in this order:
 
-On launch okashi opens in a writing folder, resolved in this order:
+1. `$OKASHI_DIR` — set this to point okashi anywhere you like.
+2. iCloud Drive — `~/Library/Mobile Documents/com~apple~CloudDocs/okashi`, when iCloud Drive is enabled.
+3. `~/Documents/okashi` — cross-platform fallback (iCloud off, or Linux).
 
-1. **`$OKASHI_DIR`** — set this to point okashi anywhere you like.
-2. **iCloud Drive** — `~/Library/Mobile Documents/com~apple~CloudDocs/okashi`,
-   when iCloud Drive is enabled on the Mac.
-3. **`~/Documents/okashi`** — fallback when iCloud is off (or on Linux).
+The folder is created on first run.
 
-The folder is created on first run; you don't need to make it yourself.
+---
 
-## How it's wired
+## Text selection
 
-It's a standard Bubble Tea app — one `model` holds all state, `Update` handles
-messages, `View` renders. The pieces:
+okashi enables mouse reporting so the scroll wheel and click-to-focus work.
+This suppresses the terminal's native drag-to-select. To select text:
 
-- **`main.go`** — the root model. Holds the `filelist`, the (vendored) `textarea`, the
-  `sidebarVisible` flag, and which pane has `focus`. `Update` intercepts the
-  global keys (collapse, switch, save, quit) and otherwise forwards messages to
-  whichever pane is focused. `View` builds the screen top-to-bottom: banner,
-  body, status line.
-- **`styles.go`** — the Lipgloss palette and the ASCII banner. This is where the
-  "vibe" lives; tweak colors and borders here.
+- **iTerm2 / Ghostty / Terminal.app** — hold **⌥ Option** and drag.
+- **Most other terminals** — hold **Shift** and drag.
 
-### The centered 80-column trick
+Then **⌘C** (or your terminal's copy key) to copy.
 
-The editor's content width is clamped to `columnWidth` (80). In `View`, the
-rendered editor is dropped into `lipgloss.Place(...)` with `lipgloss.Center`,
-which pads both sides evenly — so the text is left-justified *within* the
-column, but the column floats in the middle of the available space. Collapsing
-the sidebar just hands the editor the full window width to center within.
+---
 
-### Typewriter scrolling
+## License
 
-The caret stays pinned to the vertical center of the writing pane (`ctrl+t`
-toggles it; on by default). Bubble Tea's `textarea` only edge-anchors its
-viewport, so okashi vendors it under `internal/textarea/` and adds a small
-`Typewriter` patch: it pads the view with half a screen of blank rows and sets
-the scroll offset to the caret's wrapped row, centering every line — including
-the first and last while writing at the end of the file.
+MIT — see [LICENSE](LICENSE).
 
-## Roadmap
-
-1. ~~**Typewriter scroll**~~ ✅ Done — caret pinned to center; `ctrl+t` toggles.
-2. **Focus dimming** — render the non-current sentence/paragraph in a dim style.
-3. ~~**Word count / session stats** in the status line.~~ ✅ Done — the status bar
-   shows live `N words · +N session` (net words added since the file was opened).
-4. ~~**Chapter list**~~ ✅ Done — owned `filelist` replaces the filepicker
-   (and adds mouse support).
-5. **Editor-core hardening** — if `bubbles/textarea` strains on long manuscripts
-   (undo depth, huge files, soft-wrap edge cases), move to a rope-backed buffer.
-
-## Rebanner
-
-The ASCII banner in `styles.go` was generated with figlet's "small" font:
-
-```sh
-figlet -f small okashi        # paste output into bannerArt in styles.go
-# (no figlet? `brew install figlet`)
-```
+Copyright (c) 2026 Michael Pentz.
