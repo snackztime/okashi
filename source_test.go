@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -53,5 +54,77 @@ func TestSourceReachable(t *testing.T) {
 	os.WriteFile(f, []byte("x"), 0o644)
 	if newFolderSource(f).reachable() {
 		t.Fatal("a plain file is not a reachable source root")
+	}
+}
+
+func TestLoadSourcesNoFileIsPrimaryOnly(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "sources.json")
+	got := loadSources(store)
+	if len(got) != 1 || got[0].Kind != sourceKindPrimary {
+		t.Fatalf("no store should yield exactly [primary], got %+v", got)
+	}
+}
+
+func TestSaveThenLoadRoundTrips(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "sources.json")
+	folder := newFolderSource(t.TempDir())
+	all := []source{primarySource(), folder}
+	if err := saveSources(store, all); err != nil {
+		t.Fatalf("saveSources: %v", err)
+	}
+	got := loadSources(store)
+	if len(got) != 2 {
+		t.Fatalf("want [primary, folder], got %+v", got)
+	}
+	if got[0].Kind != sourceKindPrimary {
+		t.Fatalf("primary must be first, got %+v", got[0])
+	}
+	if got[1].ID != folder.ID || got[1].Kind != sourceKindFolder {
+		t.Fatalf("folder source not restored: %+v", got[1])
+	}
+}
+
+func TestSaveSourcesDoesNotPersistPrimary(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "sources.json")
+	if err := saveSources(store, []source{primarySource()}); err != nil {
+		t.Fatal(err)
+	}
+	data, err := os.ReadFile(store)
+	if err != nil {
+		t.Fatalf("store should exist: %v", err)
+	}
+	if strings.Contains(string(data), `"primary"`) {
+		t.Fatalf("primary must not be serialized:\n%s", data)
+	}
+}
+
+func TestAddSourceDedupsByID(t *testing.T) {
+	base := []source{primarySource()}
+	f := newFolderSource("/tmp/x")
+	one := addSource(base, f)
+	two := addSource(one, newFolderSource("/tmp/x")) // same path → same ID
+	if len(two) != 2 {
+		t.Fatalf("adding the same path twice must dedup, got %d sources", len(two))
+	}
+}
+
+func TestRemoveSourceKeepsPrimary(t *testing.T) {
+	all := []source{primarySource(), newFolderSource("/tmp/x")}
+	all = removeSource(all, "/tmp/x")
+	if len(all) != 1 || all[0].Kind != sourceKindPrimary {
+		t.Fatalf("removing a folder should leave [primary], got %+v", all)
+	}
+	all = removeSource(all, primarySourceID) // must be a no-op
+	if len(all) != 1 {
+		t.Fatalf("the primary source must not be removable, got %+v", all)
+	}
+}
+
+func TestLoadSourcesCorruptFileIsPrimaryOnly(t *testing.T) {
+	store := filepath.Join(t.TempDir(), "sources.json")
+	os.WriteFile(store, []byte("{not json"), 0o644)
+	got := loadSources(store)
+	if len(got) != 1 || got[0].Kind != sourceKindPrimary {
+		t.Fatalf("corrupt store should degrade to [primary], got %+v", got)
 	}
 }
