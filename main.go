@@ -136,6 +136,7 @@ const (
 	screenOutline
 	screenManuscript
 	screenSearch
+	screenStructure
 )
 
 const (
@@ -165,17 +166,27 @@ type model struct {
 	nameInput textinput.Model
 	preview   viewport.Model
 
-	screen          screen
-	homeItems       []homeItem
-	homeRegion      homeRegion     // launch screen: which column/group
-	homeIndex       int            // index within the region
-	homeLastCol     homeRegion     // last column visited (for up-out-of-Actions)
-	homeFiles       []homeFileItem // FILES column: the current dir's folders + documents
-	homeFilesDir    string         // the dir FILES currently shows (drill-down within the selection)
-	librarySelected int            // index into projects+folders driving FILES
-	sources         []source       // library sources; [0] is always the primary (writingDir())
-	activeSource    int            // index into sources driving the home library
-	snippets        *snippetCache
+	screen       screen
+	homeItems    []homeItem
+	homeRegion   homeRegion     // launch screen: which column/group
+	homeIndex    int            // index within the region
+	homeLastCol  homeRegion     // last column visited (for up-out-of-Actions)
+	homeFiles    []homeFileItem // FILES column: the current dir's folders + documents
+	homeFilesDir string         // the dir FILES currently shows (drill-down within the selection)
+
+	structureDir        string          // the manuscript being restructured
+	structureItems      []manifestItem  // staged chapter order/membership (committed on exit)
+	structureSel        int             // cursor row
+	structurePendingNew map[string]bool // new-blank files to create on commit
+	structureDirty      bool            // any staged edit?
+	structureAdding     bool            // the add-pick sub-mode is open
+	structureAddSel     int             // cursor in the add-pick
+	structureRenaming   bool            // the retitle field is open (reuses nameInput)
+	structureConfirm    bool            // the commit confirm bar is open
+	librarySelected     int             // index into projects+folders driving FILES
+	sources             []source        // library sources; [0] is always the primary (writingDir())
+	activeSource        int             // index into sources driving the home library
+	snippets            *snippetCache
 
 	searchInput     textinput.Model
 	searchScope     int // scopeProject | scopeDocument
@@ -713,6 +724,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenSearch {
 		return m.updateSearch(msg)
+	}
+
+	if m.screen == screenStructure {
+		return m.updateStructure(msg)
 	}
 
 	// While naming a new file, the prompt captures all input.
@@ -1330,6 +1345,10 @@ func (m model) View() string {
 		return m.searchView()
 	}
 
+	if m.screen == screenStructure {
+		return m.structureView()
+	}
+
 	bodyH := m.height - 1 // status only; no banner in the writing zone
 	if bodyH < 1 {
 		bodyH = 1
@@ -1556,6 +1575,9 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.startRenameOutline()
 	case "m":
 		m.enterManuscript()
+	case "s":
+		m.enterStructure()
+		return m, nil
 	case "ctrl+e":
 		m.exportPrompt = true
 		m.status = "export: m manuscript · t tufte · esc cancel"
