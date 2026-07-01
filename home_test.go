@@ -172,6 +172,45 @@ func TestActionsRowHorizontalNav(t *testing.T) {
 	}
 }
 
+func TestHomeVerticalFlow(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 26})
+	m = nm.(model)
+	// A recent (strip), a folder (library), and the Browse action — no files under the folder.
+	m.homeItems = []homeItem{
+		{kind: homeRecentFile, label: "x.md", path: "/r/x.md"},
+		{kind: homeFolder, label: "research", path: "/p/research"},
+		{kind: homeOpenOther, label: "Browse all files"},
+	}
+	m.resetHomeSelection()
+	if m.homeRegion != regionRecent {
+		t.Fatalf("focus should start on the RECENT strip, got %d", m.homeRegion)
+	}
+	// down: strip → a column
+	m.homeMove(0, 1)
+	col := m.homeRegion
+	if col != regionLibrary && col != regionFiles {
+		t.Fatalf("down from the strip should enter a column, got %d", col)
+	}
+	// up from the column top → back to the strip
+	m.homeMove(0, -1)
+	if m.homeRegion != regionRecent {
+		t.Fatalf("up from a column top should return to the strip, got %d", m.homeRegion)
+	}
+	// bottom of the column, then down → actions
+	m.focusAt(col, m.regionCount(col)-1)
+	m.homeMove(0, 1)
+	if m.homeRegion != regionActions {
+		t.Fatalf("down from a column bottom should enter the actions row, got %d", m.homeRegion)
+	}
+	// up from actions → leaves the actions row
+	m.homeMove(0, -1)
+	if m.homeRegion == regionActions {
+		t.Fatal("up from the actions row should leave it")
+	}
+}
+
 func TestHomeContentAndHitTest(t *testing.T) {
 	t.Setenv("OKASHI_ICONS", "plain")
 	m := initialModel()

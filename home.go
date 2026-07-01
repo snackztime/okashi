@@ -242,15 +242,18 @@ func (m model) visibleRegions() []homeRegion {
 	if m.width <= 0 {
 		return []homeRegion{regionRecent, regionLibrary, regionFiles, regionActions}
 	}
-	regs, _, _ := m.homeColumns()
+	cols, _, _ := m.homeColumns()
+	regs := []homeRegion{regionRecent} // the RECENT strip always sits above the columns
+	regs = append(regs, cols...)
 	return append(regs, regionActions)
 }
 
-// visibleCols is visibleRegions without Actions (the rendered columns).
+// visibleCols is the rendered browse columns — visibleRegions without the RECENT strip or the
+// Actions row (i.e. just LIBRARY/FILES that fit the width).
 func (m model) visibleCols() []homeRegion {
 	var out []homeRegion
 	for _, r := range m.visibleRegions() {
-		if r != regionActions {
+		if r != regionActions && r != regionRecent {
 			out = append(out, r)
 		}
 	}
@@ -461,13 +464,47 @@ func (m *model) focusAt(r homeRegion, idx int) {
 
 // homeMove navigates the launcher: up/down within a column (flowing into Actions),
 // left/right across Recent ↔ Library ↔ Files.
+func clampIdx(i, n int) int {
+	if i < 0 {
+		return 0
+	}
+	if i >= n {
+		return n - 1
+	}
+	return i
+}
+
+// homeMove navigates the launcher: the RECENT strip on top (horizontal), the LIBRARY/FILES
+// columns in the middle, and the Actions row at the bottom (horizontal). Down flows strip →
+// columns → actions; up flows actions → columns → strip; left/right move within a strip/row or
+// across the columns.
 func (m *model) homeMove(dx, dy int) {
-	// The Actions row is horizontal: left/right move between its items; up returns to the
-	// column it was entered from; down does nothing (there is nothing below it).
-	if m.homeRegion == regionActions {
-		if dy < 0 { // up → back to the column we came from (or the last non-empty visible one)
+	switch m.homeRegion {
+	case regionRecent:
+		if dy > 0 { // down → into the first non-empty column, else the actions row
+			for _, r := range m.visibleCols() {
+				if m.regionCount(r) > 0 {
+					m.focusAt(r, m.indexIn(r))
+					return
+				}
+			}
+			if m.regionCount(regionActions) > 0 {
+				m.homeLastCol = regionRecent
+				m.focusAt(regionActions, 0)
+			}
+			return
+		}
+		if dy < 0 {
+			return // nothing above the strip
+		}
+		m.focusAt(regionRecent, clampIdx(m.homeIndex+dx, m.regionCount(regionRecent)))
+		return
+
+	case regionActions:
+		if dy < 0 { // up → the column we came from (or the last non-empty column / the strip)
 			target := m.homeLastCol
 			if !m.regionVisible(target) || m.regionCount(target) == 0 {
+				target = regionRecent
 				for _, r := range m.visibleCols() {
 					if m.regionCount(r) > 0 {
 						target = r
@@ -480,50 +517,48 @@ func (m *model) homeMove(dx, dy int) {
 			return
 		}
 		if dy > 0 {
-			return
+			return // nothing below the actions row
 		}
-		// left/right within the actions row
-		n := m.regionCount(regionActions)
-		ni := m.homeIndex + dx
-		if ni < 0 {
-			ni = 0
-		}
-		if ni >= n {
-			ni = n - 1
-		}
-		m.focusAt(regionActions, ni)
+		m.focusAt(regionActions, clampIdx(m.homeIndex+dx, m.regionCount(regionActions)))
 		return
-	}
 
-	if dy != 0 {
-		n := m.regionCount(m.homeRegion)
-		if dy > 0 {
-			if m.homeIndex >= n-1 { // at the bottom of a column → drop into the Actions row
-				if m.regionCount(regionActions) > 0 {
-					m.homeLastCol = m.homeRegion
-					m.focusAt(regionActions, 0)
+	default: // a LIBRARY/FILES column
+		if dy != 0 {
+			n := m.regionCount(m.homeRegion)
+			if dy > 0 {
+				if m.homeIndex >= n-1 { // bottom of the column → the actions row
+					if m.regionCount(regionActions) > 0 {
+						m.homeLastCol = m.homeRegion
+						m.focusAt(regionActions, 0)
+					}
+					return
 				}
+				m.focusAt(m.homeRegion, m.homeIndex+1)
 				return
 			}
-			m.focusAt(m.homeRegion, m.homeIndex+1)
+			if m.homeIndex > 0 { // up within the column
+				m.focusAt(m.homeRegion, m.homeIndex-1)
+				return
+			}
+			if m.regionCount(regionRecent) > 0 { // top of the column → up into the strip
+				m.homeLastCol = m.homeRegion
+				m.focusAt(regionRecent, 0)
+			}
 			return
 		}
-		if m.homeIndex > 0 { // up within the column
-			m.focusAt(m.homeRegion, m.homeIndex-1)
+		// left/right across the visible columns
+		cols := m.visibleCols()
+		cur := indexOfRegion(cols, m.homeRegion)
+		if cur < 0 {
+			cur = 0
+		}
+		for nxt := cur + dx; nxt >= 0 && nxt < len(cols); nxt += dx {
+			if m.regionCount(cols[nxt]) > 0 {
+				m.focusAt(cols[nxt], m.indexIn(cols[nxt]))
+				return
+			}
 		}
 		return
-	}
-	// Horizontal — only across the columns actually rendered at this width.
-	cols := m.visibleCols()
-	cur := indexOfRegion(cols, m.homeRegion)
-	if cur < 0 {
-		cur = 0
-	}
-	for nxt := cur + dx; nxt >= 0 && nxt < len(cols); nxt += dx {
-		if m.regionCount(cols[nxt]) > 0 {
-			m.focusAt(cols[nxt], m.indexIn(cols[nxt]))
-			return
-		}
 	}
 }
 
@@ -576,28 +611,6 @@ func homeWindowOffset(total, active, h int) int {
 		off = total - h
 	}
 	return off
-}
-
-// recentColumn builds the RECENT box's inner lines + cells (≤ h rows).
-func (m model) recentColumn(h int) ([]string, []innerCell) {
-	rec := m.recents()
-	if len(rec) == 0 {
-		return []string{homeDim("(no recent files)")}, nil
-	}
-	active := 0
-	if m.homeRegion == regionRecent {
-		active = m.homeIndex
-	}
-	off := homeWindowOffset(len(rec), active, h)
-	var lines []string
-	var cells []innerCell
-	for i := off; i < len(rec) && len(lines) < h; i++ {
-		sel := m.homeRegion == regionRecent && m.homeIndex == i
-		txt := homeLabel(rec[i].label, sel)
-		cells = append(cells, innerCell{regionRecent, i, len(lines), 0, lipgloss.Width(rec[i].label)})
-		lines = append(lines, txt)
-	}
-	return lines, cells
 }
 
 // libraryColumn builds the LIBRARY box (PROJECTS + FOLDERS sections) + cells (≤ h rows).
@@ -724,15 +737,16 @@ func (m *model) cycleSource(dir int) {
 	}
 }
 
-// homeColumns returns the boxes to show (responsive) with their widths + titles.
+// homeColumns returns the browse boxes to show (responsive) with their widths + titles. RECENT is
+// no longer a column — it renders as a full-width strip above these (see recentStrip/homeContent).
 func (m model) homeColumns() (regions []homeRegion, titles []string, widths []int) {
-	all := []homeRegion{regionRecent, regionLibrary, regionFiles}
 	libTitle := "LIBRARY"
 	if len(m.sources) > 1 && m.activeSource >= 0 && m.activeSource < len(m.sources) {
 		libTitle = "LIBRARY · " + m.sources[m.activeSource].Name + " ▾"
 	}
-	allTitles := []string{"RECENT", libTitle, "FILES"}
-	allW := []int{homeRecentBox, homeLibraryBox, homeFilesBox}
+	all := []homeRegion{regionLibrary, regionFiles}
+	allTitles := []string{libTitle, "FILES"}
+	allW := []int{homeLibraryBox, homeFilesBox}
 	total := func(idx []int) int {
 		w := 0
 		for _, i := range idx {
@@ -740,8 +754,8 @@ func (m model) homeColumns() (regions []homeRegion, titles []string, widths []in
 		}
 		return w - homeColGap
 	}
-	// Prefer all three; drop RECENT, then LIBRARY, to fit the width.
-	for _, idx := range [][]int{{0, 1, 2}, {1, 2}, {2}} {
+	// Prefer both; drop LIBRARY to fit a narrow width.
+	for _, idx := range [][]int{{0, 1}, {1}} {
 		if total(idx) <= m.width {
 			for _, i := range idx {
 				regions = append(regions, all[i])
@@ -752,6 +766,39 @@ func (m model) homeColumns() (regions []homeRegion, titles []string, widths []in
 		}
 	}
 	return []homeRegion{regionFiles}, []string{"FILES"}, []int{m.width}
+}
+
+// recentStrip lays the recent files horizontally across one full-width row (contentW columns),
+// returning the inner line + click cells (relative to the strip content). Recents that don't fit
+// are dropped from the right.
+func (m model) recentStrip(contentW int) ([]string, []innerCell) {
+	rec := m.recents()
+	if len(rec) == 0 {
+		return []string{homeDim("(no recent files)")}, nil
+	}
+	const sep = "   "
+	var b strings.Builder
+	var cells []innerCell
+	col := 0
+	for i, r := range rec {
+		label := "› " + r.label
+		w := lipgloss.Width(label)
+		if i > 0 {
+			w += lipgloss.Width(sep)
+		}
+		if col+w > contentW { // no room for this one → stop
+			break
+		}
+		if i > 0 {
+			b.WriteString(sep)
+			col += lipgloss.Width(sep)
+		}
+		sel := m.homeRegion == regionRecent && m.homeIndex == i
+		b.WriteString(homeLabel(label, sel))
+		cells = append(cells, innerCell{regionRecent, i, 0, col, col + lipgloss.Width(label)})
+		col += lipgloss.Width(label)
+	}
+	return []string{b.String()}, cells
 }
 
 // homeContent assembles the centered logo, the framed columns, and the actions, plus the
@@ -775,8 +822,6 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 		var inner []string
 		var ics []innerCell
 		switch r {
-		case regionRecent:
-			inner, ics = m.recentColumn(availH - 2)
 		case regionLibrary:
 			inner, ics = m.libraryColumn(availH - 2)
 		default:
@@ -812,7 +857,23 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 		lines = append(lines, pad(bannerStyle.Render(l)))
 	}
 	lines = append(lines, "")
-	boxTop := len(lines) // block row where the framed boxes begin
+
+	// RECENT strip — a full-width row above the LIBRARY/FILES columns.
+	stripInner, stripCells := m.recentStrip(blockW - 4)
+	stripTop := len(lines)
+	strip := framedPanel("RECENT", strings.Join(stripInner, "\n"), blockW, 3, "")
+	lines = append(lines, strings.Split(strip, "\n")...)
+	for _, c := range stripCells {
+		cells = append(cells, homeCell{
+			region: c.region, index: c.index,
+			row: stripTop + 1 + c.row, // +1 for the strip's top border
+			x0:  2 + c.x0,             // +2 for "│ "
+			x1:  2 + c.x1,
+		})
+	}
+	lines = append(lines, "")
+
+	boxTop := len(lines) // block row where the framed columns begin
 
 	// Frame each column and join horizontally. LIBRARY/FILES carry an inline "+" (create).
 	framed := make([]string, len(cols))
