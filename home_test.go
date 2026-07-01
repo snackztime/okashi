@@ -61,7 +61,7 @@ func TestBuildHomeItems(t *testing.T) {
 
 	items := buildHomeItems(recents, dir)
 
-	// 2 recents + 1 Loose + 2 folders (hidden excluded) + 3 actions = 8
+	// 2 recents + 2 folders (hidden excluded) + 1 Notes + 3 actions = 8
 	if len(items) != 8 {
 		t.Fatalf("want 8 items, got %d: %+v", len(items), items)
 	}
@@ -71,13 +71,13 @@ func TestBuildHomeItems(t *testing.T) {
 	if items[0].label != "chapter-03.md" {
 		t.Fatalf("recent label should be the basename, got %q", items[0].label)
 	}
-	// Loose entry follows recents.
-	if items[2].kind != homeLoose || items[2].label != "◦ Loose" {
-		t.Fatalf("third item should be ◦ Loose, got %+v", items[2])
+	// Plain dirs (no manifest / no numbered files) classify as FOLDERS, alpha-sorted after recents.
+	if items[2].kind != homeFolder || items[2].label != "journal" {
+		t.Fatalf("third item should be the first folder 'journal', got %+v", items[2])
 	}
-	// Plain dirs (no manifest / no numbered files) classify as FOLDERS now.
-	if items[3].kind != homeFolder || items[3].label != "journal" {
-		t.Fatalf("folders should be alpha-sorted after Loose, got %+v", items[3])
+	// The ◦ Notes entry follows projects+folders, before the actions.
+	if items[4].kind != homeLoose || items[4].label != "◦ Notes" {
+		t.Fatalf("fifth item should be ◦ Notes, got %+v", items[4])
 	}
 	if items[5].kind != homeNewDocument {
 		t.Fatalf("6th item should be new document action, got %+v", items[5])
@@ -90,9 +90,9 @@ func TestBuildHomeItems(t *testing.T) {
 func TestBuildHomeItemsEmpty(t *testing.T) {
 	dir := t.TempDir() // no subdirs
 	items := buildHomeItems(nil, dir)
-	// Should have ◦ Loose + the 3 actions = 4
+	// Should have ◦ Notes + the 3 actions = 4
 	if len(items) != 4 || items[0].kind != homeLoose || items[3].kind != homeOpenOther {
-		t.Fatalf("empty state should be Loose + 3 actions, got %+v", items)
+		t.Fatalf("empty state should be Notes + 3 actions, got %+v", items)
 	}
 }
 
@@ -110,12 +110,12 @@ func TestHomeViewShowsRecentName(t *testing.T) {
 func TestBuildHomeItemsHasActions(t *testing.T) {
 	dir := t.TempDir()
 	items := buildHomeItems(nil, dir) // no recents, no projects
-	// ◦ Loose + the three actions, in order.
+	// ◦ Notes + the three actions, in order (empty workspace → Notes is first).
 	if len(items) != 4 {
-		t.Fatalf("want 4 items (Loose + 3 actions), got %d: %+v", len(items), items)
+		t.Fatalf("want 4 items (Notes + 3 actions), got %d: %+v", len(items), items)
 	}
-	if items[0].kind != homeLoose || items[0].label != "◦ Loose" {
-		t.Fatalf("item 0 should be ◦ Loose, got %+v", items[0])
+	if items[0].kind != homeLoose || items[0].label != "◦ Notes" {
+		t.Fatalf("item 0 should be ◦ Notes, got %+v", items[0])
 	}
 	want := []struct {
 		kind  homeKind
@@ -129,6 +129,48 @@ func TestBuildHomeItemsHasActions(t *testing.T) {
 		if items[i+1].kind != w.kind || items[i+1].label != w.label {
 			t.Fatalf("item %d = %+v, want kind %d label %q", i+1, items[i+1], w.kind, w.label)
 		}
+	}
+}
+
+func TestActionsRowHorizontalNav(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
+	m = nm.(model)
+	m.focusAt(regionActions, 0)
+	n := m.regionCount(regionActions)
+	if n < 2 {
+		t.Fatalf("expected multiple actions to navigate, got %d", n)
+	}
+	// Right/left move within the horizontal actions row.
+	m.homeMove(1, 0)
+	if m.homeRegion != regionActions || m.homeIndex != 1 {
+		t.Fatalf("right should move to actions[1], got region=%d idx=%d", m.homeRegion, m.homeIndex)
+	}
+	m.homeMove(-1, 0)
+	if m.homeIndex != 0 {
+		t.Fatalf("left should move back to actions[0], got idx=%d", m.homeIndex)
+	}
+	m.homeMove(-1, 0) // clamp at 0
+	if m.homeIndex != 0 {
+		t.Fatalf("left at start should clamp at 0, got idx=%d", m.homeIndex)
+	}
+	for i := 0; i < n+2; i++ {
+		m.homeMove(1, 0) // clamp at n-1
+	}
+	if m.homeIndex != n-1 {
+		t.Fatalf("right past end should clamp at %d, got idx=%d", n-1, m.homeIndex)
+	}
+	// Down within the actions row is a no-op (nothing below).
+	before := m.homeIndex
+	m.homeMove(0, 1)
+	if m.homeRegion != regionActions || m.homeIndex != before {
+		t.Fatalf("down in actions should be a no-op, got region=%d idx=%d", m.homeRegion, m.homeIndex)
+	}
+	// Up exits the actions row back to a column.
+	m.homeMove(0, -1)
+	if m.homeRegion == regionActions {
+		t.Fatal("up should exit the actions row to a column")
 	}
 }
 
@@ -189,11 +231,16 @@ func TestLooseEntryShowsRootDocs(t *testing.T) {
 
 	m := initialModel()
 	lib := m.library()
-	if len(lib) == 0 || lib[0].kind != homeLoose || lib[0].label != "◦ Loose" {
-		t.Fatalf("first library item should be '◦ Loose', got %+v", lib)
+	// The ◦ Notes entry renders LAST in the library (under its own OTHER section).
+	if len(lib) == 0 {
+		t.Fatalf("library should be non-empty")
 	}
-	// Select ◦ Loose and confirm FILES shows the root's loose doc.
-	m.librarySelected = 0
+	last := lib[len(lib)-1]
+	if last.kind != homeLoose || last.label != "◦ Notes" {
+		t.Fatalf("last library item should be '◦ Notes', got %+v", lib)
+	}
+	// Select ◦ Notes and confirm FILES shows the root's loose doc.
+	m.librarySelected = len(lib) - 1
 	m.recomputeHomeFiles()
 	found := false
 	for _, f := range m.homeFiles {
@@ -202,7 +249,7 @@ func TestLooseEntryShowsRootDocs(t *testing.T) {
 		}
 	}
 	if !found {
-		t.Fatalf("◦ Loose should list the root's loose docs, got %+v", m.homeFiles)
+		t.Fatalf("◦ Notes should list the root's loose docs, got %+v", m.homeFiles)
 	}
 }
 

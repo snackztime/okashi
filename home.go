@@ -157,10 +157,10 @@ func buildHomeItems(recents []string, workspace string) []homeItem {
 	for _, p := range recents {
 		items = append(items, homeItem{kind: homeRecentFile, label: filepath.Base(p), path: p})
 	}
-	items = append(items, homeItem{kind: homeLoose, label: "◦ Loose", path: workspace})
 	projects, folders := classifyLibrary(workspace)
 	items = append(items, projects...)
 	items = append(items, folders...)
+	items = append(items, homeItem{kind: homeLoose, label: "◦ Notes", path: workspace})
 	items = append(items,
 		homeItem{kind: homeNewDocument, label: "New document"},
 		homeItem{kind: homeNewProject, label: "New project"},
@@ -169,16 +169,19 @@ func buildHomeItems(recents []string, workspace string) []homeItem {
 	return items
 }
 
-// homeGroups splits the flat list by kind.
-func homeGroups(items []homeItem) (recents, projects, folders, actions []homeItem) {
+// homeGroups splits the flat list by kind. `other` holds the loose/Notes entry, which renders
+// in its own OTHER section at the foot of the library.
+func homeGroups(items []homeItem) (recents, projects, folders, other, actions []homeItem) {
 	for _, it := range items {
 		switch it.kind {
 		case homeRecentFile:
 			recents = append(recents, it)
-		case homeLoose, homeProject:
+		case homeProject:
 			projects = append(projects, it)
 		case homeFolder:
 			folders = append(folders, it)
+		case homeLoose:
+			other = append(other, it)
 		default:
 			actions = append(actions, it)
 		}
@@ -186,11 +189,14 @@ func homeGroups(items []homeItem) (recents, projects, folders, actions []homeIte
 	return
 }
 
-func (m model) recents() []homeItem { r, _, _, _ := homeGroups(m.homeItems); return r }
-func (m model) actions() []homeItem { _, _, _, a := homeGroups(m.homeItems); return a }
+func (m model) recents() []homeItem { r, _, _, _, _ := homeGroups(m.homeItems); return r }
+func (m model) actions() []homeItem { _, _, _, _, a := homeGroups(m.homeItems); return a }
 func (m model) library() []homeItem {
-	_, projects, folders, _ := homeGroups(m.homeItems)
-	return append(projects, folders...)
+	_, projects, folders, other, _ := homeGroups(m.homeItems)
+	lib := append([]homeItem{}, projects...)
+	lib = append(lib, folders...)
+	lib = append(lib, other...)
+	return lib
 }
 
 func (m model) regionCount(r homeRegion) int {
@@ -426,32 +432,53 @@ func (m *model) focusAt(r homeRegion, idx int) {
 // homeMove navigates the launcher: up/down within a column (flowing into Actions),
 // left/right across Recent ↔ Library ↔ Files.
 func (m *model) homeMove(dx, dy int) {
+	// The Actions row is horizontal: left/right move between its items; up returns to the
+	// column it was entered from; down does nothing (there is nothing below it).
+	if m.homeRegion == regionActions {
+		if dy < 0 { // up → back to the column we came from (or the last non-empty visible one)
+			target := m.homeLastCol
+			if !m.regionVisible(target) || m.regionCount(target) == 0 {
+				for _, r := range m.visibleCols() {
+					if m.regionCount(r) > 0 {
+						target = r
+					}
+				}
+			}
+			if m.regionVisible(target) && m.regionCount(target) > 0 {
+				m.focusAt(target, m.regionCount(target)-1)
+			}
+			return
+		}
+		if dy > 0 {
+			return
+		}
+		// left/right within the actions row
+		n := m.regionCount(regionActions)
+		ni := m.homeIndex + dx
+		if ni < 0 {
+			ni = 0
+		}
+		if ni >= n {
+			ni = n - 1
+		}
+		m.focusAt(regionActions, ni)
+		return
+	}
+
 	if dy != 0 {
 		n := m.regionCount(m.homeRegion)
 		if dy > 0 {
-			if m.homeRegion != regionActions && m.homeIndex >= n-1 {
+			if m.homeIndex >= n-1 { // at the bottom of a column → drop into the Actions row
 				if m.regionCount(regionActions) > 0 {
 					m.homeLastCol = m.homeRegion
 					m.focusAt(regionActions, 0)
 				}
 				return
 			}
-			if m.homeIndex < n-1 {
-				m.focusAt(m.homeRegion, m.homeIndex+1)
-			}
+			m.focusAt(m.homeRegion, m.homeIndex+1)
 			return
 		}
-		if m.homeRegion == regionActions && m.homeIndex == 0 {
-			target := m.homeLastCol
-			if !m.regionVisible(target) {
-				if vc := m.visibleCols(); len(vc) > 0 {
-					target = vc[len(vc)-1]
-				}
-			}
-			m.focusAt(target, m.regionCount(target)-1)
-			return
-		}
-		if m.homeIndex > 0 {
+		if m.homeIndex > 0 { // up within the column
 			m.focusAt(m.homeRegion, m.homeIndex-1)
 		}
 		return
@@ -459,9 +486,6 @@ func (m *model) homeMove(dx, dy int) {
 	// Horizontal — only across the columns actually rendered at this width.
 	cols := m.visibleCols()
 	cur := indexOfRegion(cols, m.homeRegion)
-	if m.homeRegion == regionActions {
-		cur = indexOfRegion(cols, m.homeLastCol)
-	}
 	if cur < 0 {
 		cur = 0
 	}
@@ -548,7 +572,7 @@ func (m model) recentColumn(h int) ([]string, []innerCell) {
 
 // libraryColumn builds the LIBRARY box (PROJECTS + FOLDERS sections) + cells (≤ h rows).
 func (m model) libraryColumn(h int) ([]string, []innerCell) {
-	_, projects, folders, _ := homeGroups(m.homeItems)
+	_, projects, folders, other, _ := homeGroups(m.homeItems)
 	type lrow struct {
 		header bool
 		text   string
@@ -556,12 +580,6 @@ func (m model) libraryColumn(h int) ([]string, []innerCell) {
 	}
 	var rows []lrow
 	idx := 0
-	// The leading ◦ Loose entry (if present) renders above the PROJECTS header.
-	if len(projects) > 0 && projects[0].kind == homeLoose {
-		rows = append(rows, lrow{text: projects[0].label, libIdx: idx})
-		idx++
-		projects = projects[1:]
-	}
 	if len(projects) > 0 {
 		rows = append(rows, lrow{header: true, text: "PROJECTS"})
 		for _, p := range projects {
@@ -576,8 +594,17 @@ func (m model) libraryColumn(h int) ([]string, []innerCell) {
 			idx++
 		}
 	}
+	// The loose/Notes entry renders last, under its own OTHER header. Its label already
+	// carries the "◦ " marker.
+	if len(other) > 0 {
+		rows = append(rows, lrow{header: true, text: "OTHER"})
+		for _, o := range other {
+			rows = append(rows, lrow{text: o.label, libIdx: idx})
+			idx++
+		}
+	}
 	if len(rows) == 0 {
-		return []string{homeDim("(no projects)")}, nil
+		return []string{homeDim("(empty)")}, nil
 	}
 	// Find the active row (the selected library item) and window around it.
 	activeRow := 0
