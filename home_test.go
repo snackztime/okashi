@@ -570,3 +570,39 @@ func TestPinToggleOnHomeProject(t *testing.T) {
 		t.Fatalf("pinning ◦ Notes should be a no-op, got %+v", m.pinnedItems())
 	}
 }
+
+func TestPinnedStripRendersAndHitTests(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	t.Setenv("HOME", t.TempDir())
+	createManuscript(filepath.Join(root, "my-novel"), "My Novel", "Opening")
+	os.MkdirAll(filepath.Join(root, "research"), 0o755)
+
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
+	m = nm.(model)
+	m.pinned = []string{filepath.Join(root, "my-novel"), filepath.Join(root, "research")}
+	m.rebuildHome()
+	m.resetHomeSelection()
+
+	out := ansiStrip(m.homeView())
+	if !strings.Contains(out, "PINNED") || !strings.Contains(out, "★ my-novel") {
+		t.Fatalf("home should render a PINNED strip with the pins:\n%s", out)
+	}
+	// render == hit-test: each pinned cell round-trips.
+	_, cells, _ := m.homeContent()
+	var pinnedCells int
+	for _, c := range cells {
+		if c.region == regionPinned {
+			pinnedCells++
+			x, y := homeCellXY(m, c.region, c.index)
+			r, idx, ok := m.homeItemAt(x, y)
+			if !ok || r != c.region || idx != c.index {
+				t.Fatalf("pinned cell (%d) failed hit-test → (%d,%d,%v)", c.index, r, idx, ok)
+			}
+		}
+	}
+	if pinnedCells != 2 {
+		t.Fatalf("want 2 pinned cells, got %d", pinnedCells)
+	}
+}

@@ -124,7 +124,8 @@ func (m *model) homeFilesFor(dir string, showFolders bool) []homeFileItem {
 type homeRegion int
 
 const (
-	regionRecent homeRegion = iota
+	regionPinned homeRegion = iota
+	regionRecent
 	regionLibrary
 	regionFiles
 	regionActions
@@ -246,6 +247,8 @@ func (m model) library() []homeItem {
 
 func (m model) regionCount(r homeRegion) int {
 	switch r {
+	case regionPinned:
+		return len(m.pinnedItems())
 	case regionRecent:
 		return len(m.recents())
 	case regionLibrary:
@@ -262,20 +265,24 @@ func (m model) regionCount(r homeRegion) int {
 // never focus a column the render dropped. Width 0 (unsized) treats all as visible.
 func (m model) visibleRegions() []homeRegion {
 	if m.width <= 0 {
-		return []homeRegion{regionRecent, regionLibrary, regionFiles, regionActions}
+		return []homeRegion{regionPinned, regionRecent, regionLibrary, regionFiles, regionActions}
 	}
 	cols, _, _ := m.homeColumns()
-	regs := []homeRegion{regionRecent} // the RECENT strip always sits above the columns
+	var regs []homeRegion
+	if m.regionCount(regionPinned) > 0 {
+		regs = append(regs, regionPinned)
+	}
+	regs = append(regs, regionRecent)
 	regs = append(regs, cols...)
 	return append(regs, regionActions)
 }
 
-// visibleCols is the rendered browse columns — visibleRegions without the RECENT strip or the
-// Actions row (i.e. just LIBRARY/FILES that fit the width).
+// visibleCols is the rendered browse columns — visibleRegions without the PINNED strip, the
+// RECENT strip, or the Actions row (i.e. just LIBRARY/FILES that fit the width).
 func (m model) visibleCols() []homeRegion {
 	var out []homeRegion
 	for _, r := range m.visibleRegions() {
-		if r != regionActions && r != regionRecent {
+		if r != regionActions && r != regionRecent && r != regionPinned {
 			out = append(out, r)
 		}
 	}
@@ -531,6 +538,30 @@ func clampIdx(i, n int) int {
 // across the columns.
 func (m *model) homeMove(dx, dy int) {
 	switch m.homeRegion {
+	case regionPinned:
+		if dy > 0 { // down → into the RECENT strip, then a column, then actions
+			if m.regionCount(regionRecent) > 0 {
+				m.focusAt(regionRecent, 0)
+				return
+			}
+			for _, r := range m.visibleCols() {
+				if m.regionCount(r) > 0 {
+					m.focusAt(r, m.indexIn(r))
+					return
+				}
+			}
+			if m.regionCount(regionActions) > 0 {
+				m.homeLastCol = regionPinned
+				m.focusAt(regionActions, 0)
+			}
+			return
+		}
+		if dy < 0 {
+			return // nothing above the PINNED strip
+		}
+		m.focusAt(regionPinned, clampIdx(m.homeIndex+dx, m.regionCount(regionPinned)))
+		return
+
 	case regionRecent:
 		if dy > 0 { // down → into the first non-empty column, else the actions row
 			for _, r := range m.visibleCols() {
@@ -546,7 +577,11 @@ func (m *model) homeMove(dx, dy int) {
 			return
 		}
 		if dy < 0 {
-			return // nothing above the strip
+			if m.regionCount(regionPinned) > 0 { // up → into the PINNED strip when pins exist
+				m.focusAt(regionPinned, 0)
+				return
+			}
+			return // nothing above the RECENT strip
 		}
 		m.focusAt(regionRecent, clampIdx(m.homeIndex+dx, m.regionCount(regionRecent)))
 		return
@@ -836,6 +871,55 @@ func (m model) homeColumns() (regions []homeRegion, titles []string, widths []in
 	return []homeRegion{regionFiles}, []string{"FILES"}, []int{m.width}
 }
 
+// pinnedStrip lays the pinned items horizontally across one full-width row (contentW columns),
+// returning the inner line + click cells (relative to the strip content). Returns nil when
+// there are no pinned items so the caller omits the strip entirely.
+func (m model) pinnedStrip(contentW int) ([]string, []innerCell) {
+	pins := m.pinnedItems()
+	if len(pins) == 0 {
+		return nil, nil
+	}
+	const sep = "   "
+	label := func(i int) string { return pins[i].label } // already "★ name"
+
+	// Window horizontally so the active pin is always rendered (and thus clickable).
+	active := 0
+	if m.homeRegion == regionPinned {
+		active = clampIdx(m.homeIndex, len(pins))
+	}
+	start := active
+	used := lipgloss.Width(label(active))
+	for start > 0 {
+		w := lipgloss.Width(sep) + lipgloss.Width(label(start-1))
+		if used+w > contentW {
+			break
+		}
+		used += w
+		start--
+	}
+
+	var b strings.Builder
+	var cells []innerCell
+	col := 0
+	for i := start; i < len(pins); i++ {
+		lbl := label(i)
+		if i == start {
+			lbl = ansi.Truncate(lbl, contentW, "…") // guarantee the anchor renders even if over-wide
+		} else {
+			if col+lipgloss.Width(sep)+lipgloss.Width(lbl) > contentW {
+				break // no room for this one → stop
+			}
+			b.WriteString(sep)
+			col += lipgloss.Width(sep)
+		}
+		sel := m.homeRegion == regionPinned && m.homeIndex == i
+		b.WriteString(homeLabel(lbl, sel))
+		cells = append(cells, innerCell{regionPinned, i, 0, col, col + lipgloss.Width(lbl)})
+		col += lipgloss.Width(lbl)
+	}
+	return []string{b.String()}, cells
+}
+
 // recentStrip lays the recent files horizontally across one full-width row (contentW columns),
 // returning the inner line + click cells (relative to the strip content). Recents that don't fit
 // are dropped from the right.
@@ -942,6 +1026,23 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 		lines = append(lines, pad(bannerStyle.Render(l)))
 	}
 	lines = append(lines, "")
+
+	// PINNED strip — rendered only when there are live pins, above the RECENT strip.
+	if m.regionCount(regionPinned) > 0 {
+		pinnedInner, pinnedCells := m.pinnedStrip(blockW - 4)
+		pinnedTop := len(lines)
+		pinnedBox := framedPanel("PINNED", strings.Join(pinnedInner, "\n"), blockW, 3, "")
+		lines = append(lines, strings.Split(pinnedBox, "\n")...)
+		for _, c := range pinnedCells {
+			cells = append(cells, homeCell{
+				region: c.region, index: c.index,
+				row: pinnedTop + 1 + c.row, // +1 for the strip's top border
+				x0:  2 + c.x0,              // +2 for "│ "
+				x1:  2 + c.x1,
+			})
+		}
+		lines = append(lines, "")
+	}
 
 	// RECENT strip — a full-width row above the LIBRARY/FILES columns.
 	stripInner, stripCells := m.recentStrip(blockW - 4)
@@ -1071,6 +1172,16 @@ func (m model) homeItemAt(x, y int) (homeRegion, int, bool) {
 // openHomeSelection acts on the focused launch item and enters writing mode.
 func (m *model) openHomeSelection() tea.Cmd {
 	switch m.homeRegion {
+	case regionPinned:
+		pins := m.pinnedItems()
+		if m.homeIndex < len(pins) {
+			m.files.SetDir(pins[m.homeIndex].path)
+			m.focus = focusSidebar
+			m.editor.Blur()
+			m.screen = screenWriting
+			m.layout()
+		}
+		return nil
 	case regionRecent:
 		rec := m.recents()
 		if m.homeIndex < len(rec) {
