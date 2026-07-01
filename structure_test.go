@@ -65,3 +65,62 @@ func writeFileP(path, content string) error {
 	}
 	return os.WriteFile(path, []byte(content), 0o644)
 }
+
+func TestStructureReorderRemoveRetitle(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "novel")
+	createManuscript(dir, "Novel", "One")
+	// add two more chapters to the manifest on disk so we have [One, Two, Three]
+	writeManifest(dir, manifest{SchemaVersion: 1, Title: "Novel", Items: []manifestItem{
+		{File: "01-one.md", Title: "One"}, {File: "02-two.md", Title: "Two"}, {File: "03-three.md", Title: "Three"},
+	}})
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	m = nm.(model)
+	m.outline.dir = dir
+	m.enterStructure()
+
+	// Move chapter 1 (One) down with J → [Two, One, Three]
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = nm.(model)
+	if m.structureItems[0].Title != "Two" || m.structureItems[1].Title != "One" {
+		t.Fatalf("J should move the selected chapter down, got %v", titles(m.structureItems))
+	}
+	if !m.structureDirty {
+		t.Fatal("reorder should mark dirty")
+	}
+	// The cursor follows the moved item (now at index 1).
+	if m.structureSel != 1 {
+		t.Fatalf("cursor should follow the moved item, sel=%d", m.structureSel)
+	}
+
+	// Remove the selected chapter (One) with x → [Two, Three]
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	m = nm.(model)
+	if len(m.structureItems) != 2 || titlesJoined(m.structureItems) != "Two|Three" {
+		t.Fatalf("x should remove the selected chapter, got %v", titles(m.structureItems))
+	}
+
+	// Retitle the selected chapter with r + type + enter.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
+	m = nm.(model)
+	if !m.structureRenaming {
+		t.Fatal("r should open the retitle field")
+	}
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "Second")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.structureItems[m.structureSel].Title != "Second" {
+		t.Fatalf("retitle should update the buffer title, got %q", m.structureItems[m.structureSel].Title)
+	}
+}
+
+func titles(items []manifestItem) []string {
+	var out []string
+	for _, it := range items {
+		out = append(out, it.Title)
+	}
+	return out
+}
+func titlesJoined(items []manifestItem) string { return strings.Join(titles(items), "|") }
