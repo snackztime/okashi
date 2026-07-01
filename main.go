@@ -144,6 +144,7 @@ const (
 const (
 	scopeProject = iota
 	scopeDocument
+	scopeAll
 )
 
 const searchLimit = 200

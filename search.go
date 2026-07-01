@@ -91,6 +91,28 @@ func searchProject(root string, allowed map[string]bool, query string, limit int
 	return hits
 }
 
+// searchAllSources searches every reachable library source's root, tagging each hit's display name
+// with its source name so results read "Dropbox/notes.md:4". Capped at limit across all sources.
+func searchAllSources(sources []source, allowed map[string]bool, query string, limit int) []searchHit {
+	if strings.TrimSpace(query) == "" || limit <= 0 {
+		return nil
+	}
+	var hits []searchHit
+	for _, s := range sources {
+		if !s.reachable() {
+			continue
+		}
+		for _, h := range searchProject(s.root(), allowed, query, limit-len(hits)) {
+			h.name = s.Name + "/" + h.name
+			hits = append(hits, h)
+		}
+		if len(hits) >= limit {
+			break
+		}
+	}
+	return hits
+}
+
 // --- model wiring ---
 
 var searchHitStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#282a36")).Background(lipgloss.Color("#f1fa8c")) // dark-on-yellow
@@ -106,13 +128,16 @@ func newSearchInput() textinput.Model {
 // recomputeSearch refreshes the hit list for the current query + scope.
 func (m *model) recomputeSearch() {
 	q := m.searchInput.Value()
-	if m.searchScope == scopeDocument {
+	switch m.searchScope {
+	case scopeDocument:
 		name := filepath.Base(m.currentFile)
 		if name == "." || name == "" {
 			name = "this document"
 		}
 		m.searchHits = searchText(name, m.currentFile, m.editor.Value(), q, searchLimit)
-	} else {
+	case scopeAll:
+		m.searchHits = searchAllSources(m.sources, m.files.allowed, q, searchLimit)
+	default: // scopeProject
 		m.searchHits = searchProject(m.files.root, m.files.allowed, q, searchLimit)
 	}
 	m.searchSel = 0
@@ -215,6 +240,10 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			m.searchJump()
 			return m, nil
+		case "ctrl+a":
+			m.searchScope = scopeAll
+			m.recomputeSearch()
+			return m, nil
 		case "tab":
 			if m.searchScope == scopeProject {
 				m.searchScope = scopeDocument
@@ -244,6 +273,8 @@ func (m model) searchView() string {
 	scope := "Project"
 	if m.searchScope == scopeDocument {
 		scope = "This document"
+	} else if m.searchScope == scopeAll {
+		scope = "All sources"
 	}
 	head := "Search ▸ " + m.searchInput.View()
 	right := lipgloss.NewStyle().Foreground(accent).Render(scope) + lipgloss.NewStyle().Foreground(subtle).Render("  (Tab)")
@@ -292,7 +323,7 @@ func (m model) searchView() string {
 	} else if len(m.searchHits) == 0 {
 		note = "(no matches)"
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render(note + " · ↑↓ select · ⏎ open · Tab scope · esc back")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render(note + " · ↑↓ select · ⏎ open · Tab scope · ctrl+a all sources · esc back")
 	b.WriteString(foot)
 	return b.String()
 }

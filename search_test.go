@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -118,4 +119,40 @@ func TestSearchExpandingFold(t *testing.T) {
 	// the decorator + highlighter must not panic on the same input
 	_ = searchDecorator("ȺȺx", "x")
 	_ = highlightQuery("ȺȺx and X again", "x", 40)
+}
+
+func TestSearchAllSourcesTagsAndSkips(t *testing.T) {
+	a := t.TempDir()
+	b := t.TempDir()
+	gone := filepath.Join(t.TempDir(), "missing")
+	os.WriteFile(filepath.Join(a, "one.md"), []byte("the windmill turned"), 0o644)
+	os.WriteFile(filepath.Join(b, "two.md"), []byte("a wind rose"), 0o644)
+	allowed := map[string]bool{".md": true}
+	sources := []source{
+		{ID: "primary", Name: "Primary", Kind: sourceKindPrimary, Path: a}, // root() = writingDir(); override below
+		{ID: b, Name: "Dropbox", Kind: sourceKindFolder, Path: b},
+		{ID: gone, Name: "Gone", Kind: sourceKindFolder, Path: gone},
+	}
+	// The primary's root() resolves to writingDir(); point it at `a` for this test.
+	t.Setenv("OKASHI_DIR", a)
+
+	hits := searchAllSources(sources, allowed, "wind", 50)
+	if len(hits) < 2 {
+		t.Fatalf("should find hits in both reachable sources, got %d: %+v", len(hits), hits)
+	}
+	var havePrimary, haveDropbox bool
+	for _, h := range hits {
+		if strings.HasPrefix(h.name, "Primary/") {
+			havePrimary = true
+		}
+		if strings.HasPrefix(h.name, "Dropbox/") {
+			haveDropbox = true
+		}
+		if strings.HasPrefix(h.name, "Gone/") {
+			t.Fatalf("unreachable source must be skipped, got %q", h.name)
+		}
+	}
+	if !havePrimary || !haveDropbox {
+		t.Fatalf("hits should be tagged with their source name, got %+v", hits)
+	}
 }
