@@ -161,3 +161,19 @@ func TestLayoutSidenotesMarkerIsWholeRun(t *testing.T) {
 		}
 	}
 }
+
+func TestSidenoteGeometryGate(t *testing.T) {
+	if _, _, ok := sidenoteGeometry(80); ok {
+		t.Fatalf("width 80 (< 90) should not enable sidenotes")
+	}
+	measure, gutter, ok := sidenoteGeometry(120)
+	if !ok {
+		t.Fatalf("width 120 should enable sidenotes")
+	}
+	if gutter < 18 || gutter > 30 {
+		t.Fatalf("gutter %d out of [18,30]", gutter)
+	}
+	if measure != 120-gutter-3 {
+		t.Fatalf("measure %d != total-gutter-3", measure)
+	}
+}

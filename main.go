@@ -201,16 +201,17 @@ type model struct {
 	searchHighlight string // transient: highlight this query on the editor's visible lines
 	searchReturn    screen // where ctrl+f was invoked from (esc returns here)
 
-	sidebarVisible bool
-	inspector      inspectorModel
-	focus          focus
-	creatingFile   bool
-	creatingFolder bool
-	addingSource   bool // home screen: typing a folder path into nameInput to add a source
-	previewing     bool
-	previewTufte   bool
-	typewriter     bool
-	dimEnabled     bool
+	sidebarVisible  bool
+	inspector       inspectorModel
+	focus           focus
+	creatingFile    bool
+	creatingFolder  bool
+	addingSource    bool // home screen: typing a folder path into nameInput to add a source
+	previewing      bool
+	previewTufte    bool
+	sidenotesActive bool
+	typewriter      bool
+	dimEnabled      bool
 
 	mdStyle           string // glamour theme, detected once at startup
 	colWidth          int
@@ -1410,6 +1411,9 @@ func (m model) View() string {
 		style := "Default"
 		if m.previewTufte {
 			style = "Tufte"
+			if m.sidenotesActive {
+				style = "Tufte · sidenotes"
+			}
 		}
 		header := breadcrumbStyle.Render("▌ PREVIEW · "+name) + lipgloss.NewStyle().Foreground(subtle).Render("  · "+style+" (t)")
 		pane = lipgloss.JoinVertical(lipgloss.Left, header, m.preview.View())
@@ -2125,6 +2129,25 @@ func (m *model) togglePreview() {
 	m.status = "preview (read-only) · ctrl+p edit · t style · ↑/↓ scroll"
 }
 
+const sidenoteMinWidth = 90
+
+// sidenoteGeometry returns the body measure and gutter width for the given total preview width,
+// and whether the total is wide enough for margin sidenotes at all.
+func sidenoteGeometry(total int) (measure, gutter int, ok bool) {
+	if total < sidenoteMinWidth {
+		return 0, 0, false
+	}
+	gutter = total / 3
+	if gutter < 18 {
+		gutter = 18
+	}
+	if gutter > 30 {
+		gutter = 30
+	}
+	measure = total - gutter - 3 // " ┆ "
+	return measure, gutter, true
+}
+
 // renderPreview rebuilds the preview viewport from the buffer: footnotes folded to endnotes
 // (glamour can't render them), styled Default (the detected theme) or Tufte.
 func (m *model) renderPreview() {
@@ -2132,6 +2155,27 @@ func (m *model) renderPreview() {
 	if wrap <= 0 {
 		wrap = m.colWidth
 	}
+	// Tufte mode + wide terminal + footnotes → margin sidenotes.
+	if m.previewTufte {
+		if measure, gutter, ok := sidenoteGeometry(wrap); ok {
+			if body, notes := footnotesToSidenotes(m.editor.Value()); len(notes) > 0 {
+				r, err := glamour.NewTermRenderer(glamour.WithStyles(tufteGlamourStyle()), glamour.WithWordWrap(measure))
+				if err != nil {
+					m.status = "preview unavailable: " + err.Error()
+					return
+				}
+				out, err := r.Render(body)
+				if err != nil {
+					m.status = "preview failed: " + err.Error()
+					return
+				}
+				m.preview.SetContent(layoutSidenotes(out, notes, measure, gutter))
+				m.sidenotesActive = true
+				return
+			}
+		}
+	}
+	m.sidenotesActive = false
 	styleOpt := glamour.WithStandardStyle(m.mdStyle)
 	if m.previewTufte {
 		styleOpt = glamour.WithStyles(tufteGlamourStyle())
