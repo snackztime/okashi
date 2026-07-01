@@ -129,6 +129,7 @@ func (m model) updateMover(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.moverSel = 0
 				m.moverReload()
 			case moverMoveHere:
+				m.moverAsChapter = true // default to "chapter" each time the confirm opens
 				m.moverConfirm = true
 			}
 			return m, nil
