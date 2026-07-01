@@ -170,7 +170,8 @@ type model struct {
 	homeRegion      homeRegion     // launch screen: which column/group
 	homeIndex       int            // index within the region
 	homeLastCol     homeRegion     // last column visited (for up-out-of-Actions)
-	homeFiles       []homeFileItem // FILES column: the selected library item's documents
+	homeFiles       []homeFileItem // FILES column: the current dir's folders + documents
+	homeFilesDir    string         // the dir FILES currently shows (drill-down within the selection)
 	librarySelected int            // index into projects+folders driving FILES
 	sources         []source       // library sources; [0] is always the primary (writingDir())
 	activeSource    int            // index into sources driving the home library

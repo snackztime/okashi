@@ -172,6 +172,94 @@ func TestActionsRowHorizontalNav(t *testing.T) {
 	}
 }
 
+func TestFilesCascadeDrillDown(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	cat := filepath.Join(root, "worldbuild")
+	os.MkdirAll(filepath.Join(cat, "characters"), 0o755)
+	os.WriteFile(filepath.Join(cat, "overview.md"), []byte("# Overview\n\ntext"), 0o644)
+	os.WriteFile(filepath.Join(cat, "characters", "alice.md"), []byte("# Alice\n\nhi"), 0o644)
+
+	m := initialModel()
+	lib := m.library()
+	sel := -1
+	for i, it := range lib {
+		if it.label == "worldbuild" {
+			sel = i
+		}
+	}
+	if sel < 0 {
+		t.Fatalf("worldbuild not in library: %+v", lib)
+	}
+	m.focusAt(regionLibrary, sel)
+
+	// FILES shows the subfolder (drillable) first, then the doc.
+	if len(m.homeFiles) < 2 || !m.homeFiles[0].isDir || m.homeFiles[0].name != "characters" {
+		t.Fatalf("FILES should lead with the 'characters' subfolder, got %+v", m.homeFiles)
+	}
+	// Drill into it — stays on the home screen.
+	m.focusAt(regionFiles, 0)
+	m.openHomeSelection()
+	if m.screen != screenHome {
+		t.Fatalf("drilling a folder should stay on home, got %v", m.screen)
+	}
+	if len(m.homeFiles) == 0 || m.homeFiles[0].name != ".." {
+		t.Fatalf("drilled FILES should start with '..', got %+v", m.homeFiles)
+	}
+	foundAlice := false
+	for _, f := range m.homeFiles {
+		if !f.isDir && (f.name == "alice.md" || f.name == "Alice") {
+			foundAlice = true
+		}
+	}
+	if !foundAlice {
+		t.Fatalf("drilled FILES should show alice.md, got %+v", m.homeFiles)
+	}
+	// ".." returns to the category root.
+	m.focusAt(regionFiles, 0)
+	m.openHomeSelection()
+	if m.homeFilesDir != cat {
+		t.Fatalf("'..' should return to %q, got %q", cat, m.homeFilesDir)
+	}
+	// Selecting a file opens it (leaves home).
+	oi := -1
+	for i, f := range m.homeFiles {
+		if !f.isDir {
+			oi = i
+			break
+		}
+	}
+	m.focusAt(regionFiles, oi)
+	m.openHomeSelection()
+	if m.screen != screenWriting {
+		t.Fatalf("selecting a file should open it, got %v", m.screen)
+	}
+}
+
+func TestNotesStaysFlat(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.MkdirAll(filepath.Join(root, "acat"), 0o755) // a subfolder at the root
+	os.WriteFile(filepath.Join(root, "loose.md"), []byte("hi"), 0o644)
+	m := initialModel()
+	lib := m.library()
+	m.focusAt(regionLibrary, len(lib)-1) // ◦ Notes is last
+	for _, f := range m.homeFiles {
+		if f.isDir {
+			t.Fatalf("Notes must not show folders/drill, got %+v", m.homeFiles)
+		}
+	}
+	found := false
+	for _, f := range m.homeFiles {
+		if f.name == "loose.md" || f.name == "loose" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("Notes should show the root loose doc, got %+v", m.homeFiles)
+	}
+}
+
 func TestHomeVerticalFlow(t *testing.T) {
 	t.Setenv("OKASHI_DIR", t.TempDir())
 	m := initialModel()
@@ -384,11 +472,11 @@ func TestClassifyLibraryAndFiles(t *testing.T) {
 		t.Fatalf("folders: %+v", folders)
 	}
 	m := initialModel()
-	files := m.homeFilesFor(filepath.Join(ws, "my-novel"))
+	files := m.homeFilesFor(filepath.Join(ws, "my-novel"), true)
 	if len(files) != 2 || files[0].name != "Opening" || files[0].words == 0 || files[0].snippet == "" {
 		t.Fatalf("project files: %+v", files)
 	}
-	cat := m.homeFilesFor(filepath.Join(ws, "research"))
+	cat := m.homeFilesFor(filepath.Join(ws, "research"), true)
 	if len(cat) != 1 || cat[0].name != "sources.md" {
 		t.Fatalf("category files: %+v", cat)
 	}

@@ -25,11 +25,12 @@ const (
 	homeOpenOther
 )
 
-// homeFileItem is one document in the FILES column: display name, path, word count, and a
-// one-line opening snippet.
+// homeFileItem is one entry in the FILES column: a document (name, path, word count, one-line
+// snippet) or, when isDir is set, a drillable subfolder or the ".." parent entry.
 type homeFileItem struct {
 	name, path, snippet string
 	words               int
+	isDir               bool
 }
 
 // classifyLibrary splits the workspace's top-level subdirs into manuscripts (projects) and
@@ -76,28 +77,37 @@ func dirIsManuscript(dir string) bool {
 	return resolveManuscript(dir, fes).ordered()
 }
 
-// homeFilesFor resolves a project/folder dir into its ordered documents (chapters in view
-// order then loose, or a category's docs), each with word count + snippet.
-func (m *model) homeFilesFor(dir string) []homeFileItem {
+// homeFilesFor resolves a dir into FILES entries: when showFolders is set, drillable subfolders
+// (alpha-sorted, hidden excluded) come first, then the documents (chapters in manifest order,
+// then loose), each with word count + snippet. showFolders is false for the flat Notes bucket.
+func (m *model) homeFilesFor(dir string, showFolders bool) []homeFileItem {
 	sub, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
+	var folders []homeFileItem
 	var fes []fileEntry
 	for _, e := range sub {
-		if e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if e.IsDir() {
+			if showFolders {
+				folders = append(folders, homeFileItem{name: e.Name(), path: filepath.Join(dir, e.Name()), isDir: true})
+			}
 			continue
 		}
 		if m.files.allowed[strings.ToLower(filepath.Ext(e.Name()))] {
 			fes = append(fes, fileEntry{name: e.Name()})
 		}
 	}
+	sort.Slice(folders, func(i, j int) bool { return folders[i].name < folders[j].name })
 	view := resolveManuscript(dir, fes)
 	mk := func(name, file string) homeFileItem {
 		p := filepath.Join(dir, file)
 		return homeFileItem{name: name, path: p, words: m.files.wc.count(p), snippet: m.snippets.get(p)}
 	}
-	var out []homeFileItem
+	out := folders
 	for _, ch := range view.chapters {
 		out = append(out, mk(ch.title, ch.file))
 	}
@@ -181,11 +191,10 @@ func (m *model) homeCreate(region homeRegion) tea.Cmd {
 		m.screen = screenWriting
 		return m.startCreate(true)
 	case regionFiles:
-		lib := m.library()
-		if m.librarySelected < 0 || m.librarySelected >= len(lib) {
+		if m.homeFilesDir == "" {
 			return nil
 		}
-		m.files.SetDir(lib[m.librarySelected].path)
+		m.files.SetDir(m.homeFilesDir) // create in the currently-viewed (possibly drilled) dir
 		m.screen = screenWriting
 		return m.startCreate(false)
 	}
@@ -285,14 +294,32 @@ func (m *model) rebuildHome() {
 	m.recomputeHomeFiles()
 }
 
-// recomputeHomeFiles fills the FILES column from the selected library item.
+// recomputeHomeFiles fills the FILES column from the selected library item, honoring any
+// drill-down (m.homeFilesDir). The Notes bucket is flat (loose docs only, no folders/drill);
+// projects and categories cascade — subfolders are drillable and a ".." entry leads back up,
+// bounded to the selected item's root. A changed library selection resets the drill.
 func (m *model) recomputeHomeFiles() {
 	lib := m.library()
 	if m.librarySelected < 0 || m.librarySelected >= len(lib) {
 		m.homeFiles = nil
+		m.homeFilesDir = ""
 		return
 	}
-	m.homeFiles = m.homeFilesFor(lib[m.librarySelected].path)
+	item := lib[m.librarySelected]
+	if item.kind == homeLoose { // Notes: flat loose bucket, no cascade
+		m.homeFilesDir = item.path
+		m.homeFiles = m.homeFilesFor(item.path, false)
+		return
+	}
+	// Reset the drill when the selection moved out of the current subtree.
+	if m.homeFilesDir == "" || !withinRoot(m.homeFilesDir, item.path) {
+		m.homeFilesDir = item.path
+	}
+	items := m.homeFilesFor(m.homeFilesDir, true)
+	if m.homeFilesDir != item.path { // drilled below the item root → offer a way back up
+		items = append([]homeFileItem{{name: "..", path: filepath.Dir(m.homeFilesDir), isDir: true}}, items...)
+	}
+	m.homeFiles = items
 }
 
 // resetHomeSelection focuses the first non-empty column (Recent first) and points the
@@ -672,7 +699,8 @@ func (m model) libraryColumn(h int) ([]string, []innerCell) {
 	return lines, cells
 }
 
-// filesColumn builds the FILES box: two lines per file (name+count, dim snippet) + cells.
+// filesColumn builds the FILES box: subfolders / ".." as one line each (drillable), documents as
+// two lines (name+count, dim snippet) + cells.
 func (m model) filesColumn(h, contentW int) ([]string, []innerCell) {
 	if len(m.homeFiles) == 0 {
 		return []string{homeDim("(empty)")}, nil
@@ -688,9 +716,25 @@ func (m model) filesColumn(h, contentW int) ([]string, []innerCell) {
 	off := homeWindowOffset(len(m.homeFiles), active, perView)
 	var lines []string
 	var cells []innerCell
-	for i := off; i < len(m.homeFiles) && len(lines)+2 <= h; i++ {
+	for i := off; i < len(m.homeFiles); i++ {
 		f := m.homeFiles[i]
 		sel := m.homeRegion == regionFiles && m.homeIndex == i
+		if f.isDir {
+			if len(lines)+1 > h {
+				break
+			}
+			text := "▸ " + f.name + "/"
+			if f.name == ".." {
+				text = "‹ .."
+			}
+			text = ansi.Truncate(text, contentW, "…")
+			cells = append(cells, innerCell{regionFiles, i, len(lines), 0, lipgloss.Width(text)})
+			lines = append(lines, homeLabel(text, sel))
+			continue
+		}
+		if len(lines)+2 > h {
+			break
+		}
 		count := commafy(f.words)
 		name := f.name
 		maxName := contentW - lipgloss.Width(count) - 1
@@ -999,15 +1043,22 @@ func (m *model) openHomeSelection() tea.Cmd {
 		}
 		return nil
 	case regionFiles:
-		if m.homeIndex < len(m.homeFiles) {
-			p := m.homeFiles[m.homeIndex].path
-			m.files.SetDir(filepath.Dir(p))
-			m.loadFile(p)
-			m.focus = focusEditor
-			m.editor.Focus()
-			m.screen = screenWriting
-			m.layout()
+		if m.homeIndex < 0 || m.homeIndex >= len(m.homeFiles) {
+			return nil
 		}
+		f := m.homeFiles[m.homeIndex]
+		if f.isDir { // drill into the subfolder (or up via "..") — stay on the home
+			m.homeFilesDir = f.path
+			m.recomputeHomeFiles()
+			m.homeIndex = 0
+			return nil
+		}
+		m.files.SetDir(filepath.Dir(f.path))
+		m.loadFile(f.path)
+		m.focus = focusEditor
+		m.editor.Focus()
+		m.screen = screenWriting
+		m.layout()
 		return nil
 	case regionLibrary:
 		lib := m.library()
