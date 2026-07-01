@@ -42,6 +42,44 @@ func TestFootnotesSkipCode(t *testing.T) {
 	}
 }
 
+func TestFootnotesToSidenotesSplitsNotes(t *testing.T) {
+	src := "Alpha[^a] and beta[^b].\n\n[^a]: first note\n[^b]: second note\n"
+	body, notes := footnotesToSidenotes(src)
+	if len(notes) != 2 {
+		t.Fatalf("want 2 notes, got %d: %v", len(notes), notes)
+	}
+	if notes[0] != "first note" || notes[1] != "second note" {
+		t.Fatalf("notes out of order: %v", notes)
+	}
+	if strings.Contains(body, "Notes") || strings.Contains(body, "[^a]") {
+		t.Fatalf("body should have no Notes section and no raw refs: %q", body)
+	}
+	if !strings.Contains(body, superscript(1)) || !strings.Contains(body, superscript(2)) {
+		t.Fatalf("body missing superscript refs: %q", body)
+	}
+}
+
+func TestFootnotesToSidenotesNoFootnotes(t *testing.T) {
+	body, notes := footnotesToSidenotes("Just prose, no notes.\n")
+	if len(notes) != 0 {
+		t.Fatalf("want 0 notes, got %v", notes)
+	}
+	if !strings.Contains(body, "Just prose") {
+		t.Fatalf("body mangled: %q", body)
+	}
+}
+
+func TestFootnotesToSidenotesIgnoresCodeAndOrphans(t *testing.T) {
+	src := "See `arr[^1]` and real[^r].\n\n[^r]: real note\n"
+	body, notes := footnotesToSidenotes(src)
+	if len(notes) != 1 || notes[0] != "real note" {
+		t.Fatalf("want 1 real note, got %v", notes)
+	}
+	if !strings.Contains(body, "arr[^1]") {
+		t.Fatalf("code span footnote must stay literal: %q", body)
+	}
+}
+
 func TestPreviewTufteToggle(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("# Title\n\nThe cat[^1] sat.\n\n[^1]: a note.\n"), 0o644)

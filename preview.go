@@ -18,22 +18,28 @@ var (
 	codeMask = regexp.MustCompile("(?s)```.*?```|~~~.*?~~~|`[^`\n]*`")
 )
 
-// footnotesToEndnotes rewrites GFM footnotes (which glamour can't render) into superscript
-// markers plus a "Notes" endnote section, so the preview reads sensibly. No-op when the
-// document has no footnote definitions. Code blocks/spans are left untouched.
-func footnotesToEndnotes(orig string) string {
-	// Mask code so the footnote regexes never see inside it; restore at the end.
+// maskCode replaces fenced/inline code with sentinels so the footnote regexes never see
+// inside it, and returns a restore func. Shared by footnotesToEndnotes and footnotesToSidenotes.
+func maskCode(orig string) (masked string, restore func(string) string) {
 	var code []string
-	md := codeMask.ReplaceAllStringFunc(orig, func(c string) string {
+	masked = codeMask.ReplaceAllStringFunc(orig, func(c string) string {
 		code = append(code, c)
 		return fmt.Sprintf("\x00CODE%d\x00", len(code)-1)
 	})
-	restore := func(s string) string {
+	restore = func(s string) string {
 		for i, c := range code {
 			s = strings.Replace(s, fmt.Sprintf("\x00CODE%d\x00", i), c, 1)
 		}
 		return s
 	}
+	return masked, restore
+}
+
+// footnotesToEndnotes rewrites GFM footnotes (which glamour can't render) into superscript
+// markers plus a "Notes" endnote section, so the preview reads sensibly. No-op when the
+// document has no footnote definitions. Code blocks/spans are left untouched.
+func footnotesToEndnotes(orig string) string {
+	md, restore := maskCode(orig)
 
 	defMatches := fnDef.FindAllStringSubmatch(md, -1)
 	if len(defMatches) == 0 {
@@ -68,6 +74,40 @@ func footnotesToEndnotes(orig string) string {
 		b.WriteString(fmt.Sprintf("%d. %s\n", num[id], defs[id]))
 	}
 	return restore(b.String())
+}
+
+// footnotesToSidenotes splits GFM footnotes out of the body for margin rendering: it rewrites
+// referenced [^id] to superscript markers in place (no endnote section) and returns the note
+// texts in first-reference order. Empty notes slice when nothing is referenced. Code is masked.
+func footnotesToSidenotes(orig string) (body string, notes []string) {
+	md, restore := maskCode(orig)
+	defMatches := fnDef.FindAllStringSubmatch(md, -1)
+	if len(defMatches) == 0 {
+		return restore(md), nil
+	}
+	defs := map[string]string{}
+	for _, m := range defMatches {
+		defs[m[1]] = strings.TrimSpace(m[2])
+	}
+	b := fnDef.ReplaceAllString(md, "") // drop definition lines
+	var order []string
+	num := map[string]int{}
+	b = fnRef.ReplaceAllStringFunc(b, func(ref string) string {
+		id := fnRef.FindStringSubmatch(ref)[1]
+		if _, ok := defs[id]; !ok {
+			return ref // orphan reference: keep literal
+		}
+		if _, seen := num[id]; !seen {
+			order = append(order, id)
+			num[id] = len(order)
+		}
+		return superscript(num[id])
+	})
+	b = strings.TrimRight(b, "\n")
+	for _, id := range order {
+		notes = append(notes, defs[id])
+	}
+	return restore(b), notes
 }
 
 func superscript(n int) string {
