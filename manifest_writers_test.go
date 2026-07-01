@@ -108,6 +108,39 @@ func TestWriteManifestForcesSchemaVersion(t *testing.T) {
 	}
 }
 
+func TestStartRenameManifestChapterRetitles(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "book")
+	first, _ := createManuscript(dir, "Book", "Untitled")
+
+	m := initialModel() // same construction as Task 2 (smoke_test.go:369)
+	m.files.root = ""
+	m.files.SetDir(dir)
+	m.files.selectName(first)
+
+	m.startRename()
+	if !m.renaming || !m.renameTarget.manifestChapter {
+		t.Fatalf("startRename on a manifest chapter should begin a manifestChapter rename; target=%+v renaming=%v", m.renameTarget, m.renaming)
+	}
+	if got := m.nameInput.Value(); got != "Untitled" {
+		t.Fatalf("prefill = %q, want the current chapter title 'Untitled'", got)
+	}
+
+	m.nameInput.SetValue("The Opening")
+	m.confirmRename()
+
+	mf, _, _ := readManifest(dir)
+	if mf.Items[0].Title != "The Opening" {
+		t.Fatalf("title = %q, want 'The Opening'", mf.Items[0].Title)
+	}
+	if mf.Items[0].File != first {
+		t.Fatalf("filename changed to %q — must stay birth-stable", mf.Items[0].File)
+	}
+	if _, err := os.Stat(filepath.Join(dir, first)); err != nil {
+		t.Fatalf("chapter file must not be renamed on disk: %v", err)
+	}
+}
+
 func TestConfirmCreateNewProjectMakesManuscript(t *testing.T) {
 	root := t.TempDir()
 	m := initialModel() // constructor used by all model tests (e.g. smoke_test.go:369)

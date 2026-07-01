@@ -147,10 +147,11 @@ const searchLimit = 200
 
 // renameTarget is the item a pending rename prompt will rename.
 type renameTarget struct {
-	dir     string // directory containing the item
-	name    string // current base name
-	isDir   bool
-	section bool // a numbered section -> title-only rename
+	dir             string // directory containing the item
+	name            string // current base name
+	isDir           bool
+	section         bool // a numbered section -> title-only rename (legacy file rename)
+	manifestChapter bool // a manifest chapter -> edit items[].title, filename birth-stable
 }
 
 const inspectorWidth = 34
@@ -1821,8 +1822,11 @@ func (m *model) startRename() {
 	}
 	if isChapterOf(v, e.name) {
 		if v.source == sourceManifest {
-			// manifest manuscript: titles are manifest-owned; okashi can't write them.
-			m.status = "chapter titles are managed by wicklight"
+			// manifest manuscript: retitle the manifest entry; filename is birth-stable (§5.7).
+			m.renamingInPane = true
+			m.nameInput.Width = m.files.width
+			m.beginRename(renameTarget{dir: m.files.dir, name: e.name, manifestChapter: true},
+				m.files.chapterTitle(e.name))
 			return
 		}
 		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
@@ -1950,8 +1954,9 @@ func (m *model) startRenameOutline() {
 	}
 	if row.isSection {
 		if v.source == sourceManifest {
-			// manifest manuscript: titles are manifest-owned; okashi can't write them.
-			m.status = "chapter titles are managed by wicklight"
+			// manifest manuscript: retitle the manifest entry; filename is birth-stable (§5.7).
+			m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, manifestChapter: true},
+				m.outline.chapterTitle(row.entry.name))
 			return
 		}
 		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
@@ -1972,6 +1977,16 @@ func (m *model) confirmRename() {
 	t := m.renameTarget
 	if typed == "" {
 		m.status = "rename cancelled (empty)"
+		m.refreshAfterRename()
+		return
+	}
+
+	if t.manifestChapter {
+		if err := renameChapterTitle(t.dir, t.name, typed); err != nil {
+			m.status = "retitle failed: " + err.Error()
+		} else {
+			m.status = "retitled to " + typed
+		}
 		m.refreshAfterRename()
 		return
 	}

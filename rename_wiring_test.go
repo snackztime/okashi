@@ -50,7 +50,10 @@ func TestSidebarRenameLooseFileKeepsExt(t *testing.T) {
 	}
 }
 
-func TestRenameRefusedForManifestChapter(t *testing.T) {
+// TestRenameManifestChapterRetitles was previously TestRenameRefusedForManifestChapter.
+// Task 3 changed behavior: pressing r on a manifest chapter now opens a retitle
+// prompt that edits items[].title, leaving the filename birth-stable.
+func TestRenameManifestChapterRetitles(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
 	proj := filepath.Join(root, "novel")
@@ -63,11 +66,30 @@ func TestRenameRefusedForManifestChapter(t *testing.T) {
 
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}})
 	m = nm.(model)
-	if m.renaming {
-		t.Fatal("r on a manifest chapter must NOT start a rename (title is manifest-owned)")
+	if !m.renaming || !m.renameTarget.manifestChapter {
+		t.Fatalf("r on a manifest chapter must start a manifestChapter retitle; renaming=%v target=%+v", m.renaming, m.renameTarget)
 	}
+	if got := m.nameInput.Value(); got != "The Letter" {
+		t.Fatalf("prefill should be the current chapter title 'The Letter', got %q", got)
+	}
+
+	// Type a new title and confirm.
+	m.nameInput.SetValue("")
+	m = typeInto(t, m, "A New Title")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+
+	// File must remain on disk, untouched.
 	if _, err := os.Stat(filepath.Join(proj, "the-letter.md")); err != nil {
-		t.Fatalf("the chapter file must be untouched: %v", err)
+		t.Fatalf("chapter file must not be renamed on disk: %v", err)
+	}
+	// Manifest title must be updated.
+	mf, _, _ := readManifest(proj)
+	if mf.Items[0].Title != "A New Title" {
+		t.Fatalf("manifest title = %q, want 'A New Title'", mf.Items[0].Title)
+	}
+	if mf.Items[0].File != "the-letter.md" {
+		t.Fatalf("manifest filename changed to %q — must be birth-stable", mf.Items[0].File)
 	}
 }
 
