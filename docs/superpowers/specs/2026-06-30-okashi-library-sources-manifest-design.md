@@ -112,9 +112,14 @@ one-line switch here).
                     Browse all files
 ```
 
-- **Source picker:** the LIBRARY title shows the active source (`LIBRARY · Wicklight ▾`); a key
-  (e.g. `s`) or clicking the `▾` cycles/opens the source list (add/remove/switch). Switching a
-  source repopulates LIBRARY (its projects/folders/loose) and FILES.
+- **Source picker (RESOLVED 2026-06-30 — cycle + inline add/remove):** the LIBRARY title shows the
+  active source (`LIBRARY · Wicklight ▾`). **`s` cycles** the active source in place (skipping
+  unreachable ones); switching repopulates LIBRARY (its ◦ Loose / projects / folders) and FILES.
+  A dim **`+ add source…`** row at the foot of LIBRARY opens a prompt to type/paste a folder path
+  (`addSource` + persist + switch to it); **`d`** on the active *folder* source removes it
+  (`removeSource` + persist; the primary is never removable). No modal — reuses the inline-prompt
+  pattern. (Chosen over a pop-up picker list and over cycle-only/edit-the-file for leanness while
+  still letting a TUI-only user add their own folder.)
 - **LIBRARY** (per active source): a leading **◦ Loose** entry (the source root's unfiled docs),
   then **PROJECTS** (manuscripts), then **FOLDERS** (categories). Selecting any drives FILES.
 - **FILES:** the selected library item's documents (chapter titles + Resources / category docs /
