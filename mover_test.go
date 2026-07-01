@@ -156,3 +156,81 @@ func TestMoverDrillIntoSubfolderAndBack(t *testing.T) {
 		t.Fatalf("'..' should return to root, got %q", m.moverDestDir)
 	}
 }
+
+func TestMoverStandalonePicksFileThenDest(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "stray.md"), []byte("x"), 0o644)
+	os.MkdirAll(filepath.Join(root, "research"), 0o755)
+	os.WriteFile(filepath.Join(root, "research", "deep.md"), []byte("y"), 0o644)
+
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	m = nm.(model)
+	m.enterMoverStandalone()
+	if m.screen != screenMover || m.moverPhase != moverPickSource {
+		t.Fatalf("standalone entry should open the mover in pick-source phase, screen=%v phase=%d", m.screen, m.moverPhase)
+	}
+	// Left pane lists the root's folders + files.
+	names := map[string]moverEntryKind{}
+	for _, e := range m.moverSrcEntries {
+		names[e.name] = e.kind
+	}
+	if names["research"] != moverFolder || names["stray.md"] != moverFile {
+		t.Fatalf("source picker should list research/ (folder) + stray.md (file), got %+v", m.moverSrcEntries)
+	}
+	// Select stray.md as the source → advances to pick-dest with the source set.
+	for i, e := range m.moverSrcEntries {
+		if e.kind == moverFile && e.name == "stray.md" {
+			m.moverSrcSel = i
+		}
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.moverPhase != moverPickDest {
+		t.Fatalf("picking a file should advance to pick-dest, phase=%d", m.moverPhase)
+	}
+	if m.moverSource != filepath.Join(root, "stray.md") || m.moverIsDir {
+		t.Fatalf("source should be stray.md, got %q isDir=%v", m.moverSource, m.moverIsDir)
+	}
+	if m.moverFromDir != root {
+		t.Fatalf("moverFromDir should be the file's container, got %q", m.moverFromDir)
+	}
+}
+
+func TestMoverStandaloneDrillAndPickFolder(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.MkdirAll(filepath.Join(root, "worldbuild", "characters"), 0o755)
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 30})
+	m = nm.(model)
+	m.enterMoverStandalone()
+	// drill into worldbuild
+	for i, e := range m.moverSrcEntries {
+		if e.kind == moverFolder && e.name == "worldbuild" {
+			m.moverSrcSel = i
+		}
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // drill
+	m = nm.(model)
+	if m.moverSrcDir != filepath.Join(root, "worldbuild") {
+		t.Fatalf("enter on a folder should drill in, srcDir=%q", m.moverSrcDir)
+	}
+	// A "→ move this folder" row now exists (we're below the source root); pick it.
+	moveThis := -1
+	for i, e := range m.moverSrcEntries {
+		if e.kind == moverMoveThis {
+			moveThis = i
+		}
+	}
+	if moveThis < 0 {
+		t.Fatalf("a 'move this folder' row should exist below root, got %+v", m.moverSrcEntries)
+	}
+	m.moverSrcSel = moveThis
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.moverPhase != moverPickDest || !m.moverIsDir || m.moverSource != filepath.Join(root, "worldbuild") {
+		t.Fatalf("'move this folder' should pick worldbuild as a folder source; phase=%d isDir=%v src=%q", m.moverPhase, m.moverIsDir, m.moverSource)
+	}
+}

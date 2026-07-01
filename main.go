@@ -238,6 +238,11 @@ type model struct {
 	moverAsChapter bool
 	moverReturn    screen
 
+	moverPhase      int          // moverPickSource | moverPickDest
+	moverSrcDir     string       // left-pane browse dir (pick-source phase)
+	moverSrcEntries []moverEntry // left-pane rows
+	moverSrcSel     int
+
 	exportPrompt bool
 
 	goalsAll        map[string]projectGoals

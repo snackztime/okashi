@@ -13,9 +13,16 @@ import (
 type moverEntryKind int
 
 const (
+	moverPickSource = 0
+	moverPickDest   = 1
+)
+
+const (
 	moverMoveHere moverEntryKind = iota // "→ move into <current folder>"
 	moverUp                             // "‹ .."
 	moverFolder                         // "▸ name/"
+	moverFile                           // "› name" (a document — selectable as the source)
+	moverMoveThis                       // "→ move this folder (<current>)" (pick the browsed folder as the source)
 )
 
 type moverEntry struct {
@@ -41,8 +48,80 @@ func (m *model) enterMover() {
 	m.moverConfirm = false
 	m.moverAsChapter = true
 	m.moverReturn = screenWriting
+	m.moverPhase = moverPickDest
 	m.moverReload()
 	m.screen = screenMover
+}
+
+// enterMoverStandalone opens the mover with no source chosen — the left pane browses the active
+// source so the user picks the file/folder to move (home action / global entry).
+func (m *model) enterMoverStandalone() {
+	m.moverPhase = moverPickSource
+	m.moverSrcDir = m.activeSourceRoot()
+	m.moverSrcSel = 0
+	m.moverConfirm = false
+	m.moverAsChapter = true
+	m.moverReturn = screenWriting
+	m.moverSrcReload()
+	m.screen = screenMover
+}
+
+// moverSrcReload rebuilds the source-picker rows for moverSrcDir: a "move this folder" row (when
+// below the source root), a ".." row (bounded to the root), subfolders (drillable), then files.
+func (m *model) moverSrcReload() {
+	root := m.activeSourceRoot()
+	var rows []moverEntry
+	below := m.moverSrcDir != root && withinRoot(m.moverSrcDir, root)
+	if below {
+		rows = append(rows, moverEntry{name: filepath.Base(m.moverSrcDir), path: m.moverSrcDir, kind: moverMoveThis})
+		rows = append(rows, moverEntry{name: "..", path: filepath.Dir(m.moverSrcDir), kind: moverUp})
+	}
+	if ents, err := os.ReadDir(m.moverSrcDir); err == nil {
+		var dirs, files []moverEntry
+		for _, e := range ents {
+			if strings.HasPrefix(e.Name(), ".") {
+				continue
+			}
+			p := filepath.Join(m.moverSrcDir, e.Name())
+			if e.IsDir() {
+				dirs = append(dirs, moverEntry{name: e.Name(), path: p, kind: moverFolder})
+			} else if m.files.allowed[strings.ToLower(filepath.Ext(e.Name()))] {
+				files = append(files, moverEntry{name: e.Name(), path: p, kind: moverFile})
+			}
+		}
+		sort.Slice(dirs, func(i, j int) bool { return dirs[i].name < dirs[j].name })
+		sort.Slice(files, func(i, j int) bool { return files[i].name < files[j].name })
+		rows = append(rows, dirs...)
+		rows = append(rows, files...)
+	}
+	m.moverSrcEntries = rows
+	if m.moverSrcSel >= len(rows) {
+		m.moverSrcSel = len(rows) - 1
+	}
+	if m.moverSrcSel < 0 {
+		m.moverSrcSel = 0
+	}
+}
+
+// pickMoverSource selects e as the thing to move (a file, or a folder via "move this folder") and
+// advances to the destination phase.
+func (m *model) pickMoverSource(e moverEntry) {
+	switch e.kind {
+	case moverFile:
+		m.moverSource = e.path
+		m.moverIsDir = false
+		m.moverFromDir = filepath.Dir(e.path)
+	case moverMoveThis:
+		m.moverSource = e.path
+		m.moverIsDir = true
+		m.moverFromDir = filepath.Dir(e.path)
+	default:
+		return
+	}
+	m.moverPhase = moverPickDest
+	m.moverDestDir = m.activeSourceRoot()
+	m.moverSel = 0
+	m.moverReload()
 }
 
 // moverReload rebuilds the destination browser rows for moverDestDir: a leading "move here" row,
@@ -104,6 +183,37 @@ func (m model) updateMover(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
+		if m.moverPhase == moverPickSource {
+			switch msg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.screen = m.moverReturn
+				return m, nil
+			case "up", "k":
+				if m.moverSrcSel > 0 {
+					m.moverSrcSel--
+				}
+			case "down", "j":
+				if m.moverSrcSel < len(m.moverSrcEntries)-1 {
+					m.moverSrcSel++
+				}
+			case "enter":
+				if m.moverSrcSel < 0 || m.moverSrcSel >= len(m.moverSrcEntries) {
+					return m, nil
+				}
+				e := m.moverSrcEntries[m.moverSrcSel]
+				switch e.kind {
+				case moverUp, moverFolder:
+					m.moverSrcDir = e.path
+					m.moverSrcSel = 0
+					m.moverSrcReload()
+				case moverFile, moverMoveThis:
+					m.pickMoverSource(e)
+				}
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -149,40 +259,77 @@ func (m *model) applyMove() error {
 }
 
 func (m model) moverView() string {
-	// LEFT: the item being moved.
-	srcName := filepath.Base(m.moverSource)
-	kindLabel := "file"
-	if m.moverIsDir {
-		kindLabel = "folder"
+	// LEFT pane: the source browser (pick phase) or the chosen source (dest phase).
+	var leftInner string
+	var leftTitle string
+	if m.moverPhase == moverPickSource {
+		leftTitle = "MOVE · pick a file"
+		visRows := m.height - 8
+		if visRows < 1 {
+			visRows = 1
+		}
+		off := homeWindowOffset(len(m.moverSrcEntries), m.moverSrcSel, visRows)
+		var lines []string
+		for i := off; i < len(m.moverSrcEntries) && len(lines) < visRows; i++ {
+			e := m.moverSrcEntries[i]
+			var text string
+			switch e.kind {
+			case moverMoveThis:
+				text = "→ move this folder"
+			case moverUp:
+				text = "‹ .."
+			case moverFolder:
+				text = "▸ " + e.name + "/"
+			default:
+				text = "› " + e.name
+			}
+			if i == m.moverSrcSel {
+				text = selectedStyle.Render(text)
+			}
+			lines = append(lines, text)
+		}
+		leftInner = strings.Join(lines, "\n")
+	} else {
+		leftTitle = "MOVE"
+		kindLabel := "file"
+		if m.moverIsDir {
+			kindLabel = "folder"
+		}
+		leftInner = "moving " + kindLabel + ":\n" + filepath.Base(m.moverSource) + "\n\nfrom: " + filepath.Base(m.moverFromDir)
 	}
-	left := "moving " + kindLabel + ":\n" + srcName + "\n\nfrom: " + filepath.Base(m.moverFromDir)
-	leftPanel := framedPanel("MOVE", left, 26, 8, "")
+	leftPanel := framedPanel(leftTitle, leftInner, max(26, min(m.width-34, 40)), max(len(strings.Split(leftInner, "\n"))+2, 8), "")
 
-	// RIGHT: the destination browser (windowed).
-	visRows := m.height - 8
-	if visRows < 1 {
-		visRows = 1
-	}
-	off := homeWindowOffset(len(m.moverEntries), m.moverSel, visRows)
-	var rows []string
-	for i := off; i < len(m.moverEntries) && len(rows) < visRows; i++ {
-		e := m.moverEntries[i]
-		var text string
-		switch e.kind {
-		case moverMoveHere:
-			text = "→ move into " + e.name + "/"
-		case moverUp:
-			text = "‹ .."
-		default:
-			text = "▸ " + e.name + "/"
-		}
-		if i == m.moverSel {
-			text = selectedStyle.Render(text)
-		}
-		rows = append(rows, text)
-	}
+	// RIGHT pane: dim placeholder in pick-source phase; destination browser in pick-dest phase.
+	var rightPanel string
 	rightW := max(30, min(m.width-30, 44))
-	rightPanel := framedPanel("TO "+filepath.Base(m.moverDestDir), strings.Join(rows, "\n"), rightW, len(rows)+2, "")
+	if m.moverPhase == moverPickSource {
+		rightInner := homeDim("pick a source first →")
+		rightPanel = framedPanel("TO", rightInner, rightW, 4, "")
+	} else {
+		visRows := m.height - 8
+		if visRows < 1 {
+			visRows = 1
+		}
+		off := homeWindowOffset(len(m.moverEntries), m.moverSel, visRows)
+		var rows []string
+		for i := off; i < len(m.moverEntries) && len(rows) < visRows; i++ {
+			e := m.moverEntries[i]
+			var text string
+			switch e.kind {
+			case moverMoveHere:
+				text = "→ move into " + e.name + "/"
+			case moverUp:
+				text = "‹ .."
+			default:
+				text = "▸ " + e.name + "/"
+			}
+			if i == m.moverSel {
+				text = selectedStyle.Render(text)
+			}
+			rows = append(rows, text)
+		}
+		rightPanel = framedPanel("TO "+filepath.Base(m.moverDestDir), strings.Join(rows, "\n"), rightW, len(rows)+2, "")
+	}
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
 	var b strings.Builder
