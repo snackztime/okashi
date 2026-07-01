@@ -1363,10 +1363,7 @@ func (m model) View() string {
 
 	cols := []string{}
 	if showSidebar {
-		title := filepath.Base(m.files.dir)
-		if m.files.dir == "" {
-			title = "Files"
-		}
+		title := m.files.paneLabel()
 		editRow, editField := -1, ""
 		if m.renaming && m.renamingInPane {
 			editRow, editField = m.files.selected, m.nameInput.View()

@@ -365,3 +365,31 @@ func TestFileListInlineCreateRow(t *testing.T) {
 		t.Fatalf("create row should add the field AND keep existing entries:\n%s", out)
 	}
 }
+
+func TestPaneLabel(t *testing.T) {
+	root := t.TempDir()
+	// A manuscript whose title differs from its folder name.
+	proj := filepath.Join(root, "novel-dir")
+	if _, err := createManuscript(proj, "The Real Title", "Untitled"); err != nil {
+		t.Fatal(err)
+	}
+	// A plain category folder.
+	cat := filepath.Join(root, "research")
+	os.MkdirAll(cat, 0o755)
+
+	f := newFilelist()
+	f.root = root
+
+	f.SetDir(root)
+	if got := f.paneLabel(); got != "Files" {
+		t.Fatalf("root paneLabel = %q, want Files", got)
+	}
+	f.SetDir(proj)
+	if got := f.paneLabel(); got != "The Real Title" {
+		t.Fatalf("manuscript paneLabel = %q, want the manifest title", got)
+	}
+	f.SetDir(cat)
+	if got := f.paneLabel(); got != "research" {
+		t.Fatalf("category paneLabel = %q, want the folder name", got)
+	}
+}

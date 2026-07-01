@@ -276,6 +276,18 @@ func (f *filelist) activate() (string, bool) {
 	return filepath.Join(f.dir, e.name), true
 }
 
+// paneLabel is the file-pane header: "Files" at the source root, the manuscript title
+// for a manuscript (manifest or legacy), else the folder name for a category.
+func (f filelist) paneLabel() string {
+	if f.dir == "" || f.dir == f.root {
+		return "Files"
+	}
+	if f.view.ordered() {
+		return f.view.title
+	}
+	return filepath.Base(f.dir)
+}
+
 // breadcrumb is the current path relative to the workspace root, e.g.
 // "okashi" at the root or "okashi / Book Name" inside a project.
 func (f filelist) breadcrumb() string {
