@@ -137,6 +137,7 @@ const (
 	screenManuscript
 	screenSearch
 	screenStructure
+	screenMover
 )
 
 const (
@@ -226,6 +227,16 @@ type model struct {
 
 	deleting     bool
 	deleteTarget string
+
+	moverSource    string
+	moverIsDir     bool
+	moverFromDir   string
+	moverDestDir   string
+	moverEntries   []moverEntry
+	moverSel       int
+	moverConfirm   bool
+	moverAsChapter bool
+	moverReturn    screen
 
 	exportPrompt bool
 
@@ -728,6 +739,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenStructure {
 		return m.updateStructure(msg)
+	}
+
+	if m.screen == screenMover {
+		return m.updateMover(msg)
 	}
 
 	// While naming a new file, the prompt captures all input.
@@ -1284,6 +1299,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.startRename()
 				case "d":
 					m.duplicateSelected()
+				case "M":
+					m.enterMover()
 				}
 			}
 		}
@@ -1347,6 +1364,10 @@ func (m model) View() string {
 
 	if m.screen == screenStructure {
 		return m.structureView()
+	}
+
+	if m.screen == screenMover {
+		return m.moverView()
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone
