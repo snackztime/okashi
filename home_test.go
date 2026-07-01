@@ -61,9 +61,10 @@ func TestBuildHomeItems(t *testing.T) {
 
 	items := buildHomeItems(recents, dir)
 
-	// 2 recents + 2 folders (hidden excluded) + 1 Notes + 3 actions = 8
-	if len(items) != 8 {
-		t.Fatalf("want 8 items, got %d: %+v", len(items), items)
+	// 2 recents + 2 folders (hidden excluded) + 1 Notes + 1 Browse action = 6
+	// (New document / New project are now the inline + on the panels, not actions.)
+	if len(items) != 6 {
+		t.Fatalf("want 6 items, got %d: %+v", len(items), items)
 	}
 	if items[0].kind != homeRecentFile || items[0].path != "/abs/chapter-03.md" {
 		t.Fatalf("first item should be the most-recent file, got %+v", items[0])
@@ -75,24 +76,21 @@ func TestBuildHomeItems(t *testing.T) {
 	if items[2].kind != homeFolder || items[2].label != "journal" {
 		t.Fatalf("third item should be the first folder 'journal', got %+v", items[2])
 	}
-	// The ◦ Notes entry follows projects+folders, before the actions.
+	// The ◦ Notes entry follows projects+folders, before the single Browse action.
 	if items[4].kind != homeLoose || items[4].label != "◦ Notes" {
 		t.Fatalf("fifth item should be ◦ Notes, got %+v", items[4])
 	}
-	if items[5].kind != homeNewDocument {
-		t.Fatalf("6th item should be new document action, got %+v", items[5])
-	}
-	if items[7].kind != homeOpenOther {
-		t.Fatalf("last item should be open-other, got %+v", items[7])
+	if items[5].kind != homeOpenOther || items[5].label != "Browse all files" {
+		t.Fatalf("last item should be the Browse action, got %+v", items[5])
 	}
 }
 
 func TestBuildHomeItemsEmpty(t *testing.T) {
 	dir := t.TempDir() // no subdirs
 	items := buildHomeItems(nil, dir)
-	// Should have ◦ Notes + the 3 actions = 4
-	if len(items) != 4 || items[0].kind != homeLoose || items[3].kind != homeOpenOther {
-		t.Fatalf("empty state should be Notes + 3 actions, got %+v", items)
+	// Should have ◦ Notes + the single Browse action = 2
+	if len(items) != 2 || items[0].kind != homeLoose || items[1].kind != homeOpenOther {
+		t.Fatalf("empty state should be Notes + Browse, got %+v", items)
 	}
 }
 
@@ -107,29 +105,20 @@ func TestHomeViewShowsRecentName(t *testing.T) {
 	}
 }
 
-func TestBuildHomeItemsHasActions(t *testing.T) {
+func TestBuildHomeItemsHasBrowseAction(t *testing.T) {
 	dir := t.TempDir()
 	items := buildHomeItems(nil, dir) // no recents, no projects
-	// ◦ Notes + the three actions, in order (empty workspace → Notes is first).
-	if len(items) != 4 {
-		t.Fatalf("want 4 items (Notes + 3 actions), got %d: %+v", len(items), items)
+	// The only action is Browse (creation moved to the inline + on the panels).
+	acts := homeGroupsActions(items)
+	if len(acts) != 1 || acts[0].kind != homeOpenOther || acts[0].label != "Browse all files" {
+		t.Fatalf("actions should be exactly [Browse all files], got %+v", acts)
 	}
-	if items[0].kind != homeLoose || items[0].label != "◦ Notes" {
-		t.Fatalf("item 0 should be ◦ Notes, got %+v", items[0])
-	}
-	want := []struct {
-		kind  homeKind
-		label string
-	}{
-		{homeNewDocument, "New document"},
-		{homeNewProject, "New project"},
-		{homeOpenOther, "Browse all files"},
-	}
-	for i, w := range want {
-		if items[i+1].kind != w.kind || items[i+1].label != w.label {
-			t.Fatalf("item %d = %+v, want kind %d label %q", i+1, items[i+1], w.kind, w.label)
-		}
-	}
+}
+
+// homeGroupsActions returns just the action items from a home-item list (test helper).
+func homeGroupsActions(items []homeItem) []homeItem {
+	_, _, _, _, a := homeGroups(items)
+	return a
 }
 
 func TestActionsRowHorizontalNav(t *testing.T) {
@@ -137,6 +126,15 @@ func TestActionsRowHorizontalNav(t *testing.T) {
 	m := initialModel()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
 	m = nm.(model)
+	// Production has a single Browse action; use a synthetic multi-action list to exercise the
+	// horizontal nav logic (left/right between actions, up-exit, down no-op).
+	m.homeItems = []homeItem{
+		{kind: homeProject, label: "novel", path: "/p/novel"},
+		{kind: homeNewDocument, label: "New document"},
+		{kind: homeNewProject, label: "New project"},
+		{kind: homeOpenOther, label: "Browse all files"},
+	}
+	m.resetHomeSelection()
 	m.focusAt(regionActions, 0)
 	n := m.regionCount(regionActions)
 	if n < 2 {
@@ -190,9 +188,9 @@ func TestHomeContentAndHitTest(t *testing.T) {
 	if blockW <= 0 || len(lines) == 0 {
 		t.Fatalf("homeContent: blockW=%d lines=%d", blockW, len(lines))
 	}
-	// One clickable cell per item (project, recent, action).
-	if len(cells) != 3 {
-		t.Fatalf("want 3 cells, got %d", len(cells))
+	// 3 item cells (recent, project, action) + 2 inline-+ cells (LIBRARY, FILES panels) = 5.
+	if len(cells) != 5 {
+		t.Fatalf("want 5 cells, got %d", len(cells))
 	}
 	// Each cell's screen coords must hit-test back to itself (render == hit-test).
 	for _, c := range cells {
@@ -205,6 +203,36 @@ func TestHomeContentAndHitTest(t *testing.T) {
 	// Top-left (logo area) misses.
 	if _, _, ok := m.homeItemAt(0, 0); ok {
 		t.Fatal("click at (0,0) should miss")
+	}
+}
+
+func TestHomeInlineCreate(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+
+	// LIBRARY + roots creation at the active source root with New-Project semantics.
+	m := initialModel()
+	m.homeCreate(regionLibrary)
+	if m.files.dir != root {
+		t.Fatalf("LIBRARY + should root at the active source root, got %q", m.files.dir)
+	}
+	if !m.creatingFile || !m.creatingFolder {
+		t.Fatalf("LIBRARY + should start a New-Project-style create, got file=%v folder=%v", m.creatingFile, m.creatingFolder)
+	}
+	if m.screen != screenWriting {
+		t.Fatalf("create should switch to the writing screen, got %v", m.screen)
+	}
+
+	// FILES + roots creation at the selected library item's dir as a plain document.
+	m2 := initialModel()
+	lib := m2.library()
+	m2.librarySelected = len(lib) - 1 // ◦ Notes → the source root
+	m2.homeCreate(regionFiles)
+	if m2.files.dir != root {
+		t.Fatalf("FILES + should root at the selected item dir, got %q", m2.files.dir)
+	}
+	if !m2.creatingFile || m2.creatingFolder {
+		t.Fatalf("FILES + should start a new-document create (not folder), got file=%v folder=%v", m2.creatingFile, m2.creatingFolder)
 	}
 }
 

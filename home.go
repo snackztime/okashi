@@ -161,12 +161,35 @@ func buildHomeItems(recents []string, workspace string) []homeItem {
 	items = append(items, projects...)
 	items = append(items, folders...)
 	items = append(items, homeItem{kind: homeLoose, label: "◦ Notes", path: workspace})
-	items = append(items,
-		homeItem{kind: homeNewDocument, label: "New document"},
-		homeItem{kind: homeNewProject, label: "New project"},
-		homeItem{kind: homeOpenOther, label: "Browse all files"},
-	)
+	// New document / New project now live as the inline `+` on the FILES / LIBRARY panels
+	// (design §4); the action row is just Browse.
+	items = append(items, homeItem{kind: homeOpenOther, label: "Browse all files"})
 	return items
+}
+
+// homePlusIndex is the sentinel cell index for a panel's inline "+" affordance (LIBRARY/FILES),
+// distinguishing a click on the "+" from a click on a list row.
+const homePlusIndex = -1
+
+// homeCreate opens a create prompt for a panel's inline "+": LIBRARY + makes a project or folder
+// in the active source root (trailing-slash → folder, plain name → manuscript); FILES + makes a
+// new document in the selected library item's directory. Both reuse the writing-screen create flow.
+func (m *model) homeCreate(region homeRegion) tea.Cmd {
+	switch region {
+	case regionLibrary:
+		m.files.SetDir(m.activeSourceRoot())
+		m.screen = screenWriting
+		return m.startCreate(true)
+	case regionFiles:
+		lib := m.library()
+		if m.librarySelected < 0 || m.librarySelected >= len(lib) {
+			return nil
+		}
+		m.files.SetDir(lib[m.librarySelected].path)
+		m.screen = screenWriting
+		return m.startCreate(false)
+	}
+	return nil
 }
 
 // homeGroups splits the flat list by kind. `other` holds the loose/Notes entry, which renders
@@ -364,6 +387,10 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		case "d":
 			m.removeActiveSource()
+		case "+", "n":
+			if m.homeRegion == regionLibrary || m.homeRegion == regionFiles {
+				return m, m.homeCreate(m.homeRegion)
+			}
 		case "enter":
 			return m, m.openHomeSelection()
 		}
@@ -380,6 +407,9 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 			r, idx, ok := m.homeItemAt(msg.X, msg.Y)
 			if !ok {
 				return m, nil
+			}
+			if idx == homePlusIndex { // clicked a panel's inline "+"
+				return m, m.homeCreate(r)
 			}
 			doubled := r == m.homeRegion && idx == m.indexIn(r) &&
 				time.Since(m.lastClickTime) < 400*time.Millisecond
@@ -784,10 +814,14 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 	lines = append(lines, "")
 	boxTop := len(lines) // block row where the framed boxes begin
 
-	// Frame each column and join horizontally.
+	// Frame each column and join horizontally. LIBRARY/FILES carry an inline "+" (create).
 	framed := make([]string, len(cols))
 	for i := range cols {
-		framed[i] = framedPanel(titles[i], strings.Join(cols[i].inner, "\n"), cols[i].w, colH, "")
+		plus := ""
+		if regions[i] == regionLibrary || regions[i] == regionFiles {
+			plus = "+"
+		}
+		framed[i] = framedPanel(titles[i], strings.Join(cols[i].inner, "\n"), cols[i].w, colH, plus)
 	}
 	gap := strings.Repeat(" ", homeColGap)
 	parts := make([]string, 0, len(framed)*2)
@@ -808,6 +842,14 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 				row: boxTop + 1 + c.row,
 				x0:  xorg[i] + 2 + c.x0,
 				x1:  xorg[i] + 2 + c.x1,
+			})
+		}
+		// The inline "+" sits on the panel's top border at column w-2 (framedPanel renders it
+		// just before the ╮). Record it as a clickable cell for LIBRARY/FILES.
+		if regions[i] == regionLibrary || regions[i] == regionFiles {
+			cells = append(cells, homeCell{
+				region: regions[i], index: homePlusIndex,
+				row: boxTop, x0: xorg[i] + cols[i].w - 2, x1: xorg[i] + cols[i].w - 1,
 			})
 		}
 	}
