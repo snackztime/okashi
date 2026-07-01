@@ -16,6 +16,11 @@ apple: libokashifm.a
 libokashifm.a: grammar_apple_fm.swift
 	xcrun swiftc -emit-library -static -o libokashifm.a grammar_apple_fm.swift -framework FoundationModels
 
+# Record the README demo GIF from demo.tape. Requires VHS (brew install vhs).
+.PHONY: demo
+demo:
+	vhs demo.tape
+
 .PHONY: clean
 clean:
 	rm -f okashi okashi-apple libokashifm.a

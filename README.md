@@ -4,7 +4,8 @@ A terminal writing app for long-form manuscripts and prose. Plain `.md` files, a
 manuscript-aware sidebar, live word counts, RTF + PDF export, and a full-screen
 distraction-free editor — all from the command line.
 
-<!-- screenshot placeholder -->
+<!-- Generate with `vhs demo.tape` (see demo.tape). -->
+![okashi — opening a chapter and toggling the Tufte preview](docs/demo.gif)
 
 ---
 
