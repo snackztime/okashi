@@ -1714,7 +1714,7 @@ func (m *model) enterOutline() {
 	m.outline.load(m.files.dir, m.files.wc)
 	m.screen = screenOutline
 	m.previewing = false
-	m.status = "binder · ↑↓ select · enter open · r rename · m read · ctrl+e export · esc back"
+	m.status = "binder · ↑↓ select · enter open · s structure · r rename · m read · ctrl+e export · esc back"
 }
 
 func (m *model) loadFile(path string) {

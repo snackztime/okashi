@@ -71,8 +71,9 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 - **Manuscript** = a folder containing a `manifest.json`. The manifest is the sole source of
   order (`items` array), chapter membership (listed in `items` = chapter; unlisted `.md` =
   Resource), and display titles (`items[].title`, `manifest.title`). okashi reads it **and
-  writes it** — create + chapter-title retitle today, structural edits (reorder/insert/move)
-  planned behind a confirmation (see Shared Contracts §1).
+  writes it** — create + chapter-title retitle, and **structure mode** (reorder / insert / remove
+  chapters, confirm-on-commit); cross-container **move** via the file mover is planned (see Shared
+  Contracts §1).
   - **Legacy fallback:** a folder with **no** manifest but ≥1 numerically-prefixed file is
     treated as a manuscript for display only — order = numeric prefix, titles = de-slugged
     filename. A read-only transitional courtesy for un-migrated corpora.
@@ -109,14 +110,16 @@ both repos.
 - **RESOLVED (2026-06-26); okashi became a writer (2026-06-30):** order, membership, and display
   titles live in the shared per-manuscript `manifest.json` (see
   `../inkmere/docs/superpowers/specs/2026-06-26-storage-spine-design.md` §2.1 and §6). okashi
-  **reads and writes** it (create + chapter-title retitle today; structural edits planned with a
-  confirmation):
+  **reads and writes** it (create + chapter-title retitle, and **structure mode** reorder / insert /
+  remove with a commit confirm; cross-container move via the file mover is planned):
   - **Manifest manuscript** (folder with `manifest.json`): `items` order is canonical;
     `items[].title` is the chapter display title; `manifest.title` is the manuscript title;
     a file is a chapter **iff** it is listed in `items`; any unlisted `.md` is a Resource.
     okashi reads this **and writes it** — it creates manuscripts and retitles `items[].title`
-    (no-confirm; filename birth-stable); structural edits (reorder/insert/move) are planned
-    behind a confirmation. If the manifest is unreadable or its `schemaVersion` is unsupported,
+    (no-confirm; filename birth-stable), and **structure mode** reorders / inserts / removes
+    chapters (`s` from the binder; staged, committed on exit behind one confirm). Cross-container
+    **move** (into/out of a manuscript) via the file mover is still planned. If the manifest is
+    unreadable or its `schemaVersion` is unsupported,
     okashi refuses to infer structure — it shows files flat as loose documents with a status
     note; it does **not** fall back to prefix ordering.
   - **Legacy manuscript** (no manifest, ≥1 numerically-prefixed file): filename-prefix
@@ -124,11 +127,12 @@ both repos.
     de-slugged from filenames. A transitional courtesy for un-migrated corpora; no
     structural writes offered here either.
   - **Category** (neither manifest nor numbered files): plain folder of documents.
-- **Authority (revised 2026-06-30):** **both apps write the shared manifest.** okashi creates
+- **Authority (revised 2026-07-01):** **both apps write the shared manifest.** okashi creates
   manuscripts (New Project) and retitles chapter display titles (`r` on a manifest chapter →
-  `items[].title`, no-confirm); structural edits (reorder/insert/move) are planned behind a
-  **confirmation** (structuring mode / file mover), mirroring wicklight's own confirm sheet.
-  wicklight owns the app-side structural writers (`ManuscriptStore.reorder`/`.move`/insert).
+  `items[].title`, no-confirm); **structure mode** (SHIPPED) reorders / inserts / removes chapters
+  behind a commit **confirmation** (`s` from the binder), mirroring wicklight's own confirm sheet.
+  Cross-container **move** (into/out of a manuscript) via the file mover is planned. wicklight owns
+  the app-side structural writers (`ManuscriptStore.reorder`/`.move`/insert).
   Safety for the shared corpus = atomic writes + `NSFileVersion`; each writer read-modify-writes.
   `r` on a legacy (manifest-less) numbered chapter still does a prefix-preserving file rename (O1).
 - **HARD GATE (standing):** any change to the manifest **shape** (schema, field set,
