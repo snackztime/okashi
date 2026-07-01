@@ -61,10 +61,10 @@ func TestBuildHomeItems(t *testing.T) {
 
 	items := buildHomeItems(recents, dir)
 
-	// 2 recents + 2 folders (hidden excluded) + 1 Notes + 1 Browse action = 6
+	// 2 recents + 2 folders (hidden excluded) + 1 Notes + 2 actions (Move files, Browse) = 7
 	// (New document / New project are now the inline + on the panels, not actions.)
-	if len(items) != 6 {
-		t.Fatalf("want 6 items, got %d: %+v", len(items), items)
+	if len(items) != 7 {
+		t.Fatalf("want 7 items, got %d: %+v", len(items), items)
 	}
 	if items[0].kind != homeRecentFile || items[0].path != "/abs/chapter-03.md" {
 		t.Fatalf("first item should be the most-recent file, got %+v", items[0])
@@ -76,21 +76,24 @@ func TestBuildHomeItems(t *testing.T) {
 	if items[2].kind != homeFolder || items[2].label != "journal" {
 		t.Fatalf("third item should be the first folder 'journal', got %+v", items[2])
 	}
-	// The ◦ Notes entry follows projects+folders, before the single Browse action.
+	// The ◦ Notes entry follows projects+folders, before the action row.
 	if items[4].kind != homeLoose || items[4].label != "◦ Notes" {
 		t.Fatalf("fifth item should be ◦ Notes, got %+v", items[4])
 	}
-	if items[5].kind != homeOpenOther || items[5].label != "Browse all files" {
-		t.Fatalf("last item should be the Browse action, got %+v", items[5])
+	if items[5].kind != homeMoveFiles || items[5].label != "Move files" {
+		t.Fatalf("sixth item should be Move files action, got %+v", items[5])
+	}
+	if items[6].kind != homeOpenOther || items[6].label != "Browse all files" {
+		t.Fatalf("last item should be the Browse action, got %+v", items[6])
 	}
 }
 
 func TestBuildHomeItemsEmpty(t *testing.T) {
 	dir := t.TempDir() // no subdirs
 	items := buildHomeItems(nil, dir)
-	// Should have ◦ Notes + the single Browse action = 2
-	if len(items) != 2 || items[0].kind != homeLoose || items[1].kind != homeOpenOther {
-		t.Fatalf("empty state should be Notes + Browse, got %+v", items)
+	// Should have ◦ Notes + Move files + Browse all files = 3
+	if len(items) != 3 || items[0].kind != homeLoose || items[1].kind != homeMoveFiles || items[2].kind != homeOpenOther {
+		t.Fatalf("empty state should be Notes + Move files + Browse, got %+v", items)
 	}
 }
 
@@ -108,10 +111,12 @@ func TestHomeViewShowsRecentName(t *testing.T) {
 func TestBuildHomeItemsHasBrowseAction(t *testing.T) {
 	dir := t.TempDir()
 	items := buildHomeItems(nil, dir) // no recents, no projects
-	// The only action is Browse (creation moved to the inline + on the panels).
+	// Action row: Move files + Browse all files (in that order).
 	acts := homeGroupsActions(items)
-	if len(acts) != 1 || acts[0].kind != homeOpenOther || acts[0].label != "Browse all files" {
-		t.Fatalf("actions should be exactly [Browse all files], got %+v", acts)
+	if len(acts) != 2 ||
+		acts[0].kind != homeMoveFiles || acts[0].label != "Move files" ||
+		acts[1].kind != homeOpenOther || acts[1].label != "Browse all files" {
+		t.Fatalf("actions should be exactly [Move files, Browse all files], got %+v", acts)
 	}
 }
 
@@ -504,5 +509,33 @@ func TestClassifyLibraryAndFiles(t *testing.T) {
 	cat := m.homeFilesFor(filepath.Join(ws, "research"), true)
 	if len(cat) != 1 || cat[0].name != "sources.md" {
 		t.Fatalf("category files: %+v", cat)
+	}
+}
+
+func TestHomeMoveFilesActionOpensStandaloneMover(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "a.md"), []byte("x"), 0o644)
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
+	m = nm.(model)
+	// find the Move-files action and open it.
+	acts := homeGroupsActions(m.homeItems)
+	found := false
+	for _, a := range acts {
+		if a.kind == homeMoveFiles && a.label == "Move files" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("home actions should include 'Move files', got %+v", acts)
+	}
+	m.homeItems = []homeItem{{kind: homeMoveFiles, label: "Move files"}}
+	m.resetHomeSelection()
+	m.focusAt(regionActions, 0)
+	cmd := m.openHomeSelection()
+	_ = cmd
+	if m.screen != screenMover || m.moverPhase != moverPickSource {
+		t.Fatalf("the Move-files action should open the standalone mover, screen=%v phase=%d", m.screen, m.moverPhase)
 	}
 }

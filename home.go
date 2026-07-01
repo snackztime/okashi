@@ -22,6 +22,7 @@ const (
 	homeLoose
 	homeNewDocument
 	homeNewProject
+	homeMoveFiles
 	homeOpenOther
 )
 
@@ -172,8 +173,11 @@ func buildHomeItems(recents []string, workspace string) []homeItem {
 	items = append(items, folders...)
 	items = append(items, homeItem{kind: homeLoose, label: "◦ Notes", path: workspace})
 	// New document / New project now live as the inline `+` on the FILES / LIBRARY panels
-	// (design §4); the action row is just Browse.
-	items = append(items, homeItem{kind: homeOpenOther, label: "Browse all files"})
+	// (design §4); the action row is Move files + Browse.
+	items = append(items,
+		homeItem{kind: homeMoveFiles, label: "Move files"},
+		homeItem{kind: homeOpenOther, label: "Browse all files"},
+	)
 	return items
 }
 
@@ -1092,7 +1096,11 @@ func (m *model) openHomeSelection() tea.Cmd {
 		if m.homeIndex >= len(acts) {
 			return nil
 		}
-		// The only shipped action is Browse (create moved to the inline + on the panels).
+		// Actions: Move files opens the standalone mover; Browse opens the sidebar.
+		if acts[m.homeIndex].kind == homeMoveFiles {
+			m.enterMoverStandalone()
+			return nil
+		}
 		if acts[m.homeIndex].kind == homeOpenOther {
 			m.files.SetDir(m.activeSourceRoot())
 			m.focus = focusSidebar

@@ -43,6 +43,7 @@ const helpText = `ctrl+b   toggle sidebar
 ctrl+y   inspector tabs
 ctrl+n   new file (+  new, right-click / F2  rename)
 r        rename file
+M        move file/folder
 del      delete file
 d        duplicate file
 ctrl+l   outline
