@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -9,6 +10,73 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
+
+// structAdd is one row in the add pick: the "new blank chapter" sentinel (file == "") or an
+// existing loose Resource file.
+type structAdd struct {
+	file  string // "" = new blank chapter
+	label string
+}
+
+// structureAddChoices is [new blank chapter] followed by the manuscript's loose Resources (on-disk
+// .md not currently listed in the buffer nor pending-new), de-slug-titled.
+func (m model) structureAddChoices() []structAdd {
+	out := []structAdd{{file: "", label: "＋ new blank chapter"}}
+	listed := map[string]bool{}
+	for _, it := range m.structureItems {
+		listed[it.File] = true
+	}
+	for _, e := range readEntries(m.structureDir) { // non-hidden document files
+		if listed[e.name] {
+			continue
+		}
+		out = append(out, structAdd{file: e.name, label: "◦ " + sectionTitle(e.name)})
+	}
+	return out
+}
+
+// uniqueChapterFile returns a filename not present on disk in dir and not already taken by the
+// buffer/pending set — "untitled.md", "untitled-2.md", …
+func uniqueChapterFile(dir string, taken map[string]bool) string {
+	for n := 1; ; n++ {
+		name := "untitled.md"
+		if n > 1 {
+			name = "untitled-" + strconv.Itoa(n) + ".md"
+		}
+		if taken[name] {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dir, name)); os.IsNotExist(err) {
+			return name
+		}
+	}
+}
+
+// applyAdd inserts the chosen add option after the cursor.
+func (m *model) applyAdd(c structAdd) {
+	at := m.structureSel + 1
+	if at > len(m.structureItems) {
+		at = len(m.structureItems)
+	}
+	var it manifestItem
+	if c.file == "" { // new blank chapter
+		taken := map[string]bool{}
+		for _, x := range m.structureItems {
+			taken[x.File] = true
+		}
+		for f := range m.structurePendingNew {
+			taken[f] = true
+		}
+		f := uniqueChapterFile(m.structureDir, taken)
+		m.structurePendingNew[f] = true
+		it = manifestItem{File: f, Title: "Untitled"}
+	} else { // promote an existing loose Resource
+		it = manifestItem{File: c.file, Title: sectionTitle(c.file)}
+	}
+	m.structureItems = append(m.structureItems[:at], append([]manifestItem{it}, m.structureItems[at:]...)...)
+	m.structureSel = at
+	m.structureDirty = true
+}
 
 // enterStructure opens structure mode for the binder's current manuscript. Manifest manuscripts
 // only — a legacy/absent/unreadable manifest keeps the binder with a status.
@@ -72,6 +140,30 @@ func (m model) updateStructure(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.nameInput, cmd = m.nameInput.Update(msg)
 			return m, cmd
 		}
+		if m.structureAdding {
+			choices := m.structureAddChoices()
+			switch msg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.structureAdding = false
+				return m, nil
+			case "up", "k":
+				if m.structureAddSel > 0 {
+					m.structureAddSel--
+				}
+			case "down", "j":
+				if m.structureAddSel < len(choices)-1 {
+					m.structureAddSel++
+				}
+			case "enter":
+				if m.structureAddSel < len(choices) {
+					m.applyAdd(choices[m.structureAddSel])
+				}
+				m.structureAdding = false
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -107,6 +199,9 @@ func (m model) updateStructure(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.structureDirty = true
 			}
+		case "a":
+			m.structureAdding = true
+			m.structureAddSel = 0
 		case "r":
 			if m.structureSel < len(m.structureItems) {
 				m.structureRenaming = true
@@ -140,6 +235,19 @@ func (m model) structureView() string {
 	body := framedPanel(m.structureTitle()+" — structure", strings.Join(rows, "\n"),
 		max(40, min(m.width-8, 72)), len(rows)+2, "")
 	b.WriteString(lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, body))
+	if m.structureAdding {
+		var picks []string
+		for i, c := range m.structureAddChoices() {
+			label := c.label
+			if i == m.structureAddSel {
+				label = selectedStyle.Render(label)
+			}
+			picks = append(picks, label)
+		}
+		pick := framedPanel("add", strings.Join(picks, "\n"), max(30, min(m.width-8, 40)), len(picks)+2, "")
+		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, pick))
+		return b.String()
+	}
 	if m.structureRenaming {
 		field := "retitle ▸ " + m.nameInput.View()
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, field))
