@@ -265,7 +265,11 @@ func (m model) regionCount(r homeRegion) int {
 // never focus a column the render dropped. Width 0 (unsized) treats all as visible.
 func (m model) visibleRegions() []homeRegion {
 	if m.width <= 0 {
-		return []homeRegion{regionPinned, regionRecent, regionLibrary, regionFiles, regionActions}
+		regs := []homeRegion{}
+		if m.regionCount(regionPinned) > 0 { // only when there are pins (match the sized path)
+			regs = append(regs, regionPinned)
+		}
+		return append(regs, regionRecent, regionLibrary, regionFiles, regionActions)
 	}
 	cols, _, _ := m.homeColumns()
 	var regs []homeRegion
@@ -532,7 +536,7 @@ func clampIdx(i, n int) int {
 	return i
 }
 
-// homeMove navigates the launcher: the RECENT strip on top (horizontal), the LIBRARY/FILES
+// homeMove navigates the launcher: the PINNED + RECENT strips on top (horizontal), the LIBRARY/FILES
 // columns in the middle, and the Actions row at the bottom (horizontal). Down flows strip →
 // columns → actions; up flows actions → columns → strip; left/right move within a strip/row or
 // across the columns.
