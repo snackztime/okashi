@@ -54,16 +54,31 @@ func readManifest(dir string) (m manifest, present bool, err error) {
 	return m, true, nil
 }
 
-// writeManifest serializes m to dir/manifest.json atomically, pretty-printed with a
-// trailing newline. okashi owns manifest writes for its own AND the wicklight-shared
-// corpus (design §0); the schema is forced to EXACTLY v1 so wicklight reads it verbatim.
+// writeManifest serializes m to dir/manifest.json atomically. okashi owns manifest writes for
+// its own AND the wicklight-shared corpus (design §0); the schema is forced to EXACTLY v1 so
+// wicklight reads it verbatim. The serialization matches wicklight's
+// JSONEncoder(.prettyPrinted, .sortedKeys): alphabetically-sorted keys, 2-space indent, no
+// trailing newline — so when the two apps alternate writes the NSFileVersion diff stays small
+// and legible instead of a whole-file reformat (storage-spine §67-69). Go sorts map keys
+// alphabetically, yielding the same items/schemaVersion/title (and file/title) order Swift emits.
 func writeManifest(dir string, m manifest) error {
 	m.SchemaVersion = manifestSchemaVersion
-	data, err := json.MarshalIndent(m, "", "  ")
+	// Force a non-nil slice so an empty manuscript serializes as `[]`, not `null` (which
+	// wicklight's [ManifestItem] decode would reject).
+	items := m.Items
+	if items == nil {
+		items = []manifestItem{}
+	}
+	top := map[string]any{
+		"schemaVersion": m.SchemaVersion,
+		"title":         m.Title,
+		"items":         items,
+	}
+	data, err := json.MarshalIndent(top, "", "  ")
 	if err != nil {
 		return err
 	}
-	return atomicWrite(filepath.Join(dir, manifestName), append(data, '\n'), 0o644)
+	return atomicWrite(filepath.Join(dir, manifestName), data, 0o644)
 }
 
 // createManuscript makes a brand-new manuscript at dir: the folder, an empty first

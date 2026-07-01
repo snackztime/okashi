@@ -3,8 +3,53 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
+
+// TestWriteManifestMatchesWicklightSortedKeys locks okashi's serialization to wicklight's
+// JSONEncoder(.sortedKeys) key order + no trailing newline, so the shared corpus doesn't churn
+// when the two apps alternate writes (storage-spine §67-69). Struct-order marshaling would put
+// schemaVersion first; sorted keys put items first.
+func TestWriteManifestMatchesWicklightSortedKeys(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeManifest(dir, manifest{Title: "Novel A", Items: []manifestItem{{File: "a.md", Title: "One"}}}); err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(filepath.Join(dir, manifestName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(b)
+	iItems := strings.Index(s, `"items"`)
+	iSchema := strings.Index(s, `"schemaVersion"`)
+	if iItems < 0 || iSchema < 0 || iItems > iSchema {
+		t.Fatalf("keys not sorted (want items before schemaVersion):\n%s", s)
+	}
+	if iFile := strings.Index(s, `"file"`); iFile < 0 || iFile > iSchema {
+		t.Fatalf("item key file should precede top-level schemaVersion (items block first):\n%s", s)
+	}
+	if strings.HasSuffix(s, "\n") {
+		t.Fatalf("manifest must have no trailing newline (matches wicklight JSONEncoder)")
+	}
+	// Still round-trips through the reader.
+	if _, present, rerr := readManifest(dir); rerr != nil || !present {
+		t.Fatalf("sorted-key manifest must round-trip: present=%v err=%v", present, rerr)
+	}
+}
+
+// TestWriteManifestEmptyItemsIsArray guards the nil-slice→[] fix: an empty manuscript must
+// serialize items as `[]`, never `null` (wicklight decodes a JSON array).
+func TestWriteManifestEmptyItemsIsArray(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeManifest(dir, manifest{Title: "Empty"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, manifestName))
+	if strings.Contains(string(b), "null") {
+		t.Fatalf("empty items must serialize as [], not null:\n%s", b)
+	}
+}
 
 func TestCreateManuscriptRoundTrips(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "my-novel")
