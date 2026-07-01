@@ -70,8 +70,9 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 - **The atom is one `.md` file.**
 - **Manuscript** = a folder containing a `manifest.json`. The manifest is the sole source of
   order (`items` array), chapter membership (listed in `items` = chapter; unlisted `.md` =
-  Resource), and display titles (`items[].title`, `manifest.title`). okashi reads it;
-  **wicklight owns it** (see Shared Contracts §1).
+  Resource), and display titles (`items[].title`, `manifest.title`). okashi reads it **and
+  writes it** — create + chapter-title retitle today, structural edits (reorder/insert/move)
+  planned behind a confirmation (see Shared Contracts §1).
   - **Legacy fallback:** a folder with **no** manifest but ≥1 numerically-prefixed file is
     treated as a manuscript for display only — order = numeric prefix, titles = de-slugged
     filename. A read-only transitional courtesy for un-migrated corpora.
@@ -82,9 +83,9 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 - Shipped features: the launch hub; a manuscript-aware sidebar (titles + per-chapter word
   counts); the **outline** (`ctrl+l`: select/open, `m` → pager — **read-only navigator**;
   no reorder, no insert); the **pager** (`m`: read-through with jump-to-edit); **export**
-  (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **rename** (`r`: blocked for manifest
-  chapters — titles are wicklight-owned and filenames are birth-stable; retained for legacy
-  numbered chapters, loose files, Resources, and folders); markdown **preview** (`ctrl+p`,
+  (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **rename** (`r`: manifest chapters
+  **retitle** the `items[].title` — filename stays birth-stable; legacy numbered chapters,
+  loose files, Resources, and folders rename on disk); markdown **preview** (`ctrl+p`,
   glamour).
 - Env knobs: `OKASHI_DIR`, `OKASHI_WIDTH`, `OKASHI_SMARTQUOTES`, `OKASHI_THEME`,
   `OKASHI_ICONS` (`nerd`/`plain`/`auto`; unset = auto — Nerd Font glyphs except on
@@ -105,27 +106,35 @@ okashi and the macOS app operate the **same on-disk corpus**. Keep this block al
 both repos.
 
 ### 1. Manuscript ordering & membership — RESOLVED (2026-06-26)
-- **RESOLVED:** order, membership, and display titles live in wicklight's per-manuscript
-  `manifest.json` (see `../inkmere/docs/superpowers/specs/2026-06-26-storage-spine-design.md`
-  §2.1 and §6). okashi treats manuscript structure as **read-only**:
+- **RESOLVED (2026-06-26); okashi became a writer (2026-06-30):** order, membership, and display
+  titles live in the shared per-manuscript `manifest.json` (see
+  `../inkmere/docs/superpowers/specs/2026-06-26-storage-spine-design.md` §2.1 and §6). okashi
+  **reads and writes** it (create + chapter-title retitle today; structural edits planned with a
+  confirmation):
   - **Manifest manuscript** (folder with `manifest.json`): `items` order is canonical;
     `items[].title` is the chapter display title; `manifest.title` is the manuscript title;
     a file is a chapter **iff** it is listed in `items`; any unlisted `.md` is a Resource.
-    okashi reads this and **never writes it**. If the manifest is unreadable or its
-    `schemaVersion` is unsupported, okashi refuses to infer structure — it shows files flat
-    as loose documents with a status note; it does **not** fall back to prefix ordering.
+    okashi reads this **and writes it** — it creates manuscripts and retitles `items[].title`
+    (no-confirm; filename birth-stable); structural edits (reorder/insert/move) are planned
+    behind a confirmation. If the manifest is unreadable or its `schemaVersion` is unsupported,
+    okashi refuses to infer structure — it shows files flat as loose documents with a status
+    note; it does **not** fall back to prefix ordering.
   - **Legacy manuscript** (no manifest, ≥1 numerically-prefixed file): filename-prefix
     convention is a **read-only display fallback** — order by numeric prefix, titles
     de-slugged from filenames. A transitional courtesy for un-migrated corpora; no
     structural writes offered here either.
   - **Category** (neither manifest nor numbered files): plain folder of documents.
-- **Authority:** wicklight owns reorder, insert, convert, and chapter-title rename for manifest
-  chapters. okashi retains prose writes and loose-file management. `r` retitle is retained
-  for legacy (manifest-less) numbered chapters only (resolved O1); blocked for manifest
-  chapters (title is manifest-owned, filename is birth-stable).
+- **Authority (revised 2026-06-30):** **both apps write the shared manifest.** okashi creates
+  manuscripts (New Project) and retitles chapter display titles (`r` on a manifest chapter →
+  `items[].title`, no-confirm); structural edits (reorder/insert/move) are planned behind a
+  **confirmation** (structuring mode / file mover), mirroring wicklight's own confirm sheet.
+  wicklight owns the app-side structural writers (`ManuscriptStore.reorder`/`.move`/insert).
+  Safety for the shared corpus = atomic writes + `NSFileVersion`; each writer read-modify-writes.
+  `r` on a legacy (manifest-less) numbered chapter still does a prefix-preserving file rename (O1).
 - **HARD GATE (standing):** any change to the manifest **shape** (schema, field set,
   serialization) must STOP, confirm with the user, and implement in **both** repos together.
-  okashi performs no manifest writes — the gate is about the shared schema contract only.
+  okashi **writes v1-shaped manifests** (allowed); the gate is about changing the shared schema
+  *shape*, not about writing data.
 
 ### 2. Markdown flavor — HARD GATE (ADOPTED)
 - Flavor = **CommonMark + GFM (tables, task lists, strikethrough, autolinks) + footnotes**,
@@ -180,5 +189,7 @@ both repos.
   it and confirm rather than proceeding.
 - The shared design reference is the app repo's `SPEC.md`; this file is okashi's operational
   rule set.
-- Adopted & shipped: **atomic writes** (pending earlier, now in `save()` + export) and **GFM +
-  footnotes** in the export parser (shipped with Tasks 1–3 of the 2026-06-22 export refactor).
+- Adopted & shipped: **atomic writes** (pending earlier, now in `save()` + export), **GFM +
+  footnotes** in the export parser (shipped with Tasks 1–3 of the 2026-06-22 export refactor),
+  and **okashi as a manifest writer** (create + chapter-title retitle; 2026-06-30, shared-contract
+  change mirrored in `../inkmere`).
