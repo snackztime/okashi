@@ -9,27 +9,28 @@ name** its own manuscripts (so "New Project" is real). Builds on the shipped Mil
 
 ---
 
-## 0. Manifest authority — source-scoped, NOT a wicklight change
+## 0. Manifest authority — okashi is a manifest writer (with confirm) — SHARED-CONTRACT CHANGE
 
-okashi may write a manifest **for a project it owns**; it never resequences the **wicklight-
-shared corpus**. Because those are different scopes, wicklight's contract is **unchanged** —
-this is not a cross-repo gate.
+**okashi may write any project's `manifest.json`**, including the wicklight-shared corpus. The
+safety model is the **same one okashi already uses for prose chapters** in that corpus: atomic
+temp-then-rename (no corruption, ever) + iCloud `NSFileVersion` (a rare concurrent overwrite is
+recoverable). A manifest is just another file in the corpus okashi already writes to.
 
-- **okashi WRITES (safe, no coordination needed):** **create** a `manifest.json` for a **new**
-  manuscript (a brand-new folder → no other writer), and edit a manifest's **chapter titles**
-  (`items[].title` — a single-field atomic rewrite, last-writer-wins + iCloud version history).
-- **okashi NEVER WRITES (stays wicklight-owned):** `items` **order** and **membership** —
-  reorder, insert/remove, cross-folder/source move, convert. This is the sequencing wicklight
-  coordinates; okashi doesn't touch it, so the "wicklight owns structure" line holds.
-- **Source-scoped ownership:** okashi fully owns manifests in **its own sources** (folders you
-  add to okashi, and projects okashi creates). In the **wicklight-shared source** (the iCloud
-  corpus both apps use) okashi still defers *structure* to wicklight — it may birth + name, but
-  never resequence. A per-source `readonlyStructure` flag (default: shared/iCloud primary =
-  read-only structure; added folders = okashi-owned) makes this explicit; a standalone TUI user
-  (no wicklight) has every source okashi-owned.
-- **Doc note only (no wicklight edit):** okashi `CLAUDE.md` §1 gets a one-line update — "okashi
-  may create/retitle manifests in okashi-owned sources; never resequences; the wicklight-shared
-  corpus's structure stays wicklight's." No wicklight `SPEC.md` change (its behavior is unaffected).
+- **No confirm (low-stakes):** **create** a new manuscript's manifest (brand-new folder — no
+  other writer); **retitle** a chapter (`items[].title` — cosmetic, single-field).
+- **Confirm (consequential):** **structural** edits — reorder / insert / remove / move — prompt
+  a confirmation ("Move chapter 3 to the end? Rewrites manifest.json"). This mirrors wicklight's
+  own confirm sheet (multi-source §6). Structural edits are the "structuring mode" ([[roadmap-
+  backlog]]); create/retitle land in this cycle.
+- **Concurrency discipline:** **read-modify-write** — re-read the manifest immediately before
+  writing so okashi rewrites the latest on-disk state (minimizes the lost-update window). Atomic
+  write. `NSFileVersion` is the recovery net for the rare simultaneous-edit race.
+- **HARD-GATE (both repos):** this reverses wicklight's "okashi never writes manifests; the only
+  writers are wicklight's `ManuscriptStore`" line. Reflect the new authority in **both** — okashi
+  `CLAUDE.md` §1 and wicklight `SPEC.md` / multi-source §4 / project-model §4. **No wicklight code
+  change expected** (it already reloads externally-changed files via its file-presenter/iCloud
+  coordination) — but **verify** wicklight picks up an okashi manifest write. Schema stays v1
+  (unchanged), so this is an *authority* gate, not a *schema* gate.
 
 ---
 
