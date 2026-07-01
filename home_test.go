@@ -61,9 +61,9 @@ func TestBuildHomeItems(t *testing.T) {
 
 	items := buildHomeItems(recents, dir)
 
-	// 2 recents + 2 projects (hidden excluded) + 3 actions = 7
-	if len(items) != 7 {
-		t.Fatalf("want 7 items, got %d: %+v", len(items), items)
+	// 2 recents + 1 Loose + 2 folders (hidden excluded) + 3 actions = 8
+	if len(items) != 8 {
+		t.Fatalf("want 8 items, got %d: %+v", len(items), items)
 	}
 	if items[0].kind != homeRecentFile || items[0].path != "/abs/chapter-03.md" {
 		t.Fatalf("first item should be the most-recent file, got %+v", items[0])
@@ -71,24 +71,28 @@ func TestBuildHomeItems(t *testing.T) {
 	if items[0].label != "chapter-03.md" {
 		t.Fatalf("recent label should be the basename, got %q", items[0].label)
 	}
+	// Loose entry follows recents.
+	if items[2].kind != homeLoose || items[2].label != "◦ Loose" {
+		t.Fatalf("third item should be ◦ Loose, got %+v", items[2])
+	}
 	// Plain dirs (no manifest / no numbered files) classify as FOLDERS now.
-	if items[2].kind != homeFolder || items[2].label != "journal" {
-		t.Fatalf("folders should be alpha-sorted after recents, got %+v", items[2])
+	if items[3].kind != homeFolder || items[3].label != "journal" {
+		t.Fatalf("folders should be alpha-sorted after Loose, got %+v", items[3])
 	}
-	if items[4].kind != homeNewDocument {
-		t.Fatalf("5th item should be new document action, got %+v", items[4])
+	if items[5].kind != homeNewDocument {
+		t.Fatalf("6th item should be new document action, got %+v", items[5])
 	}
-	if items[6].kind != homeOpenOther {
-		t.Fatalf("last item should be open-other, got %+v", items[6])
+	if items[7].kind != homeOpenOther {
+		t.Fatalf("last item should be open-other, got %+v", items[7])
 	}
 }
 
 func TestBuildHomeItemsEmpty(t *testing.T) {
 	dir := t.TempDir() // no subdirs
 	items := buildHomeItems(nil, dir)
-	// Should have the 3 actions
-	if len(items) != 3 || items[2].kind != homeOpenOther {
-		t.Fatalf("empty state should be the 3 actions, got %+v", items)
+	// Should have ◦ Loose + the 3 actions = 4
+	if len(items) != 4 || items[0].kind != homeLoose || items[3].kind != homeOpenOther {
+		t.Fatalf("empty state should be Loose + 3 actions, got %+v", items)
 	}
 }
 
@@ -106,9 +110,12 @@ func TestHomeViewShowsRecentName(t *testing.T) {
 func TestBuildHomeItemsHasActions(t *testing.T) {
 	dir := t.TempDir()
 	items := buildHomeItems(nil, dir) // no recents, no projects
-	// Just the three actions, in order.
-	if len(items) != 3 {
-		t.Fatalf("want 3 action items, got %d: %+v", len(items), items)
+	// ◦ Loose + the three actions, in order.
+	if len(items) != 4 {
+		t.Fatalf("want 4 items (Loose + 3 actions), got %d: %+v", len(items), items)
+	}
+	if items[0].kind != homeLoose || items[0].label != "◦ Loose" {
+		t.Fatalf("item 0 should be ◦ Loose, got %+v", items[0])
 	}
 	want := []struct {
 		kind  homeKind
@@ -119,8 +126,8 @@ func TestBuildHomeItemsHasActions(t *testing.T) {
 		{homeOpenOther, "Browse all files"},
 	}
 	for i, w := range want {
-		if items[i].kind != w.kind || items[i].label != w.label {
-			t.Fatalf("item %d = %+v, want kind %d label %q", i, items[i], w.kind, w.label)
+		if items[i+1].kind != w.kind || items[i+1].label != w.label {
+			t.Fatalf("item %d = %+v, want kind %d label %q", i+1, items[i+1], w.kind, w.label)
 		}
 	}
 }
@@ -171,6 +178,31 @@ func TestActiveSourceRootDefaultsToWritingDir(t *testing.T) {
 	}
 	if m.activeSourceRoot() != dir {
 		t.Fatalf("activeSourceRoot() = %q, want writingDir() %q", m.activeSourceRoot(), dir)
+	}
+}
+
+func TestLooseEntryShowsRootDocs(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	os.WriteFile(filepath.Join(root, "stray.md"), []byte("# Stray\n\nA loose note."), 0o644)
+	os.MkdirAll(filepath.Join(root, "acat"), 0o755) // a category folder (not loose)
+
+	m := initialModel()
+	lib := m.library()
+	if len(lib) == 0 || lib[0].kind != homeLoose || lib[0].label != "◦ Loose" {
+		t.Fatalf("first library item should be '◦ Loose', got %+v", lib)
+	}
+	// Select ◦ Loose and confirm FILES shows the root's loose doc.
+	m.librarySelected = 0
+	m.recomputeHomeFiles()
+	found := false
+	for _, f := range m.homeFiles {
+		if f.name == "stray.md" || f.name == "Stray" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("◦ Loose should list the root's loose docs, got %+v", m.homeFiles)
 	}
 }
 

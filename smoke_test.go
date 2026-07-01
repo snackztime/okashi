@@ -2016,11 +2016,12 @@ func TestHomeEdgeStatesAndResponsive(t *testing.T) {
 	m := initialModel()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 26})
 	m = nm.(model)
-	// Empty workspace (actions only) — nav + render must not panic.
+	// Workspace with only the ◦ Loose entry (no subdirs, no recents) — nav + render must not panic.
+	// Loose is always present so the library has 1 item; resetHomeSelection focuses regionLibrary.
 	m.homeItems = buildHomeItems(nil, t.TempDir())
 	m.resetHomeSelection()
-	if m.homeRegion != regionActions {
-		t.Fatalf("empty workspace should focus Actions, got %d", m.homeRegion)
+	if m.homeRegion != regionLibrary {
+		t.Fatalf("workspace with only Loose entry should focus Library, got %d", m.homeRegion)
 	}
 	for _, k := range []tea.KeyType{tea.KeyUp, tea.KeyDown, tea.KeyLeft, tea.KeyRight, tea.KeyTab} {
 		nm, _ = m.Update(tea.KeyMsg{Type: k})

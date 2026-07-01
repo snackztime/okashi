@@ -19,6 +19,7 @@ const (
 	homeRecentFile homeKind = iota
 	homeProject
 	homeFolder
+	homeLoose
 	homeNewDocument
 	homeNewProject
 	homeOpenOther
@@ -156,6 +157,7 @@ func buildHomeItems(recents []string, workspace string) []homeItem {
 	for _, p := range recents {
 		items = append(items, homeItem{kind: homeRecentFile, label: filepath.Base(p), path: p})
 	}
+	items = append(items, homeItem{kind: homeLoose, label: "◦ Loose", path: workspace})
 	projects, folders := classifyLibrary(workspace)
 	items = append(items, projects...)
 	items = append(items, folders...)
@@ -173,7 +175,7 @@ func homeGroups(items []homeItem) (recents, projects, folders, actions []homeIte
 		switch it.kind {
 		case homeRecentFile:
 			recents = append(recents, it)
-		case homeProject:
+		case homeLoose, homeProject:
 			projects = append(projects, it)
 		case homeFolder:
 			folders = append(folders, it)
@@ -526,6 +528,12 @@ func (m model) libraryColumn(h int) ([]string, []innerCell) {
 	}
 	var rows []lrow
 	idx := 0
+	// The leading ◦ Loose entry (if present) renders above the PROJECTS header.
+	if len(projects) > 0 && projects[0].kind == homeLoose {
+		rows = append(rows, lrow{text: projects[0].label, libIdx: idx})
+		idx++
+		projects = projects[1:]
+	}
 	if len(projects) > 0 {
 		rows = append(rows, lrow{header: true, text: "PROJECTS"})
 		for _, p := range projects {
