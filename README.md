@@ -39,6 +39,9 @@ where that is). The sidebar shows your documents and projects on the left; the
 editor is centered on the right. Collapse the sidebar with `ctrl+b` for a
 full-screen writing surface.
 
+**Saving:** okashi autosaves as you write and shows a save indicator in the
+status bar. Press `ctrl+s` to save explicitly at any time.
+
 ---
 
 ## Keyboard shortcuts
@@ -53,6 +56,7 @@ full-screen writing surface.
 | `ctrl+k` | Binder |
 | `ctrl+o` | Home (launch screen) |
 | `esc` | Switch focus / back |
+| `ctrl+c` | Quit |
 
 ### Files
 
@@ -73,7 +77,6 @@ full-screen writing surface.
 | `ctrl+d` | Focus dim (dim everything outside the current sentence) |
 | `ctrl+g` | Set goals |
 | `ctrl+r` | Spelling suggestions |
-| `ctrl+c` | Quit |
 
 ### Export & preview
 
@@ -139,8 +142,10 @@ Set `OKASHI_AUTHOR` to include your name in the Manuscript running header.
 `↑`/`↓` scroll, `ctrl+p` returns to editing.
 
 Inside the preview, press `t` to toggle **Tufte view** — a book-style layout
-that floats footnotes into **margin sidenotes** on wide terminals (≥ 90 columns).
-On narrower terminals, footnotes fall back to endnotes at the bottom of the page.
+that floats footnotes into **margin sidenotes** when the terminal is wide enough
+to hold the text plus a right margin. The body stays at your writing measure; the
+preview pane widens to accommodate the notes. On a narrower terminal, footnotes
+fall back to numbered endnotes.
 
 The preview theme follows your terminal background (dark or light). Override
 with `OKASHI_THEME=dark` or `OKASHI_THEME=light`.
