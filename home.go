@@ -235,6 +235,22 @@ func (m model) regionVisible(r homeRegion) bool {
 	return false
 }
 
+// activeSourceRoot is the filesystem root of the active library source. Falls back to
+// writingDir() if the index is somehow out of range (defensive; activeSource is clamped).
+func (m model) activeSourceRoot() string {
+	if m.activeSource < 0 || m.activeSource >= len(m.sources) {
+		return writingDir()
+	}
+	return m.sources[m.activeSource].root()
+}
+
+// rebuildHome rebuilds the launch list from recents + the active source's library, then
+// refreshes the FILES column. Call after anything that changes the active source.
+func (m *model) rebuildHome() {
+	m.homeItems = buildHomeItems(loadRecents(recentPath()), m.activeSourceRoot())
+	m.recomputeHomeFiles()
+}
+
 // recomputeHomeFiles fills the FILES column from the selected library item.
 func (m *model) recomputeHomeFiles() {
 	lib := m.library()

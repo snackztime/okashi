@@ -119,6 +119,21 @@ func TestHomeContentAndHitTest(t *testing.T) {
 	}
 }
 
+func TestActiveSourceRootDefaultsToWritingDir(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	if len(m.sources) < 1 || m.sources[0].Kind != sourceKindPrimary {
+		t.Fatalf("model should load sources with primary first, got %+v", m.sources)
+	}
+	if m.activeSource != 0 {
+		t.Fatalf("activeSource should start at 0 (primary), got %d", m.activeSource)
+	}
+	if m.activeSourceRoot() != dir {
+		t.Fatalf("activeSourceRoot() = %q, want writingDir() %q", m.activeSourceRoot(), dir)
+	}
+}
+
 func TestClassifyLibraryAndFiles(t *testing.T) {
 	ws := t.TempDir()
 	os.MkdirAll(filepath.Join(ws, "my-novel"), 0o755)

@@ -172,6 +172,8 @@ type model struct {
 	homeLastCol     homeRegion     // last column visited (for up-out-of-Actions)
 	homeFiles       []homeFileItem // FILES column: the selected library item's documents
 	librarySelected int            // index into projects+folders driving FILES
+	sources         []source       // library sources; [0] is always the primary (writingDir())
+	activeSource    int            // index into sources driving the home library
 	snippets        *snippetCache
 
 	searchInput     textinput.Model
@@ -277,7 +279,9 @@ func initialModel() model {
 		colWidth:       resolveColumnWidth(),
 		smartQuotes:    resolveSmartQuotes(),
 		screen:         screenHome,
-		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir()),
+		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir()), // writingDir() == activeSourceRoot() at init (activeSource==0 is the primary)
+		sources:        loadSources(sourcesPath()),
+		activeSource:   0,
 		sidebarVisible: true,
 		focus:          focusSidebar,
 		typewriter:     true,
@@ -1082,7 +1086,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+o":
 			m.previewing = false
 			m.screen = screenHome
-			m.homeItems = buildHomeItems(loadRecents(recentPath()), writingDir())
+			m.homeItems = buildHomeItems(loadRecents(recentPath()), m.activeSourceRoot())
 			m.resetHomeSelection()
 			return m, nil
 		case "ctrl+f":
