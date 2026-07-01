@@ -6,6 +6,39 @@ import (
 	"testing"
 )
 
+func TestMoveDocumentChapterBetweenManuscripts(t *testing.T) {
+	root := t.TempDir()
+	a := filepath.Join(root, "a")
+	first, _ := createManuscript(a, "A", "Alpha") // 01-alpha.md
+	b := filepath.Join(root, "b")
+	createManuscript(b, "B", "Beta") // 01-beta.md (distinct name → no collision)
+
+	if err := moveDocument(a, first, b, true); err != nil {
+		t.Fatal(err)
+	}
+	// Removed from A's manifest.
+	am, _, _ := readManifest(a)
+	for _, it := range am.Items {
+		if it.File == first {
+			t.Fatalf("%s should have been removed from A's manifest, items=%+v", first, am.Items)
+		}
+	}
+	// Appended to B's manifest.
+	bm, _, _ := readManifest(b)
+	found := false
+	for _, it := range bm.Items {
+		if it.File == first {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("%s should have been inserted into B's manifest, items=%+v", first, bm.Items)
+	}
+	if _, err := os.Stat(filepath.Join(b, first)); err != nil {
+		t.Fatalf("file should have moved into B: %v", err)
+	}
+}
+
 func TestSafeMoveSameVolume(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "a.md")

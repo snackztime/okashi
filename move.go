@@ -44,9 +44,14 @@ func moveDocument(srcDir, file, dstDir string, asChapter bool) error {
 		return err
 	}
 
-	// Source manifest: drop the chapter (read-modify-write).
+	// Source manifest: drop the chapter (read-modify-write). The file has already moved, so a
+	// re-read failure here is an inconsistent state — propagate it rather than report success.
 	if wasChapter {
-		if sm, present, err := readManifest(srcDir); err == nil && present {
+		sm, present, err := readManifest(srcDir)
+		if err != nil {
+			return fmt.Errorf("moved %s but could not update the source manifest: %w", file, err)
+		}
+		if present {
 			if err := writeManifest(srcDir, manifestRemove(sm, file)); err != nil {
 				return err
 			}
