@@ -55,8 +55,9 @@ ctrl+d   focus dim
 ctrl+s   save
 ctrl+g   set goals
 ctrl+r   spelling suggestions
-ctrl+f   search
+ctrl+f   search (tab scope · ctrl+a all sources)
 ctrl+o   home
+⌥/⇧+drag select text (native) · ⌘C copy
 esc      switch focus / back
 ctrl+c   quit`
 
