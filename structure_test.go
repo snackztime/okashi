@@ -3,12 +3,42 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
 )
+
+func TestStructureViewWindowsToSelection(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "big")
+	os.MkdirAll(dir, 0o755)
+	var items []manifestItem
+	for i := 1; i <= 50; i++ {
+		f := "ch-" + strconv.Itoa(i) + ".md"
+		items = append(items, manifestItem{File: f, Title: "Chapter " + strconv.Itoa(i)})
+	}
+	writeManifest(dir, manifest{SchemaVersion: 1, Title: "Big", Items: items})
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 80, Height: 20})
+	m = nm.(model)
+	m.outline.dir = dir
+	m.enterStructure()
+	m.structureSel = 45 // deep past the fold on a 20-row terminal
+
+	out := ansiStrip(m.structureView())
+	if !strings.Contains(out, "Chapter 46") { // the selected chapter's row (index 45 → "46  Chapter 46")
+		t.Fatalf("the selected chapter must be windowed into view; got:\n%s", out)
+	}
+	if strings.Contains(out, "Chapter 1 ") { // far-off chapter 1 scrolled off the top
+		t.Fatalf("chapter 1 should NOT render on a 20-row terminal when sel=45; got:\n%s", out)
+	}
+	if lines := strings.Count(out, "\n"); lines > m.height+2 {
+		t.Fatalf("structureView must stay O(visible): %d lines for height %d", lines, m.height)
+	}
+}
 
 func enterStructureAt(t *testing.T, root, name, first string) model {
 	t.Helper()

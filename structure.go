@@ -246,10 +246,17 @@ func (m model) updateStructure(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m model) structureView() string {
 	var b strings.Builder
-	rows := make([]string, 0, len(m.structureItems))
-	for i, it := range m.structureItems {
+	// Window the chapter list so View() stays O(visible) and the selected row is always shown
+	// (CLAUDE.md: View MUST stay O(visible) — a 400-page work has 40–100 chapters).
+	visRows := m.height - 8
+	if visRows < 1 {
+		visRows = 1
+	}
+	off := homeWindowOffset(len(m.structureItems), m.structureSel, visRows)
+	rows := make([]string, 0, visRows)
+	for i := off; i < len(m.structureItems) && len(rows) < visRows; i++ {
 		num := lipgloss.NewStyle().Foreground(subtle).Render(fmtNum(i + 1))
-		label := it.Title
+		label := m.structureItems[i].Title
 		if m.structureSel == i {
 			label = selectedStyle.Render(label)
 		}
