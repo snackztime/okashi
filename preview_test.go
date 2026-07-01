@@ -163,17 +163,37 @@ func TestLayoutSidenotesMarkerIsWholeRun(t *testing.T) {
 }
 
 func TestSidenoteGeometryGate(t *testing.T) {
-	if _, _, ok := sidenoteGeometry(80); ok {
-		t.Fatalf("width 80 (< 90) should not enable sidenotes")
+	// avail 80, measure 72 → gutter 5 < 18 → no sidenotes.
+	if _, ok := sidenoteGeometry(80, 72); ok {
+		t.Fatalf("avail 80 / measure 72 should not fit a sidenote margin")
 	}
-	measure, gutter, ok := sidenoteGeometry(120)
+	// avail 96, measure 72 → gutter 21 → ok, within [18,30].
+	gutter, ok := sidenoteGeometry(96, 72)
 	if !ok {
-		t.Fatalf("width 120 should enable sidenotes")
+		t.Fatalf("avail 96 / measure 72 should fit sidenotes")
 	}
 	if gutter < 18 || gutter > 30 {
 		t.Fatalf("gutter %d out of [18,30]", gutter)
 	}
-	if measure != 120-gutter-3 {
-		t.Fatalf("measure %d != total-gutter-3", measure)
+	// avail 200 → gutter clamped to 30.
+	if g, _ := sidenoteGeometry(200, 72); g != 30 {
+		t.Fatalf("gutter should clamp to 30, got %d", g)
+	}
+}
+
+func TestSidenotePlanEngagesOnlyWithRoomAndNotes(t *testing.T) {
+	doc := "Alpha[^a] and beta[^b].\n\n[^a]: first\n[^b]: second\n"
+	// Wide pane + footnotes → engaged, body measure stays 72.
+	measure, gutter, _, notes, ok := sidenotePlan(120, 72, doc)
+	if !ok || len(notes) != 2 || measure != 72 || gutter < 18 || gutter > 30 {
+		t.Fatalf("wide+footnotes should engage: measure=%d gutter=%d notes=%d ok=%v", measure, gutter, len(notes), ok)
+	}
+	// Narrow pane → not engaged even with footnotes.
+	if _, _, _, _, ok := sidenotePlan(80, 72, doc); ok {
+		t.Fatalf("narrow pane should not engage sidenotes")
+	}
+	// Wide pane, no footnotes → not engaged.
+	if _, _, _, _, ok := sidenotePlan(120, 72, "just prose\n"); ok {
+		t.Fatalf("no footnotes should not engage sidenotes")
 	}
 }

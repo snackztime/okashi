@@ -210,6 +210,7 @@ type model struct {
 	previewing      bool
 	previewTufte    bool
 	sidenotesActive bool
+	previewAvail    int
 	typewriter      bool
 	dimEnabled      bool
 
@@ -936,6 +937,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.layout()
+		if m.previewing {
+			m.renderPreview()
+		}
 		return m, nil
 
 	case tea.MouseMsg:
@@ -1502,6 +1506,10 @@ func (m *model) layout() {
 	editorH := bodyH - 1 // editor column reserves a blank line + the status row
 	if editorH < 1 {
 		editorH = 1
+	}
+	m.previewAvail = editorArea - 2
+	if m.previewAvail < 0 {
+		m.previewAvail = 0
 	}
 	m.editor.SetWidth(cw)
 	m.editor.SetHeight(editorH)
@@ -2129,53 +2137,71 @@ func (m *model) togglePreview() {
 	m.status = "preview (read-only) · ctrl+p edit · t style · ↑/↓ scroll"
 }
 
-const sidenoteMinWidth = 90
+const (
+	sidenoteMinGutter = 18
+	sidenoteMaxGutter = 30
+)
 
-// sidenoteGeometry returns the body measure and gutter width for the given total preview width,
-// and whether the total is wide enough for margin sidenotes at all.
-func sidenoteGeometry(total int) (measure, gutter int, ok bool) {
-	if total < sidenoteMinWidth {
-		return 0, 0, false
+// sidenoteGeometry reports the gutter width for a preview pane of `avail` columns holding a body
+// of `measure` columns plus the 3-col " ┆ " gap, and whether a margin (>= sidenoteMinGutter) fits.
+func sidenoteGeometry(avail, measure int) (gutter int, ok bool) {
+	gutter = avail - measure - 3
+	if gutter < sidenoteMinGutter {
+		return 0, false
 	}
-	gutter = total / 3
-	if gutter < 18 {
-		gutter = 18
+	if gutter > sidenoteMaxGutter {
+		gutter = sidenoteMaxGutter
 	}
-	if gutter > 30 {
-		gutter = 30
+	return gutter, true
+}
+
+// sidenotePlan decides whether the Tufte preview should render margin sidenotes: the body measure
+// stays the writing measure (colWidth), the gutter uses the pane's spare width, and it engages only
+// when the pane is wide enough AND the doc has referenced footnotes. body/notes come from
+// footnotesToSidenotes (body has superscript refs, no endnote section).
+func sidenotePlan(avail, colWidth int, buffer string) (measure, gutter int, body string, notes []string, ok bool) {
+	measure = colWidth
+	if avail > 0 && avail < measure {
+		measure = avail // tiny panes: never exceed the available width
 	}
-	measure = total - gutter - 3 // " ┆ "
-	return measure, gutter, true
+	g, gok := sidenoteGeometry(avail, measure)
+	if !gok {
+		return 0, 0, "", nil, false
+	}
+	b, ns := footnotesToSidenotes(buffer)
+	if len(ns) == 0 {
+		return 0, 0, "", nil, false
+	}
+	return measure, g, b, ns, true
 }
 
 // renderPreview rebuilds the preview viewport from the buffer: footnotes folded to endnotes
 // (glamour can't render them), styled Default (the detected theme) or Tufte.
 func (m *model) renderPreview() {
-	wrap := m.preview.Width
-	if wrap <= 0 {
-		wrap = m.colWidth
-	}
-	// Tufte mode + wide terminal + footnotes → margin sidenotes.
 	if m.previewTufte {
-		if measure, gutter, ok := sidenoteGeometry(wrap); ok {
-			if body, notes := footnotesToSidenotes(m.editor.Value()); len(notes) > 0 {
-				r, err := glamour.NewTermRenderer(glamour.WithStyles(tufteGlamourStyle()), glamour.WithWordWrap(measure))
-				if err != nil {
-					m.status = "preview unavailable: " + err.Error()
-					return
-				}
-				out, err := r.Render(body)
-				if err != nil {
-					m.status = "preview failed: " + err.Error()
-					return
-				}
-				m.preview.SetContent(layoutSidenotes(out, notes, measure, gutter))
-				m.sidenotesActive = true
+		if measure, gutter, body, notes, ok := sidenotePlan(m.previewAvail, m.colWidth, m.editor.Value()); ok {
+			r, err := glamour.NewTermRenderer(glamour.WithStyles(tufteGlamourStyle()), glamour.WithWordWrap(measure))
+			if err != nil {
+				m.status = "preview unavailable: " + err.Error()
 				return
 			}
+			out, err := r.Render(body)
+			if err != nil {
+				m.status = "preview failed: " + err.Error()
+				return
+			}
+			m.preview.Width = measure + 3 + gutter // widen the pane to hold the margin
+			m.preview.SetContent(layoutSidenotes(out, notes, measure, gutter))
+			m.sidenotesActive = true
+			return
 		}
 	}
 	m.sidenotesActive = false
+	wrap := min(m.colWidth, m.previewAvail)
+	if wrap <= 0 {
+		wrap = m.colWidth // pre-layout (previewAvail not set yet)
+	}
+	m.preview.Width = wrap
 	styleOpt := glamour.WithStandardStyle(m.mdStyle)
 	if m.previewTufte {
 		styleOpt = glamour.WithStyles(tufteGlamourStyle())
