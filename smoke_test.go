@@ -2023,7 +2023,7 @@ func TestHomeEdgeStatesAndResponsive(t *testing.T) {
 	m = nm.(model)
 	// Workspace with only the ◦ Loose entry (no subdirs, no recents) — nav + render must not panic.
 	// Loose is always present so the library has 1 item; resetHomeSelection focuses regionLibrary.
-	m.homeItems = buildHomeItems(nil, t.TempDir())
+	m.homeItems = buildHomeItems(nil, t.TempDir(), nil)
 	m.resetHomeSelection()
 	if m.homeRegion != regionLibrary {
 		t.Fatalf("workspace with only Loose entry should focus Library, got %d", m.homeRegion)

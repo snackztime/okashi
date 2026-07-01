@@ -59,7 +59,7 @@ func TestBuildHomeItems(t *testing.T) {
 	}
 	recents := []string{"/abs/chapter-03.md", "/abs/note.md"}
 
-	items := buildHomeItems(recents, dir)
+	items := buildHomeItems(recents, dir, nil)
 
 	// 2 recents + 2 folders (hidden excluded) + 1 Notes + 2 actions (Move files, Browse) = 7
 	// (New document / New project are now the inline + on the panels, not actions.)
@@ -90,7 +90,7 @@ func TestBuildHomeItems(t *testing.T) {
 
 func TestBuildHomeItemsEmpty(t *testing.T) {
 	dir := t.TempDir() // no subdirs
-	items := buildHomeItems(nil, dir)
+	items := buildHomeItems(nil, dir, nil)
 	// Should have ◦ Notes + Move files + Browse all files = 3
 	if len(items) != 3 || items[0].kind != homeLoose || items[1].kind != homeMoveFiles || items[2].kind != homeOpenOther {
 		t.Fatalf("empty state should be Notes + Move files + Browse, got %+v", items)
@@ -110,7 +110,7 @@ func TestHomeViewShowsRecentName(t *testing.T) {
 
 func TestBuildHomeItemsHasBrowseAction(t *testing.T) {
 	dir := t.TempDir()
-	items := buildHomeItems(nil, dir) // no recents, no projects
+	items := buildHomeItems(nil, dir, nil) // no recents, no projects
 	// Action row: Move files + Browse all files (in that order).
 	acts := homeGroupsActions(items)
 	if len(acts) != 2 ||
@@ -122,7 +122,7 @@ func TestBuildHomeItemsHasBrowseAction(t *testing.T) {
 
 // homeGroupsActions returns just the action items from a home-item list (test helper).
 func homeGroupsActions(items []homeItem) []homeItem {
-	_, _, _, _, a := homeGroups(items)
+	_, _, _, _, _, a := homeGroups(items)
 	return a
 }
 
@@ -537,5 +537,36 @@ func TestHomeMoveFilesActionOpensStandaloneMover(t *testing.T) {
 	_ = cmd
 	if m.screen != screenMover || m.moverPhase != moverPickSource {
 		t.Fatalf("the Move-files action should open the standalone mover, screen=%v phase=%d", m.screen, m.moverPhase)
+	}
+}
+
+func TestPinToggleOnHomeProject(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	t.Setenv("HOME", t.TempDir()) // isolate the pins config dir (TestMain also does this)
+	proj := filepath.Join(root, "my-novel")
+	createManuscript(proj, "My Novel", "Opening")
+
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 30})
+	m = nm.(model)
+	// select the project in LIBRARY and pin it with `p`.
+	lib := m.library()
+	for i, it := range lib {
+		if it.label == "my-novel" {
+			m.focusAt(regionLibrary, i)
+		}
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	m = nm.(model)
+	if len(m.pinnedItems()) != 1 || m.pinnedItems()[0].label != "★ my-novel" {
+		t.Fatalf("p should pin the project, got %+v", m.pinnedItems())
+	}
+	// pinning ◦ Notes is a no-op.
+	m.focusAt(regionLibrary, len(m.library())-1) // Notes is last
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'p'}})
+	m = nm.(model)
+	if len(m.pinnedItems()) != 1 {
+		t.Fatalf("pinning ◦ Notes should be a no-op, got %+v", m.pinnedItems())
 	}
 }

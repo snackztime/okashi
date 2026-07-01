@@ -16,7 +16,8 @@ import (
 type homeKind int
 
 const (
-	homeRecentFile homeKind = iota
+	homePinned homeKind = iota
+	homeRecentFile
 	homeProject
 	homeFolder
 	homeLoose
@@ -161,10 +162,15 @@ type innerCell struct {
 	x0, x1 int
 }
 
-// buildHomeItems composes the flat launch list: recent files, then projects (manuscripts),
-// then folders (categories), then the actions. The three-column launcher groups by kind.
-func buildHomeItems(recents []string, workspace string) []homeItem {
+// buildHomeItems composes the flat launch list: pinned items, then recent files, then projects
+// (manuscripts), then folders (categories), then the actions. The three-column launcher groups by kind.
+func buildHomeItems(recents []string, workspace string, pinned []string) []homeItem {
 	var items []homeItem
+	for _, p := range pinned {
+		if _, err := os.Stat(p); err == nil { // skip dead pins
+			items = append(items, homeItem{kind: homePinned, label: "★ " + filepath.Base(p), path: p})
+		}
+	}
 	for _, p := range recents {
 		items = append(items, homeItem{kind: homeRecentFile, label: filepath.Base(p), path: p})
 	}
@@ -207,9 +213,11 @@ func (m *model) homeCreate(region homeRegion) tea.Cmd {
 
 // homeGroups splits the flat list by kind. `other` holds the loose/Notes entry, which renders
 // in its own OTHER section at the foot of the library.
-func homeGroups(items []homeItem) (recents, projects, folders, other, actions []homeItem) {
+func homeGroups(items []homeItem) (pinned, recents, projects, folders, other, actions []homeItem) {
 	for _, it := range items {
 		switch it.kind {
+		case homePinned:
+			pinned = append(pinned, it)
 		case homeRecentFile:
 			recents = append(recents, it)
 		case homeProject:
@@ -225,10 +233,11 @@ func homeGroups(items []homeItem) (recents, projects, folders, other, actions []
 	return
 }
 
-func (m model) recents() []homeItem { r, _, _, _, _ := homeGroups(m.homeItems); return r }
-func (m model) actions() []homeItem { _, _, _, _, a := homeGroups(m.homeItems); return a }
+func (m model) recents() []homeItem     { _, r, _, _, _, _ := homeGroups(m.homeItems); return r }
+func (m model) actions() []homeItem     { _, _, _, _, _, a := homeGroups(m.homeItems); return a }
+func (m model) pinnedItems() []homeItem { p, _, _, _, _, _ := homeGroups(m.homeItems); return p }
 func (m model) library() []homeItem {
-	_, projects, folders, other, _ := homeGroups(m.homeItems)
+	_, _, projects, folders, other, _ := homeGroups(m.homeItems)
 	lib := append([]homeItem{}, projects...)
 	lib = append(lib, folders...)
 	lib = append(lib, other...)
@@ -294,7 +303,7 @@ func (m model) activeSourceRoot() string {
 // rebuildHome rebuilds the launch list from recents + the active source's library, then
 // refreshes the FILES column. Call after anything that changes the active source.
 func (m *model) rebuildHome() {
-	m.homeItems = buildHomeItems(loadRecents(recentPath()), m.activeSourceRoot())
+	m.homeItems = buildHomeItems(loadRecents(recentPath()), m.activeSourceRoot(), m.pinned)
 	m.recomputeHomeFiles()
 }
 
@@ -421,6 +430,17 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		case "d":
 			m.removeActiveSource()
+		case "p":
+			if m.homeRegion == regionLibrary {
+				lib := m.library()
+				if m.librarySelected >= 0 && m.librarySelected < len(lib) {
+					it := lib[m.librarySelected]
+					if it.kind == homeProject || it.kind == homeFolder {
+						m.pinned = togglePin(pinsPath(), it.path)
+						m.rebuildHome()
+					}
+				}
+			}
 		case "+", "n":
 			if m.homeRegion == regionLibrary || m.homeRegion == regionFiles {
 				return m, m.homeCreate(m.homeRegion)
@@ -646,7 +666,7 @@ func homeWindowOffset(total, active, h int) int {
 
 // libraryColumn builds the LIBRARY box (PROJECTS + FOLDERS sections) + cells (≤ h rows).
 func (m model) libraryColumn(h int) ([]string, []innerCell) {
-	_, projects, folders, other, _ := homeGroups(m.homeItems)
+	_, _, projects, folders, other, _ := homeGroups(m.homeItems)
 	type lrow struct {
 		header bool
 		text   string

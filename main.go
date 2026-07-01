@@ -190,6 +190,7 @@ type model struct {
 	librarySelected     int             // index into projects+folders driving FILES
 	sources             []source        // library sources; [0] is always the primary (writingDir())
 	activeSource        int             // index into sources driving the home library
+	pinned              []string        // pinned project/folder paths (persisted via pins.go)
 	snippets            *snippetCache
 
 	searchInput     textinput.Model
@@ -311,8 +312,9 @@ func initialModel() model {
 		colWidth:       resolveColumnWidth(),
 		smartQuotes:    resolveSmartQuotes(),
 		screen:         screenHome,
-		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir()), // writingDir() == activeSourceRoot() at init (activeSource==0 is the primary)
+		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir(), loadPins(pinsPath())), // writingDir() == activeSourceRoot() at init (activeSource==0 is the primary)
 		sources:        loadSources(sourcesPath()),
+		pinned:         loadPins(pinsPath()),
 		activeSource:   0,
 		sidebarVisible: true,
 		focus:          focusSidebar,
@@ -1126,7 +1128,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+o":
 			m.previewing = false
 			m.screen = screenHome
-			m.homeItems = buildHomeItems(loadRecents(recentPath()), m.activeSourceRoot())
+			m.homeItems = buildHomeItems(loadRecents(recentPath()), m.activeSourceRoot(), m.pinned)
 			m.resetHomeSelection()
 			return m, nil
 		case "ctrl+f":
