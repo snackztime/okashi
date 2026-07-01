@@ -38,6 +38,30 @@ func TestWriteManifestMatchesWicklightSortedKeys(t *testing.T) {
 	}
 }
 
+// TestWriteManifestNoHTMLEscaping guards that okashi emits &, <, > literally like Swift's
+// JSONEncoder (not Go's default \uXXXX escaping) — else a title with "&" churns the whole file
+// on every app handoff, defeating the sorted-keys parity fix. Round-trips to the exact strings.
+func TestWriteManifestNoHTMLEscaping(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeManifest(dir, manifest{Title: "Tom & Jerry", Items: []manifestItem{{File: "a.md", Title: "A < B > C"}}}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(filepath.Join(dir, manifestName))
+	s := string(b)
+	// With Go's default HTML escaping ON, the file would hold "Tom & Jerry" and the literal
+	// substrings below would be ABSENT — so these presence checks fail exactly when escaping leaks.
+	if !strings.Contains(s, "Tom & Jerry") || !strings.Contains(s, "A < B > C") {
+		t.Fatalf("titles must be emitted literally (no HTML escaping):\n%s", s)
+	}
+	if strings.Contains(s, `u0026`) || strings.Contains(s, `u003c`) || strings.Contains(s, `u003e`) {
+		t.Fatalf("found an HTML \\uXXXX escape — must emit &/</> literally:\n%s", s)
+	}
+	m, _, _ := readManifest(dir)
+	if m.Title != "Tom & Jerry" || m.Items[0].Title != "A < B > C" {
+		t.Fatalf("round-trip mismatch: %+v", m)
+	}
+}
+
 // TestWriteManifestEmptyItemsIsArray guards the nil-slice→[] fix: an empty manuscript must
 // serialize items as `[]`, never `null` (wicklight decodes a JSON array).
 func TestWriteManifestEmptyItemsIsArray(t *testing.T) {

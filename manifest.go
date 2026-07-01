@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,8 +17,8 @@ type manifestItem struct {
 	Title string `json:"title"`
 }
 
-// manifest is wicklight's per-manuscript order/membership/title file. okashi reads
-// it and NEVER writes it (see the reconciliation design, §3.1).
+// manifest is the shared per-manuscript order/membership/title file. okashi reads it AND
+// writes it — create + chapter-title retitle today, structural edits later (see design §0).
 type manifest struct {
 	SchemaVersion int            `json:"schemaVersion"`
 	Title         string         `json:"title"`
@@ -74,11 +75,17 @@ func writeManifest(dir string, m manifest) error {
 		"title":         m.Title,
 		"items":         items,
 	}
-	data, err := json.MarshalIndent(top, "", "  ")
-	if err != nil {
+	// SetEscapeHTML(false): Swift's JSONEncoder emits &, <, > literally; Go's default escapes
+	// them to their \uXXXX forms, which would churn the whole file whenever a title contains one
+	// ("Tom & Jerry"). Encoder also appends a trailing '\n'; trim it to match Swift (no newline).
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(top); err != nil {
 		return err
 	}
-	return atomicWrite(filepath.Join(dir, manifestName), data, 0o644)
+	return atomicWrite(filepath.Join(dir, manifestName), bytes.TrimRight(buf.Bytes(), "\n"), 0o644)
 }
 
 // createManuscript makes a brand-new manuscript at dir: the folder, an empty first
