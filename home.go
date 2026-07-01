@@ -326,6 +326,8 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.homeCycleRegion(1)
 		case "shift+tab":
 			m.homeCycleRegion(-1)
+		case "s":
+			m.cycleSource(1)
 		case "enter":
 			return m, m.openHomeSelection()
 		}
@@ -605,10 +607,38 @@ func (m model) filesColumn(h, contentW int) ([]string, []innerCell) {
 	return lines, cells
 }
 
+// cycleSource advances the active source by dir (wrapping), skipping unreachable sources, then
+// rebuilds the library. Stays put if no other reachable source exists.
+func (m *model) cycleSource(dir int) {
+	n := len(m.sources)
+	if n <= 1 {
+		return
+	}
+	for i := 1; i <= n; i++ {
+		nxt := ((m.activeSource+dir*i)%n + n) % n
+		if nxt == m.activeSource {
+			break
+		}
+		if m.sources[nxt].reachable() {
+			m.activeSource = nxt
+			m.rebuildHome()
+			m.librarySelected = 0
+			m.recomputeHomeFiles()
+			m.resetHomeSelection()
+			m.status = "source: " + m.sources[nxt].Name
+			return
+		}
+	}
+}
+
 // homeColumns returns the boxes to show (responsive) with their widths + titles.
 func (m model) homeColumns() (regions []homeRegion, titles []string, widths []int) {
 	all := []homeRegion{regionRecent, regionLibrary, regionFiles}
-	allTitles := []string{"RECENT", "LIBRARY", "FILES"}
+	libTitle := "LIBRARY"
+	if len(m.sources) > 1 && m.activeSource >= 0 && m.activeSource < len(m.sources) {
+		libTitle = "LIBRARY · " + m.sources[m.activeSource].Name + " ▾"
+	}
+	allTitles := []string{"RECENT", libTitle, "FILES"}
 	allW := []int{homeRecentBox, homeLibraryBox, homeFilesBox}
 	total := func(idx []int) int {
 		w := 0

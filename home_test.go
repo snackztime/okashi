@@ -10,6 +10,46 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
+func TestCycleSourceSwitchesAndRepopulates(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	// A second (folder) source with its own project.
+	other := t.TempDir()
+	createManuscript(filepath.Join(other, "other-novel"), "Other Novel", "Untitled")
+
+	m := initialModel()
+	m.sources = append(m.sources, newFolderSource(other))
+
+	m.cycleSource(1)
+	if m.activeSource != 1 {
+		t.Fatalf("cycleSource should move to the folder source, got %d", m.activeSource)
+	}
+	if m.activeSourceRoot() != other {
+		t.Fatalf("active root = %q, want %q", m.activeSourceRoot(), other)
+	}
+	// The library now reflects the other source's project.
+	found := false
+	for _, it := range m.library() {
+		if it.label == "other-novel" {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("library should show the folder source's project, got %+v", m.library())
+	}
+}
+
+func TestCycleSourceSkipsUnreachable(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	m := initialModel()
+	m.sources = append(m.sources, newFolderSource(filepath.Join(t.TempDir(), "gone"))) // unreachable
+	m.cycleSource(1)
+	if m.activeSource != 0 {
+		t.Fatalf("cycling should skip an unreachable source and stay on primary, got %d", m.activeSource)
+	}
+}
+
 func TestBuildHomeItems(t *testing.T) {
 	dir := t.TempDir()
 	for _, d := range []string{"novel", "journal", ".hidden"} {
