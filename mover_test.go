@@ -42,6 +42,72 @@ func TestMoverEnterFromFilePane(t *testing.T) {
 	}
 }
 
+func TestMoverMoveFileIntoManuscriptAsChapter(t *testing.T) {
+	root := t.TempDir()
+	os.WriteFile(filepath.Join(root, "scene.md"), []byte("x"), 0o644)
+	proj := filepath.Join(root, "novel")
+	createManuscript(proj, "Novel", "Opening")
+	m := moverModelAt(t, root, "scene.md")
+	m.enterMover()
+	// drill into novel, then "move here" as a chapter.
+	for i, e := range m.moverEntries {
+		if e.kind == moverFolder && e.name == "novel" {
+			m.moverSel = i
+		}
+	}
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // drill into novel
+	m = nm.(model)
+	m.moverSel = 0                                   // the "move here" row
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // → confirm
+	m = nm.(model)
+	if !m.moverConfirm {
+		t.Fatal("moving a file into a manuscript should open the confirm")
+	}
+	if !m.moverAsChapter {
+		t.Fatal("the confirm should default to 'chapter'")
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}}) // apply
+	m = nm.(model)
+	// scene.md moved into novel and was appended as a chapter.
+	if _, err := os.Stat(filepath.Join(proj, "scene.md")); err != nil {
+		t.Fatalf("file should have moved into the manuscript: %v", err)
+	}
+	mf, _, _ := readManifest(proj)
+	last := mf.Items[len(mf.Items)-1]
+	if last.File != "scene.md" {
+		t.Fatalf("file should be appended as a chapter, items=%+v", mf.Items)
+	}
+	if m.screen != screenWriting {
+		t.Fatalf("after a move the mover should return, screen=%v", m.screen)
+	}
+}
+
+func TestMoverMoveFolder(t *testing.T) {
+	root := t.TempDir()
+	os.MkdirAll(filepath.Join(root, "worldbuild"), 0o755)
+	os.MkdirAll(filepath.Join(root, "trilogy"), 0o755)
+	m := moverModelAt(t, root, "worldbuild")
+	m.enterMover()
+	if !m.moverIsDir {
+		t.Fatal("source should be a folder")
+	}
+	for i, e := range m.moverEntries {
+		if e.kind == moverFolder && e.name == "trilogy" {
+			m.moverSel = i
+		}
+	}
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // drill into trilogy
+	m = nm.(model)
+	m.moverSel = 0                                   // move here
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // folder → plain confirm (no radio)
+	m = nm.(model)
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = nm.(model)
+	if _, err := os.Stat(filepath.Join(root, "trilogy", "worldbuild")); err != nil {
+		t.Fatalf("folder should have moved under trilogy: %v", err)
+	}
+}
+
 func TestMoverDrillIntoSubfolderAndBack(t *testing.T) {
 	root := t.TempDir()
 	os.WriteFile(filepath.Join(root, "stray.md"), []byte("x"), 0o644)

@@ -79,6 +79,31 @@ func (m model) updateMover(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width, m.height = msg.Width, msg.Height
 		return m, nil
 	case tea.KeyMsg:
+		if m.moverConfirm {
+			fileIntoManuscript := !m.moverIsDir && hasManifest(m.moverDestDir)
+			switch msg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "left", "right", "tab":
+				if fileIntoManuscript {
+					m.moverAsChapter = !m.moverAsChapter
+				}
+			case "y", "enter":
+				if err := m.applyMove(); err != nil {
+					m.status = "move failed: " + err.Error()
+				} else {
+					m.status = "moved " + filepath.Base(m.moverSource)
+				}
+				m.moverConfirm = false
+				m.files.SetDir(m.files.dir) // refresh the pane (source may have left it)
+				m.screen = m.moverReturn
+				return m, nil
+			case "esc", "n":
+				m.moverConfirm = false
+				return m, nil
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -104,12 +129,22 @@ func (m model) updateMover(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.moverSel = 0
 				m.moverReload()
 			case moverMoveHere:
-				// commit target = moverDestDir → confirm (Task 2)
+				m.moverConfirm = true
 			}
 			return m, nil
 		}
 	}
 	return m, nil
+}
+
+// applyMove performs the chosen move via the chunk-1 engine. A folder → moveFolder; a file →
+// moveDocument (asChapter only when the destination is a manuscript AND the user chose chapter).
+func (m *model) applyMove() error {
+	if m.moverIsDir {
+		return moveFolder(m.moverSource, m.moverDestDir)
+	}
+	asChapter := m.moverAsChapter && hasManifest(m.moverDestDir)
+	return moveDocument(m.moverFromDir, filepath.Base(m.moverSource), m.moverDestDir, asChapter)
 }
 
 func (m model) moverView() string {
@@ -151,6 +186,24 @@ func (m model) moverView() string {
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
 	var b strings.Builder
 	b.WriteString(lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, body))
+	if m.moverConfirm {
+		dst := filepath.Base(m.moverDestDir)
+		var line string
+		if !m.moverIsDir && hasManifest(m.moverDestDir) {
+			chapter, resource := "( ) chapter", "( ) resource"
+			if m.moverAsChapter {
+				chapter = "(•) chapter"
+			} else {
+				resource = "(•) resource"
+			}
+			line = "move " + filepath.Base(m.moverSource) + " → " + dst + " as  " + chapter + "  " + resource + "   ←→ toggle · y move · esc cancel"
+		} else {
+			line = "move " + filepath.Base(m.moverSource) + " → " + dst + "?   y move · esc cancel"
+		}
+		bar := lipgloss.NewStyle().Foreground(accent).Render(line)
+		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
+		return b.String()
+	}
 	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ browse · enter drill/select · esc cancel")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
