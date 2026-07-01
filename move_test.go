@@ -143,3 +143,44 @@ func TestMoveDocumentRefusesCollisionAndNoop(t *testing.T) {
 		t.Fatal("moving into the same folder must be refused")
 	}
 }
+
+func TestMoveFolderManuscriptRidesAlong(t *testing.T) {
+	root := t.TempDir()
+	proj := filepath.Join(root, "novel")
+	createManuscript(proj, "Novel", "Untitled")
+	trilogy := filepath.Join(root, "trilogy")
+	os.MkdirAll(trilogy, 0o755)
+
+	if err := moveFolder(proj, trilogy); err != nil {
+		t.Fatal(err)
+	}
+	moved := filepath.Join(trilogy, "novel")
+	if !hasManifest(moved) {
+		t.Fatal("the manuscript's manifest should ride along into the new location")
+	}
+	m, _, err := readManifest(moved)
+	if err != nil || m.Title != "Novel" {
+		t.Fatalf("manifest should read back intact: title=%q err=%v", m.Title, err)
+	}
+	if _, err := os.Stat(proj); !os.IsNotExist(err) {
+		t.Fatal("the old folder location should be gone")
+	}
+}
+
+func TestMoveFolderRefusesCollisionAndSelf(t *testing.T) {
+	root := t.TempDir()
+	a := filepath.Join(root, "a")
+	os.MkdirAll(filepath.Join(a, "sub"), 0o755)
+	dst := filepath.Join(root, "dst")
+	os.MkdirAll(filepath.Join(dst, "a"), 0o755) // collision: dst/a already exists
+
+	if err := moveFolder(a, dst); err == nil {
+		t.Fatal("a name collision must be refused")
+	}
+	if err := moveFolder(a, filepath.Join(a, "sub")); err == nil {
+		t.Fatal("moving a folder into its own descendant must be refused")
+	}
+	if err := moveFolder(a, filepath.Dir(a)); err == nil {
+		t.Fatal("moving a folder into the parent it already lives in must be refused")
+	}
+}

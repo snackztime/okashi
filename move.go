@@ -90,3 +90,21 @@ func safeMove(src, dst string) error {
 	}
 	return os.Remove(src)
 }
+
+// moveFolder moves the directory srcDir INTO dstParent (as dstParent/base(srcDir)) via os.Rename.
+// A manuscript's manifest.json rides along inside the folder. Refuses a name collision, moving a
+// folder into itself or a descendant, and a no-op (it already lives in dstParent).
+func moveFolder(srcDir, dstParent string) error {
+	base := filepath.Base(srcDir)
+	dst := filepath.Join(dstParent, base)
+	if srcDir == dst {
+		return fmt.Errorf("%s already lives there", base)
+	}
+	if withinRoot(dstParent, srcDir) {
+		return fmt.Errorf("can't move a folder into itself")
+	}
+	if _, err := os.Stat(dst); err == nil {
+		return fmt.Errorf("%s already exists in the destination", base)
+	}
+	return os.Rename(srcDir, dst)
+}
