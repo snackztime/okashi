@@ -236,3 +236,85 @@ func TestConfirmCreateNewProjectMakesManuscript(t *testing.T) {
 		t.Fatalf("focus = %v, want focusEditor (land writing)", m.focus)
 	}
 }
+
+func mf(files ...string) manifest {
+	m := manifest{SchemaVersion: 1, Title: "T"}
+	for _, f := range files {
+		m.Items = append(m.Items, manifestItem{File: f, Title: f})
+	}
+	return m
+}
+
+func files(m manifest) []string {
+	var out []string
+	for _, it := range m.Items {
+		out = append(out, it.File)
+	}
+	return out
+}
+
+func eqStr(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func TestManifestInsert(t *testing.T) {
+	orig := mf("a", "b", "c")
+	got := manifestInsert(orig, "x", "X", 1)
+	if !eqStr(files(got), []string{"a", "x", "b", "c"}) {
+		t.Fatalf("insert at 1: %v", files(got))
+	}
+	if got.Items[1].Title != "X" {
+		t.Fatalf("inserted title = %q", got.Items[1].Title)
+	}
+	// clamp
+	if !eqStr(files(manifestInsert(orig, "x", "X", 99)), []string{"a", "b", "c", "x"}) {
+		t.Fatal("insert past end should append")
+	}
+	if !eqStr(files(manifestInsert(orig, "x", "X", -5)), []string{"x", "a", "b", "c"}) {
+		t.Fatal("insert before start should prepend")
+	}
+	// no mutation of the argument
+	if !eqStr(files(orig), []string{"a", "b", "c"}) {
+		t.Fatalf("insert mutated its argument: %v", files(orig))
+	}
+}
+
+func TestManifestRemove(t *testing.T) {
+	orig := mf("a", "b", "c")
+	if !eqStr(files(manifestRemove(orig, "b")), []string{"a", "c"}) {
+		t.Fatal("remove b")
+	}
+	if !eqStr(files(manifestRemove(orig, "zzz")), []string{"a", "b", "c"}) {
+		t.Fatal("removing an absent file should be a no-op")
+	}
+	if !eqStr(files(orig), []string{"a", "b", "c"}) {
+		t.Fatal("remove mutated its argument")
+	}
+}
+
+func TestManifestReorder(t *testing.T) {
+	orig := mf("a", "b", "c", "d")
+	// move c (index 2) up one → index 1
+	if !eqStr(files(manifestReorder(orig, "c", 1)), []string{"a", "c", "b", "d"}) {
+		t.Fatalf("reorder c up: %v", files(manifestReorder(orig, "c", 1)))
+	}
+	// move c down one → index 3 (in the post-removal list)
+	if !eqStr(files(manifestReorder(orig, "c", 3)), []string{"a", "b", "d", "c"}) {
+		t.Fatalf("reorder c down: %v", files(manifestReorder(orig, "c", 3)))
+	}
+	// absent → no-op
+	if !eqStr(files(manifestReorder(orig, "zzz", 0)), []string{"a", "b", "c", "d"}) {
+		t.Fatal("reorder absent should be a no-op")
+	}
+	if !eqStr(files(orig), []string{"a", "b", "c", "d"}) {
+		t.Fatal("reorder mutated its argument")
+	}
+}

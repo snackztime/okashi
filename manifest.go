@@ -135,3 +135,67 @@ func renameChapterTitle(dir, file, newTitle string) error {
 	}
 	return writeManifest(dir, m)
 }
+
+// manifestInsert returns a copy of m with a new {file,title} item inserted at index at (clamped to
+// [0,len]). Callers ensure file is not already listed. The argument is not mutated.
+func manifestInsert(m manifest, file, title string, at int) manifest {
+	if at < 0 {
+		at = 0
+	}
+	if at > len(m.Items) {
+		at = len(m.Items)
+	}
+	items := make([]manifestItem, 0, len(m.Items)+1)
+	items = append(items, m.Items[:at]...)
+	items = append(items, manifestItem{File: file, Title: title})
+	items = append(items, m.Items[at:]...)
+	m.Items = items
+	return m
+}
+
+// manifestRemove returns a copy of m without the item whose File == file (no-op if absent). The
+// argument is not mutated.
+func manifestRemove(m manifest, file string) manifest {
+	items := make([]manifestItem, 0, len(m.Items))
+	for _, it := range m.Items {
+		if it.File != file {
+			items = append(items, it)
+		}
+	}
+	m.Items = items
+	return m
+}
+
+// manifestReorder returns a copy of m with the item File==file moved to index to (clamped) in the
+// list AFTER the item is removed. No-op if file isn't listed. The argument is not mutated.
+func manifestReorder(m manifest, file string, to int) manifest {
+	from := -1
+	for i, it := range m.Items {
+		if it.File == file {
+			from = i
+			break
+		}
+	}
+	if from < 0 {
+		return m
+	}
+	moved := m.Items[from]
+	rest := make([]manifestItem, 0, len(m.Items)-1)
+	for i, it := range m.Items {
+		if i != from {
+			rest = append(rest, it)
+		}
+	}
+	if to < 0 {
+		to = 0
+	}
+	if to > len(rest) {
+		to = len(rest)
+	}
+	out := make([]manifestItem, 0, len(m.Items))
+	out = append(out, rest[:to]...)
+	out = append(out, moved)
+	out = append(out, rest[to:]...)
+	m.Items = out
+	return m
+}
