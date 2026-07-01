@@ -165,9 +165,14 @@ one-line switch here).
 
 ## 8. Sequencing (for the plan)
 
-1. **Manifest writers** (`createManuscript`/`renameChapterTitle`/`writeManifest`) + the one-line
-   okashi `CLAUDE.md` §1 note (no wicklight change — §0). Wire "New Project" (folder+manifest+
-   first chapter) + `r` retitle for manifest chapters, gated to okashi-owned sources.
+1. **Manifest writers** (`createManuscript`/`renameChapterTitle`/`writeManifest`) + the
+   shared-contract doc updates in **BOTH** repos (okashi `CLAUDE.md` §1 **and** wicklight
+   `SPEC.md` / multi-source §4 / project-model §4 — reverse the committed "okashi never writes
+   manifests; the only writers are wicklight's `ManuscriptStore`" line). No wicklight *code*
+   change, but **verify** wicklight reloads an okashi-written manifest (§0). Wire "New Project"
+   (folder+manifest+first chapter) + `r` retitle for manifest chapters — on **any** source
+   incl. the wicklight-shared corpus (create/retitle are no-confirm per §0), and **remove the
+   current `r`-block on manifest chapters** (§5.7).
 2. **Source model** (`source`/`sources.json`/load-merge) + the LIBRARY source picker + `◦ Loose`.
 3. **Home layout** (Recent-on-top strip + inline `+` on LIBRARY/FILES + trailing-slash trigger +
    Browse-only actions). (Reuses the shipped Miller render/hit-test/nav.)
