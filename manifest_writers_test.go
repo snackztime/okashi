@@ -107,3 +107,30 @@ func TestWriteManifestForcesSchemaVersion(t *testing.T) {
 		t.Fatalf("schemaVersion = %d, want %d", m.SchemaVersion, manifestSchemaVersion)
 	}
 }
+
+func TestConfirmCreateNewProjectMakesManuscript(t *testing.T) {
+	root := t.TempDir()
+	m := initialModel() // constructor used by all model tests (e.g. smoke_test.go:369)
+	m.files.root = ""   // allow an arbitrary temp dir as root (smoke_test.go pattern)
+	m.files.SetDir(root)
+	m.creatingFile = true
+	m.creatingFolder = true // the New-Project action
+	m.creatingInPane = true
+	m.nameInput.SetValue("My Novel")
+
+	m.confirmCreate()
+
+	dir := filepath.Join(root, "My Novel")
+	if !hasManifest(dir) {
+		t.Fatalf("New Project should create a manifest at %s", dir)
+	}
+	if m.files.dir != dir {
+		t.Fatalf("pane dir = %q, want %q (should enter the project)", m.files.dir, dir)
+	}
+	if filepath.Base(m.currentFile) != "01-untitled.md" {
+		t.Fatalf("currentFile = %q, want the opened first chapter", m.currentFile)
+	}
+	if m.focus != focusEditor {
+		t.Fatalf("focus = %v, want focusEditor (land writing)", m.focus)
+	}
+}

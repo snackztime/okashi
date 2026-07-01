@@ -1738,18 +1738,28 @@ func (m *model) confirmCreate() {
 
 	if folder {
 		dir := filepath.Join(m.files.dir, name)
+		if explicitFolder {
+			// New Project → a real manuscript (folder + manifest + first chapter you land in).
+			first, err := createManuscript(dir, name, "Untitled")
+			if err != nil {
+				m.status = "couldn't create project: " + err.Error()
+				return
+			}
+			m.files.SetDir(dir)
+			m.loadFile(filepath.Join(dir, first))
+			m.focus = focusEditor
+			m.editor.Focus()
+			m.status = "new project " + name + " — start writing"
+			return
+		}
+		// "name/" convention → a plain category folder; refresh and stay.
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			m.status = "couldn't create folder: " + err.Error()
 			return
 		}
-		if explicitFolder {
-			m.files.SetDir(dir) // New project → enter the folder
-			m.status = "new project " + name
-		} else {
-			m.files.SetDir(m.files.dir) // name/ → refresh, stay
-			m.files.selectName(name)
-			m.status = "created folder " + name
-		}
+		m.files.SetDir(m.files.dir)
+		m.files.selectName(name)
+		m.status = "created folder " + name
 		m.focus = focusSidebar
 		m.editor.Blur()
 		return
