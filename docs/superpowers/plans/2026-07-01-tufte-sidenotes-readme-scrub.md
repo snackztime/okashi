@@ -604,3 +604,220 @@ git commit -m "docs: rewrite README as a standalone product guide with a shortcu
 - **Type consistency:** `footnotesToSidenotes(string) (string, []string)`, `layoutSidenotes(string, []string, int, int) string`, `sidenoteGeometry(int) (int, int, bool)`, `maskCode(string) (string, func(string) string)`, `superscriptRuns(string) []string`, `padTo(string, int) string`, `wrapPlain(string, int) []string`, model field `sidenotesActive bool`, const `sidenoteMinWidth = 90` — used consistently across tasks.
 - **No placeholders in code steps:** every code step carries the actual code. The README's Homebrew/license TBDs are intended deliverable content (external facts), not plan placeholders.
 - **Invariants:** Default + narrow-Tufte preview paths are preserved verbatim in Task 4; the endnote path and `footnotesToEndnotes` behavior are unchanged (Task 2 refactor is behavior-preserving, guarded by its existing tests).
+
+---
+
+## Task 6: Auto-widen the Tufte preview so sidenotes engage by terminal width (follow-up)
+
+**Why:** the shipped gate used `m.preview.Width`, which `layout()` clamps to the writing measure (`min(colWidth, editorArea-2)`, default 72). So sidenotes never appear unless `OKASHI_WIDTH>=92`. Decouple the body **measure** (stays = writing measure) from the preview **pane width** (may grow to hold the margin), so Tufte sidenotes appear on any wide terminal at the default measure. Default mode and narrow-Tufte-endnote output stay identical.
+
+**Files:**
+- Modify: `main.go` (`layout()`, `renderPreview()`, the `WindowSizeMsg` handler at ~935, the model struct, the geometry helpers)
+- Test: `preview_test.go`
+
+**Interfaces:**
+- Consumes: `footnotesToSidenotes`, `layoutSidenotes`, `tufteGlamourStyle`, `effectivePanels`.
+- Produces: `sidenoteGeometry(avail, measure int) (gutter int, ok bool)` (NEW signature); `sidenotePlan(avail, colWidth int, buffer string) (measure, gutter int, body string, notes []string, ok bool)`; model field `previewAvail int`.
+
+- [ ] **Step 1: Update the gate test to the new signature (write failing)**
+
+Replace `TestSidenoteGeometryGate` in preview_test.go with:
+```go
+func TestSidenoteGeometryGate(t *testing.T) {
+	// avail 80, measure 72 → gutter 5 < 18 → no sidenotes.
+	if _, ok := sidenoteGeometry(80, 72); ok {
+		t.Fatalf("avail 80 / measure 72 should not fit a sidenote margin")
+	}
+	// avail 96, measure 72 → gutter 21 → ok, within [18,30].
+	gutter, ok := sidenoteGeometry(96, 72)
+	if !ok {
+		t.Fatalf("avail 96 / measure 72 should fit sidenotes")
+	}
+	if gutter < 18 || gutter > 30 {
+		t.Fatalf("gutter %d out of [18,30]", gutter)
+	}
+	// avail 200 → gutter clamped to 30.
+	if g, _ := sidenoteGeometry(200, 72); g != 30 {
+		t.Fatalf("gutter should clamp to 30, got %d", g)
+	}
+}
+
+func TestSidenotePlanEngagesOnlyWithRoomAndNotes(t *testing.T) {
+	doc := "Alpha[^a] and beta[^b].\n\n[^a]: first\n[^b]: second\n"
+	// Wide pane + footnotes → engaged, body measure stays 72.
+	measure, gutter, _, notes, ok := sidenotePlan(120, 72, doc)
+	if !ok || len(notes) != 2 || measure != 72 || gutter < 18 || gutter > 30 {
+		t.Fatalf("wide+footnotes should engage: measure=%d gutter=%d notes=%d ok=%v", measure, gutter, len(notes), ok)
+	}
+	// Narrow pane → not engaged even with footnotes.
+	if _, _, _, _, ok := sidenotePlan(80, 72, doc); ok {
+		t.Fatalf("narrow pane should not engage sidenotes")
+	}
+	// Wide pane, no footnotes → not engaged.
+	if _, _, _, _, ok := sidenotePlan(120, 72, "just prose\n"); ok {
+		t.Fatalf("no footnotes should not engage sidenotes")
+	}
+}
+```
+
+- [ ] **Step 2: Run to confirm failure**
+
+Run: `/opt/homebrew/bin/go test . -run 'TestSidenoteGeometryGate|TestSidenotePlan' -v`
+Expected: FAIL (signature mismatch / `undefined: sidenotePlan`).
+
+- [ ] **Step 3: Rework the geometry helpers**
+
+In main.go, replace the old `const sidenoteMinWidth = 90` + `sidenoteGeometry(total)` with:
+```go
+const (
+	sidenoteMinGutter = 18
+	sidenoteMaxGutter = 30
+)
+
+// sidenoteGeometry reports the gutter width for a preview pane of `avail` columns holding a body
+// of `measure` columns plus the 3-col " ┆ " gap, and whether a margin (>= sidenoteMinGutter) fits.
+func sidenoteGeometry(avail, measure int) (gutter int, ok bool) {
+	gutter = avail - measure - 3
+	if gutter < sidenoteMinGutter {
+		return 0, false
+	}
+	if gutter > sidenoteMaxGutter {
+		gutter = sidenoteMaxGutter
+	}
+	return gutter, true
+}
+
+// sidenotePlan decides whether the Tufte preview should render margin sidenotes: the body measure
+// stays the writing measure (colWidth), the gutter uses the pane's spare width, and it engages only
+// when the pane is wide enough AND the doc has referenced footnotes. body/notes come from
+// footnotesToSidenotes (body has superscript refs, no endnote section).
+func sidenotePlan(avail, colWidth int, buffer string) (measure, gutter int, body string, notes []string, ok bool) {
+	measure = colWidth
+	if avail > 0 && avail < measure {
+		measure = avail // tiny panes: never exceed the available width
+	}
+	g, gok := sidenoteGeometry(avail, measure)
+	if !gok {
+		return 0, 0, "", nil, false
+	}
+	b, ns := footnotesToSidenotes(buffer)
+	if len(ns) == 0 {
+		return 0, 0, "", nil, false
+	}
+	return measure, g, b, ns, true
+}
+```
+
+- [ ] **Step 4: Store `previewAvail` in `layout()` + add the model field**
+
+Add `previewAvail int` to the model struct (next to `sidenotesActive bool`). In `layout()` (main.go ~1508), after `cw := min(m.colWidth, editorArea-2)`:
+```go
+	m.previewAvail = editorArea - 2
+	if m.previewAvail < 0 {
+		m.previewAvail = 0
+	}
+```
+Keep the existing `m.preview.Width = cw` line (renderPreview overrides it when sidenotes engage; this is the default/fallback width).
+
+- [ ] **Step 5: Rewrite `renderPreview` to use the plan + widen the pane**
+
+Replace `renderPreview` with:
+```go
+func (m *model) renderPreview() {
+	if m.previewTufte {
+		if measure, gutter, body, notes, ok := sidenotePlan(m.previewAvail, m.colWidth, m.editor.Value()); ok {
+			r, err := glamour.NewTermRenderer(glamour.WithStyles(tufteGlamourStyle()), glamour.WithWordWrap(measure))
+			if err != nil {
+				m.status = "preview unavailable: " + err.Error()
+				return
+			}
+			out, err := r.Render(body)
+			if err != nil {
+				m.status = "preview failed: " + err.Error()
+				return
+			}
+			m.preview.Width = measure + 3 + gutter // widen the pane to hold the margin
+			m.preview.SetContent(layoutSidenotes(out, notes, measure, gutter))
+			m.sidenotesActive = true
+			return
+		}
+	}
+	m.sidenotesActive = false
+	wrap := min(m.colWidth, m.previewAvail)
+	if wrap <= 0 {
+		wrap = m.colWidth // pre-layout (previewAvail not set yet)
+	}
+	m.preview.Width = wrap
+	styleOpt := glamour.WithStandardStyle(m.mdStyle)
+	if m.previewTufte {
+		styleOpt = glamour.WithStyles(tufteGlamourStyle())
+	}
+	r, err := glamour.NewTermRenderer(styleOpt, glamour.WithWordWrap(wrap))
+	if err != nil {
+		m.status = "preview unavailable: " + err.Error()
+		return
+	}
+	out, err := r.Render(footnotesToEndnotes(m.editor.Value()))
+	if err != nil {
+		m.status = "preview failed: " + err.Error()
+		return
+	}
+	m.preview.SetContent(out)
+}
+```
+Note: the fallback `wrap = min(colWidth, previewAvail)` equals the old `cw`, so Default and narrow-Tufte output and pane width are identical to before.
+
+- [ ] **Step 6: Re-render the preview on resize (fixes stale/clipped content)**
+
+In the `tea.WindowSizeMsg` handler (main.go ~935–938), after `m.layout()`, add:
+```go
+		if m.previewing {
+			m.renderPreview()
+		}
+```
+This keeps the sidenote pane width in sync when the terminal resizes (previously the content went stale).
+
+- [ ] **Step 7: Run all tests + build + vet**
+
+Run:
+```
+/opt/homebrew/bin/gofmt -w main.go preview.go preview_test.go
+/opt/homebrew/bin/go build ./... && /opt/homebrew/bin/go test ./... && /opt/homebrew/bin/go vet ./...
+```
+Expected: all pass; the two new/updated tests PASS.
+
+- [ ] **Step 8: Commit**
+
+```
+git add main.go preview.go preview_test.go
+git commit -m "feat(preview): auto-widen Tufte preview so sidenotes engage by terminal width"
+```
+
+---
+
+## Task 7: README accuracy — sidenote trigger wording + T5 nits
+
+**Files:**
+- Modify: `README.md`
+
+**Interfaces:** none.
+
+- [ ] **Step 1: Fix the Preview section wording**
+
+The Preview section currently says sidenotes engage "on wide terminals (≥ 90 columns)" and implies a column threshold. Reword to reflect Task 6: in Tufte mode (`t`), when the terminal is wide enough to hold the text plus a margin, footnotes render as **margin sidenotes**; on a narrow terminal they fall back to numbered endnotes. Do NOT mention `OKASHI_WIDTH` as the trigger (it is no longer the gate). The body measure stays the writing measure.
+
+- [ ] **Step 2: Move `ctrl+c` to Navigation**
+
+In the shortcuts table, move the `ctrl+c` (quit) row out of the Writing group into Navigation (or a standalone row). It quits the app, not a writing action.
+
+- [ ] **Step 3: Restore the autosave note**
+
+Add a short line (in Quick start or a small "Saving" note) describing the shipped behavior: okashi autosaves as you write and shows a save indicator; `ctrl+s` saves explicitly. (This shipped feature was dropped in the rewrite.)
+
+- [ ] **Step 4: Verify + commit**
+
+Run: `grep -niE 'inkmere|wicklight' README.md` (must be empty). Eyeball the shortcuts table still matches `helpText` (minus the regrouping) and that the Preview wording matches Task 6 behavior.
+```
+git add README.md
+git commit -m "docs: correct sidenote trigger wording + ctrl+c grouping + autosave note"
+```
