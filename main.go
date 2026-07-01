@@ -189,6 +189,7 @@ type model struct {
 	focus          focus
 	creatingFile   bool
 	creatingFolder bool
+	addingSource   bool // home screen: typing a folder path into nameInput to add a source
 	previewing     bool
 	previewTufte   bool
 	typewriter     bool

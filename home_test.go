@@ -206,6 +206,51 @@ func TestLooseEntryShowsRootDocs(t *testing.T) {
 	}
 }
 
+func TestConfirmAddSourcePersistsAndSwitches(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	t.Cleanup(func() { os.Remove(sourcesPath()) }) // don't pollute shared config for later tests
+	m := initialModel()
+	newDir := t.TempDir()
+
+	m.confirmAddSource(newDir)
+
+	// It was appended, persisted, and became active.
+	last := m.sources[len(m.sources)-1]
+	if last.Kind != sourceKindFolder || last.root() != newDir {
+		t.Fatalf("added source wrong: %+v", last)
+	}
+	if m.activeSource != len(m.sources)-1 {
+		t.Fatalf("adding a source should switch to it, active=%d", m.activeSource)
+	}
+	if len(loadSources(sourcesPath())) < 2 {
+		t.Fatalf("added source should be persisted")
+	}
+}
+
+func TestConfirmAddSourceRejectsUnreachable(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	before := len(m.sources)
+	m.confirmAddSource(filepath.Join(t.TempDir(), "does-not-exist"))
+	if len(m.sources) != before {
+		t.Fatalf("an unreachable path must not be added")
+	}
+}
+
+func TestRemoveActiveSourceKeepsPrimary(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	m.confirmAddSource(t.TempDir()) // now on a folder source
+	m.removeActiveSource()
+	if len(m.sources) != 1 || m.activeSource != 0 {
+		t.Fatalf("removing the active folder source should return to [primary], got %d sources active=%d", len(m.sources), m.activeSource)
+	}
+	m.removeActiveSource() // now on primary — must be a no-op
+	if len(m.sources) != 1 {
+		t.Fatalf("primary must not be removable")
+	}
+}
+
 func TestClassifyLibraryAndFiles(t *testing.T) {
 	ws := t.TempDir()
 	os.MkdirAll(filepath.Join(ws, "my-novel"), 0o755)

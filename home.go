@@ -313,6 +313,26 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ensureVisibleFocus() // a narrower width may have dropped the focused column
 		return m, nil
 	case tea.KeyMsg:
+		// While the add-source prompt is active, capture all input for nameInput.
+		if m.addingSource {
+			switch msg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.addingSource = false
+				m.nameInput.Blur()
+				m.status = "add source cancelled"
+				return m, nil
+			case "enter":
+				m.addingSource = false
+				m.nameInput.Blur()
+				m.confirmAddSource(strings.TrimSpace(m.nameInput.Value()))
+				return m, nil
+			}
+			var cmd tea.Cmd
+			m.nameInput, cmd = m.nameInput.Update(msg)
+			return m, cmd
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -330,6 +350,14 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.homeCycleRegion(-1)
 		case "s":
 			m.cycleSource(1)
+		case "a":
+			m.addingSource = true
+			m.nameInput.SetValue("")
+			m.nameInput.Placeholder = "/path/to/folder"
+			m.nameInput.Focus()
+			return m, textinput.Blink
+		case "d":
+			m.removeActiveSource()
 		case "enter":
 			return m, m.openHomeSelection()
 		}
@@ -794,6 +822,14 @@ func (m model) homeContent() (lines []string, cells []homeCell, blockW int) {
 func (m model) homeView() string {
 	lines, _, blockW := m.homeContent()
 	block := lipgloss.NewStyle().Width(blockW).Render(strings.Join(lines, "\n"))
+	if m.addingSource {
+		prompt := "add source ▸ " + m.nameInput.View()
+		bottom := statusStyle.Width(m.width).Render(prompt)
+		return lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, block),
+			bottom,
+		)
+	}
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, block)
 }
 
@@ -876,6 +912,54 @@ func (m *model) openHomeSelection() tea.Cmd {
 		}
 		return nil
 	}
+}
+
+// confirmAddSource adds path as a folder source (if reachable), persists, switches to it, and
+// rebuilds the library. Ignores an unreachable/duplicate path (addSource dedups by ID).
+func (m *model) confirmAddSource(path string) {
+	s := newFolderSource(path)
+	if !s.reachable() {
+		m.status = "not a folder: " + path
+		return
+	}
+	before := len(m.sources)
+	m.sources = addSource(m.sources, s)
+	if len(m.sources) == before { // dedup: already present → just switch to it
+		for i, e := range m.sources {
+			if e.ID == s.ID {
+				m.activeSource = i
+			}
+		}
+	} else {
+		m.activeSource = len(m.sources) - 1
+	}
+	_ = saveSources(sourcesPath(), m.sources)
+	m.rebuildHome()
+	m.librarySelected = 0
+	m.recomputeHomeFiles()
+	m.resetHomeSelection()
+	m.status = "source added: " + s.Name
+}
+
+// removeActiveSource removes the active source if it is a folder source, persists, and returns
+// to the primary. A no-op (with a status) when the active source is the primary.
+func (m *model) removeActiveSource() {
+	if m.activeSource < 0 || m.activeSource >= len(m.sources) {
+		return
+	}
+	s := m.sources[m.activeSource]
+	if s.Kind == sourceKindPrimary {
+		m.status = "the primary source can't be removed"
+		return
+	}
+	m.sources = removeSource(m.sources, s.ID)
+	m.activeSource = 0
+	_ = saveSources(sourcesPath(), m.sources)
+	m.rebuildHome()
+	m.librarySelected = 0
+	m.recomputeHomeFiles()
+	m.resetHomeSelection()
+	m.status = "source removed: " + s.Name
 }
 
 // startCreate opens the name prompt in file or folder mode.
