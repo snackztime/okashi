@@ -260,6 +260,31 @@ func TestNotesStaysFlat(t *testing.T) {
 	}
 }
 
+func TestRecentStripWindowsToActive(t *testing.T) {
+	t.Setenv("OKASHI_DIR", t.TempDir())
+	m := initialModel()
+	// Many recents so they overflow a narrow strip.
+	var items []homeItem
+	for i := 0; i < 20; i++ {
+		nm := "recentfile-" + string(rune('a'+i)) + ".md"
+		items = append(items, homeItem{kind: homeRecentFile, label: nm, path: "/r/" + nm})
+	}
+	items = append(items, homeItem{kind: homeOpenOther, label: "Browse all files"})
+	m.homeItems = items
+	m.focusAt(regionRecent, 18) // near the end — would fall off the right of a narrow strip
+
+	_, cells := m.recentStrip(40)
+	found := false
+	for _, c := range cells {
+		if c.region == regionRecent && c.index == 18 {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("the active recent (index 18) must be windowed into view, cells=%+v", cells)
+	}
+}
+
 func TestHomeVerticalFlow(t *testing.T) {
 	t.Setenv("OKASHI_DIR", t.TempDir())
 	m := initialModel()

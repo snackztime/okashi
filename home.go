@@ -821,26 +821,43 @@ func (m model) recentStrip(contentW int) ([]string, []innerCell) {
 		return []string{homeDim("(no recent files)")}, nil
 	}
 	const sep = "   "
+	label := func(i int) string { return "› " + rec[i].label }
+
+	// Window horizontally so the active recent is always rendered (and thus clickable): pick the
+	// smallest start index such that rec[start..active] fits in contentW, then fill rightward.
+	active := 0
+	if m.homeRegion == regionRecent {
+		active = clampIdx(m.homeIndex, len(rec))
+	}
+	start := active
+	used := lipgloss.Width(label(active))
+	for start > 0 {
+		w := lipgloss.Width(sep) + lipgloss.Width(label(start-1))
+		if used+w > contentW {
+			break
+		}
+		used += w
+		start--
+	}
+
 	var b strings.Builder
 	var cells []innerCell
 	col := 0
-	for i, r := range rec {
-		label := "› " + r.label
-		w := lipgloss.Width(label)
-		if i > 0 {
-			w += lipgloss.Width(sep)
-		}
-		if col+w > contentW { // no room for this one → stop
-			break
-		}
-		if i > 0 {
+	for i := start; i < len(rec); i++ {
+		lbl := label(i)
+		if i == start {
+			lbl = ansi.Truncate(lbl, contentW, "…") // guarantee the anchor renders even if over-wide
+		} else {
+			if col+lipgloss.Width(sep)+lipgloss.Width(lbl) > contentW {
+				break // no room for this one → stop
+			}
 			b.WriteString(sep)
 			col += lipgloss.Width(sep)
 		}
 		sel := m.homeRegion == regionRecent && m.homeIndex == i
-		b.WriteString(homeLabel(label, sel))
-		cells = append(cells, innerCell{regionRecent, i, 0, col, col + lipgloss.Width(label)})
-		col += lipgloss.Width(label)
+		b.WriteString(homeLabel(lbl, sel))
+		cells = append(cells, innerCell{regionRecent, i, 0, col, col + lipgloss.Width(lbl)})
+		col += lipgloss.Width(lbl)
 	}
 	return []string{b.String()}, cells
 }
@@ -1075,17 +1092,9 @@ func (m *model) openHomeSelection() tea.Cmd {
 		if m.homeIndex >= len(acts) {
 			return nil
 		}
-		switch acts[m.homeIndex].kind {
-		case homeNewDocument:
-			m.files.SetDir(writingDir())
-			m.screen = screenWriting
-			return m.startCreate(false)
-		case homeNewProject:
-			m.files.SetDir(writingDir())
-			m.screen = screenWriting
-			return m.startCreate(true)
-		case homeOpenOther:
-			m.files.SetDir(writingDir())
+		// The only shipped action is Browse (create moved to the inline + on the panels).
+		if acts[m.homeIndex].kind == homeOpenOther {
+			m.files.SetDir(m.activeSourceRoot())
 			m.focus = focusSidebar
 			m.editor.Blur()
 			m.screen = screenWriting

@@ -661,33 +661,38 @@ func TestConfirmCreateFile(t *testing.T) {
 	}
 }
 
-func TestHubNewProjectOpensFolderPrompt(t *testing.T) {
+// Creation moved from the action row to the inline + on the panels. The '+' key on LIBRARY opens
+// a New-Project-style prompt; on FILES a new-document prompt in the current dir.
+func TestHubLibraryPlusOpensProjectPrompt(t *testing.T) {
 	t.Setenv("OKASHI_DIR", t.TempDir())
 	m := initialModel()
-	m.homeItems = []homeItem{{kind: homeNewProject, label: "New project"}}
-	m.resetHomeSelection()
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.focusAt(regionLibrary, 0)
+	m.homeRegion = regionLibrary
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
 	m = nm.(model)
 	if m.screen != screenWriting {
-		t.Fatal("New project should switch to writing")
+		t.Fatal("LIBRARY + should switch to writing")
 	}
 	if !m.creatingFile || !m.creatingFolder {
-		t.Fatal("New project should open the create prompt in folder mode")
+		t.Fatal("LIBRARY + should open the create prompt in New-Project (folder) mode")
+	}
+	if m.files.dir != m.activeSourceRoot() {
+		t.Fatalf("LIBRARY + should root at the active source, got %q", m.files.dir)
 	}
 }
 
-func TestHubNewDocumentOpensFilePrompt(t *testing.T) {
+func TestHubFilesPlusOpensDocPrompt(t *testing.T) {
 	t.Setenv("OKASHI_DIR", t.TempDir())
 	m := initialModel()
-	m.homeItems = []homeItem{{kind: homeNewDocument, label: "New document"}}
-	m.resetHomeSelection()
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m.focusAt(regionLibrary, 0) // select a library item → sets homeFilesDir
+	m.homeRegion = regionFiles
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'+'}})
 	m = nm.(model)
 	if !m.creatingFile || m.creatingFolder {
-		t.Fatal("New document should open the create prompt in file mode")
+		t.Fatal("FILES + should open the create prompt in file (document) mode")
 	}
-	if m.files.dir != writingDir() {
-		t.Fatalf("New document should root at the workspace, got %q", m.files.dir)
+	if m.files.dir != m.homeFilesDir {
+		t.Fatalf("FILES + should root at the current FILES dir %q, got %q", m.homeFilesDir, m.files.dir)
 	}
 }
 
