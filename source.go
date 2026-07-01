@@ -16,7 +16,7 @@ const (
 
 const primarySourceID = "primary"
 
-// source is one library root okashi browses. It mirrors wicklight's Source (id/name/kind/path)
+// source is one library root okashi browses. It mirrors the companion app's Source (id/name/kind/path)
 // so the two apps stay conceptually parallel, though each persists its own file. The primary's
 // Path is empty and resolves to writingDir() at runtime; folder sources carry an absolute path.
 type source struct {

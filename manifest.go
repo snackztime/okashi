@@ -25,7 +25,7 @@ type manifest struct {
 	Items         []manifestItem `json:"items"`
 }
 
-// hasManifest reports whether dir contains a manifest.json — wicklight's manuscript
+// hasManifest reports whether dir contains a manifest.json — the companion app's manuscript
 // marker (design §4: folder with manifest = manuscript).
 func hasManifest(dir string) bool {
 	_, err := os.Stat(filepath.Join(dir, manifestName))
@@ -56,16 +56,16 @@ func readManifest(dir string) (m manifest, present bool, err error) {
 }
 
 // writeManifest serializes m to dir/manifest.json atomically. okashi owns manifest writes for
-// its own AND the wicklight-shared corpus (design §0); the schema is forced to EXACTLY v1 so
-// wicklight reads it verbatim. The serialization matches wicklight's
+// its own AND the shared corpus (design §0); the schema is forced to EXACTLY v1 so
+// the companion app reads it verbatim. The serialization matches the companion app's
 // JSONEncoder(.prettyPrinted, .sortedKeys): alphabetically-sorted keys, 2-space indent, no
 // trailing newline — so when the two apps alternate writes the NSFileVersion diff stays small
 // and legible instead of a whole-file reformat (storage-spine §67-69). Go sorts map keys
-// alphabetically, yielding the same items/schemaVersion/title (and file/title) order Swift emits.
+// alphabetically, yielding the same items/schemaVersion/title (and file/title) order the companion app emits.
 func writeManifest(dir string, m manifest) error {
 	m.SchemaVersion = manifestSchemaVersion
 	// Force a non-nil slice so an empty manuscript serializes as `[]`, not `null` (which
-	// wicklight's [ManifestItem] decode would reject).
+	// the companion app's [ManifestItem] decode would reject).
 	items := m.Items
 	if items == nil {
 		items = []manifestItem{}

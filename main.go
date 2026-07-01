@@ -1789,7 +1789,7 @@ func (m *model) confirmCreate() {
 	}
 
 	if name == manifestName {
-		m.status = "manifest.json is managed by wicklight"
+		m.status = "manifest.json is read-only (managed externally)"
 		return
 	}
 
@@ -1873,7 +1873,7 @@ func (m *model) startRename() {
 	}
 	v := m.files.view
 	if v.source == sourceManifest && v.warning != "" {
-		m.status = "manifest unreadable — structure is managed by wicklight"
+		m.status = "manifest unreadable — structure is read-only (external manifest)"
 		return
 	}
 	if isChapterOf(v, e.name) {
@@ -1908,12 +1908,12 @@ func (m *model) startDelete() {
 		return
 	}
 	if e.name == manifestName {
-		m.status = "manifest.json is managed by wicklight"
+		m.status = "manifest.json is read-only (managed externally)"
 		return
 	}
 	v := m.files.view
 	if isChapterOf(v, e.name) && v.source == sourceManifest {
-		m.status = "chapter files are managed by wicklight"
+		m.status = "chapter files are read-only (external manifest)"
 		return
 	}
 	m.deleting = true
@@ -2005,7 +2005,7 @@ func (m *model) startRenameOutline() {
 	// the guard must precede it.
 	v := resolveManuscript(m.outline.dir, readEntries(m.outline.dir))
 	if v.source == sourceManifest && v.warning != "" {
-		m.status = "manifest unreadable — structure is managed by wicklight"
+		m.status = "manifest unreadable — structure is read-only (external manifest)"
 		return
 	}
 	if row.isSection {
@@ -2063,7 +2063,7 @@ func (m *model) confirmRename() {
 		}
 	}
 	if newName == manifestName {
-		m.status = "manifest.json is managed by wicklight"
+		m.status = "manifest.json is read-only (managed externally)"
 		m.refreshAfterRename()
 		return
 	}

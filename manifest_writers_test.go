@@ -7,11 +7,11 @@ import (
 	"testing"
 )
 
-// TestWriteManifestMatchesWicklightSortedKeys locks okashi's serialization to wicklight's
+// TestWriteManifestSortedKeys locks okashi's serialization to the companion app's
 // JSONEncoder(.sortedKeys) key order + no trailing newline, so the shared corpus doesn't churn
 // when the two apps alternate writes (storage-spine §67-69). Struct-order marshaling would put
 // schemaVersion first; sorted keys put items first.
-func TestWriteManifestMatchesWicklightSortedKeys(t *testing.T) {
+func TestWriteManifestSortedKeys(t *testing.T) {
 	dir := t.TempDir()
 	if err := writeManifest(dir, manifest{Title: "Novel A", Items: []manifestItem{{File: "a.md", Title: "One"}}}); err != nil {
 		t.Fatal(err)
@@ -30,7 +30,7 @@ func TestWriteManifestMatchesWicklightSortedKeys(t *testing.T) {
 		t.Fatalf("item key file should precede top-level schemaVersion (items block first):\n%s", s)
 	}
 	if strings.HasSuffix(s, "\n") {
-		t.Fatalf("manifest must have no trailing newline (matches wicklight JSONEncoder)")
+		t.Fatalf("manifest must have no trailing newline (matches the companion app's JSONEncoder)")
 	}
 	// Still round-trips through the reader.
 	if _, present, rerr := readManifest(dir); rerr != nil || !present {
@@ -63,7 +63,7 @@ func TestWriteManifestNoHTMLEscaping(t *testing.T) {
 }
 
 // TestWriteManifestEmptyItemsIsArray guards the nil-slice→[] fix: an empty manuscript must
-// serialize items as `[]`, never `null` (wicklight decodes a JSON array).
+// serialize items as `[]`, never `null` (the companion app decodes a JSON array).
 func TestWriteManifestEmptyItemsIsArray(t *testing.T) {
 	dir := t.TempDir()
 	if err := writeManifest(dir, manifest{Title: "Empty"}); err != nil {
