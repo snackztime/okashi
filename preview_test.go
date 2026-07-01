@@ -107,3 +107,57 @@ func TestPreviewTufteToggle(t *testing.T) {
 		t.Fatal("t should toggle to the Tufte style")
 	}
 }
+
+func TestLayoutSidenotesAnchorsOnRefRow(t *testing.T) {
+	body := "line zero\nalpha " + superscript(1) + " here\nline two\n"
+	out := layoutSidenotes(body, []string{"the note"}, 20, 12)
+	lines := strings.Split(out, "\n")
+	// The note must appear on the same row as the ¹ marker (row index 1), in the gutter.
+	if !strings.Contains(lines[1], "┆") || !strings.Contains(lines[1], "the note") {
+		t.Fatalf("note not on ref row:\n%s", out)
+	}
+	// Row 0 has a gutter divider but no note text.
+	if !strings.Contains(lines[0], "┆") || strings.Contains(lines[0], "the note") {
+		t.Fatalf("row 0 should be divider-only:\n%s", out)
+	}
+}
+
+func TestLayoutSidenotesCascadeNoOverlap(t *testing.T) {
+	// Two markers on adjacent rows; notes must not land on the same gutter row.
+	body := "a " + superscript(1) + "\nb " + superscript(2) + "\n"
+	out := layoutSidenotes(body, []string{"note one", "note two"}, 10, 12)
+	lines := strings.Split(out, "\n")
+	row1 := -1
+	row2 := -1
+	for i, ln := range lines {
+		if strings.Contains(ln, "note one") {
+			row1 = i
+		}
+		if strings.Contains(ln, "note two") {
+			row2 = i
+		}
+	}
+	if row1 == -1 || row2 == -1 || row1 == row2 {
+		t.Fatalf("notes overlap or missing (row1=%d row2=%d):\n%s", row1, row2, out)
+	}
+}
+
+func TestLayoutSidenotesMarkerIsWholeRun(t *testing.T) {
+	// ¹ must not anchor inside ¹² (note 12's marker).
+	body := "x " + superscript(12) + "\ny " + superscript(1) + "\n"
+	notes := make([]string, 12)
+	for i := range notes {
+		notes[i] = "n" + superscript(i+1)
+	}
+	out := layoutSidenotes(body, notes, 10, 14)
+	lines := strings.Split(out, "\n")
+	// note 1 (n¹) should anchor on row 1 (the y-line), not row 0 (the ¹² line).
+	for i, ln := range lines {
+		if strings.Contains(ln, "n"+superscript(1)) && !strings.Contains(ln, "n"+superscript(12)) {
+			if i == 0 {
+				t.Fatalf("note 1 mis-anchored onto the ¹² row:\n%s", out)
+			}
+			break
+		}
+	}
+}

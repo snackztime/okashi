@@ -8,6 +8,8 @@ import (
 
 	"github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/glamour/styles"
+	"github.com/charmbracelet/lipgloss"
+	xansi "github.com/charmbracelet/x/ansi"
 )
 
 var (
@@ -155,4 +157,130 @@ func tufteGlamourStyle() ansi.StyleConfig {
 	s.Link.Color = sp(sepia)
 	s.Item.Color = sp(ink)
 	return s
+}
+
+var sidenoteDivider = lipgloss.NewStyle().Foreground(lipgloss.Color("#7a6f63")).Render("┆")
+var sidenoteText = lipgloss.NewStyle().Foreground(lipgloss.Color("#704214"))
+
+// padTo pads s with spaces to visible width w (ANSI-aware). Longer strings are returned as-is.
+func padTo(s string, w int) string {
+	n := w - xansi.StringWidth(s)
+	if n <= 0 {
+		return s
+	}
+	return s + strings.Repeat(" ", n)
+}
+
+// superscriptRuns returns the distinct maximal superscript runs on a line (as strings).
+func superscriptRuns(line string) []string {
+	isSup := func(r rune) bool {
+		switch r {
+		case '⁰', '¹', '²', '³', '⁴', '⁵', '⁶', '⁷', '⁸', '⁹':
+			return true
+		}
+		return false
+	}
+	var runs []string
+	var cur strings.Builder
+	for _, r := range line {
+		if isSup(r) {
+			cur.WriteRune(r)
+			continue
+		}
+		if cur.Len() > 0 {
+			runs = append(runs, cur.String())
+			cur.Reset()
+		}
+	}
+	if cur.Len() > 0 {
+		runs = append(runs, cur.String())
+	}
+	return runs
+}
+
+// wrapPlain wraps s to width w on spaces (plain text — note bodies carry no ANSI).
+func wrapPlain(s string, w int) []string {
+	if w < 1 {
+		w = 1
+	}
+	var out []string
+	for _, para := range strings.Split(s, "\n") {
+		words := strings.Fields(para)
+		if len(words) == 0 {
+			out = append(out, "")
+			continue
+		}
+		line := words[0]
+		for _, word := range words[1:] {
+			if len(line)+1+len(word) > w {
+				out = append(out, line)
+				line = word
+			} else {
+				line += " " + word
+			}
+		}
+		out = append(out, line)
+	}
+	return out
+}
+
+// layoutSidenotes composes body (glamour output, wrapped to `measure`) with `notes` floated into
+// a right gutter of `gutter` columns, each anchored to the first row bearing its superscript
+// marker and cascading downward so notes never overlap.
+func layoutSidenotes(body string, notes []string, measure, gutter int) string {
+	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
+	// gutterRows[i] is the note text (already numbered/wrapped) for output row i.
+	gutterRows := map[int]string{}
+	nextFree := 0
+	anchorOf := func(marker string) int {
+		for i, ln := range lines {
+			for _, run := range superscriptRuns(ln) {
+				if run == marker {
+					return i
+				}
+			}
+		}
+		return -1
+	}
+	for n, text := range notes {
+		marker := superscript(n + 1)
+		anchor := anchorOf(marker)
+		if anchor < 0 {
+			anchor = nextFree
+		}
+		start := anchor
+		if start < nextFree {
+			start = nextFree
+		}
+		wrapped := wrapPlain(marker+" "+text, gutter)
+		for j, wl := range wrapped {
+			gutterRows[start+j] = wl
+		}
+		nextFree = start + len(wrapped) + 1 // blank row between notes
+	}
+	// Determine how many rows we render (body rows or further, if a note overflows).
+	maxRow := len(lines) - 1
+	for r := range gutterRows {
+		if r > maxRow {
+			maxRow = r
+		}
+	}
+	var b strings.Builder
+	for i := 0; i <= maxRow; i++ {
+		bodyLine := ""
+		if i < len(lines) {
+			bodyLine = lines[i]
+		}
+		b.WriteString(padTo(bodyLine, measure))
+		b.WriteString(" ")
+		b.WriteString(sidenoteDivider)
+		b.WriteString(" ")
+		if g, ok := gutterRows[i]; ok {
+			b.WriteString(sidenoteText.Render(g))
+		}
+		if i < maxRow {
+			b.WriteString("\n")
+		}
+	}
+	return b.String()
 }
