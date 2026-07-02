@@ -217,6 +217,8 @@ type model struct {
 	colWidth          int
 	smartQuotes       bool
 	sessionBaseline   int // word count when the current file was opened/created
+	now               time.Time
+	sessionStart      time.Time
 	currentFile       string
 	outlineReturnFile string // chapter to return to after editing outline.md (ctrl+l)
 	status            string
@@ -329,6 +331,8 @@ func initialModel() model {
 		appleFindings:  map[string][]grammarFinding{},
 		snippets:       newSnippetCache(),
 		searchInput:    newSearchInput(),
+		now:            time.Now(),
+		sessionStart:   time.Now(),
 	}
 	m.resetHomeSelection()
 	return m
@@ -705,6 +709,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if t, ok := msg.(autosaveTickMsg); ok {
 		now := time.Time(t)
+		m.now = now
 		if m.autosaveDue(now) {
 			m.save()
 		}
@@ -2234,12 +2239,25 @@ func signedComma(n int) string {
 	return "+" + commafy(n)
 }
 
+// fmtDuration renders a duration as M:SS under an hour, H:MM:SS at or above. Negative clamps to 0.
+func fmtDuration(d time.Duration) string {
+	if d < 0 {
+		d = 0
+	}
+	s := int(d.Seconds())
+	h, m, sec := s/3600, (s%3600)/60, s%60
+	if h > 0 {
+		return fmt.Sprintf("%d:%02d:%02d", h, m, sec)
+	}
+	return fmt.Sprintf("%d:%02d", m, sec)
+}
+
 // statsText is the live readout shown on the right of the status bar:
 // total words in the buffer, plus net words added since this file was opened.
 func (m model) statsText() string {
 	words := wordCount(m.editor.Value())
 	delta := words - m.sessionBaseline
-	return fmt.Sprintf("%s words · %s session", commafy(words), signedComma(delta))
+	return fmt.Sprintf("%s words · %s session · ⏱ %s", commafy(words), signedComma(delta), fmtDuration(m.now.Sub(m.sessionStart)))
 }
 
 // statusBar composes the bottom line: the status message on the left, the live

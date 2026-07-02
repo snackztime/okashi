@@ -70,9 +70,9 @@ func TestStatsText(t *testing.T) {
 	m.editor.SetValue("one two three four five")
 	m.sessionBaseline = 2 // as if a 2-word file was open when the session "started"
 
-	want := "5 words · +3 session"
-	if got := m.statsText(); got != want {
-		t.Errorf("statsText() = %q, want %q", got, want)
+	wantPrefix := "5 words · +3 session · ⏱ "
+	if got := m.statsText(); !strings.HasPrefix(got, wantPrefix) {
+		t.Errorf("statsText() = %q, want prefix %q", got, wantPrefix)
 	}
 }
 
@@ -90,8 +90,8 @@ func TestSessionBaselineResetsOnOpen(t *testing.T) {
 	if m.sessionBaseline != 3 {
 		t.Fatalf("baseline after open = %d, want 3", m.sessionBaseline)
 	}
-	if got := m.statsText(); got != "3 words · +0 session" {
-		t.Fatalf("stats after open = %q, want %q", got, "3 words · +0 session")
+	if got := m.statsText(); !strings.HasPrefix(got, "3 words · +0 session · ⏱ ") {
+		t.Fatalf("stats after open = %q, want prefix %q", got, "3 words · +0 session · ⏱ ")
 	}
 }
 
@@ -145,7 +145,7 @@ func TestSessionBaselineResetsOnNewFile(t *testing.T) {
 	if m.sessionBaseline != 0 {
 		t.Fatalf("baseline after new file = %d, want 0", m.sessionBaseline)
 	}
-	if got := m.statsText(); got != "0 words · +0 session" {
-		t.Fatalf("stats after new file = %q, want %q", got, "0 words · +0 session")
+	if got := m.statsText(); !strings.HasPrefix(got, "0 words · +0 session · ⏱ ") {
+		t.Fatalf("stats after new file = %q, want prefix %q", got, "0 words · +0 session · ⏱ ")
 	}
 }
