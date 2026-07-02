@@ -411,6 +411,14 @@ func autosaveTick() tea.Cmd {
 	return tea.Tick(time.Second, func(t time.Time) tea.Msg { return autosaveTickMsg(t) })
 }
 
+// bellCmd rings the terminal bell once. Fired at a pomodoro transition.
+func bellCmd() tea.Cmd {
+	return func() tea.Msg {
+		os.Stdout.Write([]byte{0x07})
+		return nil
+	}
+}
+
 // analysisActionRowY is the inspector body row (content-relative, 0 = tab bar)
 // for the "Check grammar" action button — rendered below the Passive row (10),
 // after a blank row (11), at row 12. Does NOT shift the 5 checkbox rows.
@@ -737,20 +745,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeSaveCtr = 0
 			}
 		}
+		cmds := []tea.Cmd{autosaveTick()}
+		if m.autoRecheckDue(now) {
+			m.checkingGrammar = true
+			m.lastGrammarCheck = now
+			cmds = append(cmds, checkGrammarCmd(m.grammarChecker, m.currentFile, m.editor.Value()))
+		}
 		if m.sprintActive && !m.now.Before(m.sprintEnd) {
 			end, onBreak, active, msg := advanceSprint(m.now, m.sprintEnd, m.sprintOnBreak, 5*time.Minute)
 			m.sprintEnd, m.sprintOnBreak, m.sprintActive = end, onBreak, active
 			m.status = msg
+			cmds = append(cmds, bellCmd())
 		}
 		if m.autosaveDue(now) {
 			m.save()
 		}
-		if m.autoRecheckDue(now) {
-			m.checkingGrammar = true
-			m.lastGrammarCheck = now
-			return m, tea.Batch(checkGrammarCmd(m.grammarChecker, m.currentFile, m.editor.Value()), autosaveTick())
-		}
-		return m, autosaveTick()
+		return m, tea.Batch(cmds...)
 	}
 
 	if msg, ok := msg.(grammarResultMsg); ok {
