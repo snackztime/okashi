@@ -110,7 +110,7 @@ func TestPreviewTufteToggle(t *testing.T) {
 
 func TestLayoutSidenotesAnchorsOnRefRow(t *testing.T) {
 	body := "line zero\nalpha " + superscript(1) + " here\nline two\n"
-	out := layoutSidenotes(body, []string{"the note"}, 20, 12)
+	out := layoutSidenotes(body, []string{"the note"}, 20, 12, false)
 	lines := strings.Split(out, "\n")
 	// The note must appear on the same row as the ¹ marker (row index 1), in the gutter.
 	if !strings.Contains(lines[1], "┆") || !strings.Contains(lines[1], "the note") {
@@ -125,7 +125,7 @@ func TestLayoutSidenotesAnchorsOnRefRow(t *testing.T) {
 func TestLayoutSidenotesCascadeNoOverlap(t *testing.T) {
 	// Two markers on adjacent rows; notes must not land on the same gutter row.
 	body := "a " + superscript(1) + "\nb " + superscript(2) + "\n"
-	out := layoutSidenotes(body, []string{"note one", "note two"}, 10, 12)
+	out := layoutSidenotes(body, []string{"note one", "note two"}, 10, 12, false)
 	lines := strings.Split(out, "\n")
 	row1 := -1
 	row2 := -1
@@ -149,7 +149,7 @@ func TestLayoutSidenotesMarkerIsWholeRun(t *testing.T) {
 	for i := range notes {
 		notes[i] = "n" + superscript(i+1)
 	}
-	out := layoutSidenotes(body, notes, 10, 14)
+	out := layoutSidenotes(body, notes, 10, 14, false)
 	lines := strings.Split(out, "\n")
 	// note 1 (n¹) should anchor on row 1 (the y-line), not row 0 (the ¹² line).
 	for i, ln := range lines {

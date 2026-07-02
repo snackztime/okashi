@@ -124,43 +124,54 @@ func superscript(n int) string {
 func sp(s string) *string { return &s }
 func bp(b bool) *bool     { return &b }
 
-// tufteGlamourStyle is a warm, book-like glamour theme derived from the light style:
-// sepia ink, restrained (markerless) headings, muted quotes/rules.
-func tufteGlamourStyle() ansi.StyleConfig {
+// tuftePalette holds the warm, book-like colors for the Tufte preview, chosen per background so
+// the body reads at full legibility on either theme. `note` is a step subdued from `ink` so
+// sidenotes recede as secondary matter; on dark that means dimmer, on light greyer.
+type tuftePalette struct{ ink, accent, note, muted string }
+
+func tufteColors(dark bool) tuftePalette {
+	if dark {
+		return tuftePalette{ink: "#e6dcc8", accent: "#dbb06a", note: "#ab9974", muted: "#6b6153"}
+	}
+	return tuftePalette{ink: "#3b3228", accent: "#704214", note: "#8a7d6a", muted: "#9b8f80"}
+}
+
+// tufteGlamourStyle is a warm, book-like glamour theme: legible ink for all prose, a warm accent
+// for (markerless) headings and links, muted rules. It derives from the light or dark base style
+// so the body text stays legible on whichever terminal background is in use.
+func tufteGlamourStyle(dark bool) ansi.StyleConfig {
 	s := styles.LightStyleConfig // value copy
-	ink := "#3b3228"
-	muted := "#7a6f63"
-	sepia := "#704214"
+	if dark {
+		s = styles.DarkStyleConfig
+	}
+	p := tufteColors(dark)
 
-	s.Document.Color = sp(ink)
-	s.Text.Color = sp(ink)
-	s.Paragraph.Color = sp(ink)
+	s.Document.Color = sp(p.ink)
+	s.Text.Color = sp(p.ink)
+	s.Paragraph.Color = sp(p.ink)
+	s.Item.Color = sp(p.ink)
+	s.Emph.Color = sp(p.ink)
+	s.Emph.Italic = bp(true)
+	s.Strong.Color = sp(p.ink)
+	s.Strong.Bold = bp(true)
+	s.BlockQuote.Color = sp(p.ink) // legible body colour; the italic sets it apart
+	s.BlockQuote.Italic = bp(true)
 
-	s.Heading.Color = sp(sepia)
+	s.Heading.Color = sp(p.accent)
 	s.Heading.Bold = bp(true)
 	s.H1.BackgroundColor = nil // drop the heavy colored block
-	s.H1.Color = sp(sepia)
+	s.H1.Color = sp(p.accent)
 	s.H1.Bold = bp(true)
 	s.H1.Prefix = ""
 	for _, h := range []*ansi.StyleBlock{&s.H2, &s.H3, &s.H4, &s.H5, &s.H6} {
 		h.Prefix = "" // markerless headings (the book look)
-		h.Color = sp(sepia)
+		h.Color = sp(p.accent)
 		h.Bold = bp(true)
 	}
-	s.BlockQuote.Color = sp(muted)
-	s.BlockQuote.Italic = bp(true)
-	s.Emph.Italic = bp(true)
-	s.Emph.Color = sp(ink)
-	s.Strong.Bold = bp(true)
-	s.Strong.Color = sp(ink)
-	s.HorizontalRule.Color = sp(muted)
-	s.Link.Color = sp(sepia)
-	s.Item.Color = sp(ink)
+	s.HorizontalRule.Color = sp(p.muted)
+	s.Link.Color = sp(p.accent)
 	return s
 }
-
-var sidenoteDivider = lipgloss.NewStyle().Foreground(lipgloss.Color("#7a6f63")).Render("┆")
-var sidenoteText = lipgloss.NewStyle().Foreground(lipgloss.Color("#704214"))
 
 // padTo pads s with spaces to visible width w (ANSI-aware). Longer strings are returned as-is.
 func padTo(s string, w int) string {
@@ -227,7 +238,10 @@ func wrapPlain(s string, w int) []string {
 // layoutSidenotes composes body (glamour output, wrapped to `measure`) with `notes` floated into
 // a right gutter of `gutter` columns, each anchored to the first row bearing its superscript
 // marker and cascading downward so notes never overlap.
-func layoutSidenotes(body string, notes []string, measure, gutter int) string {
+func layoutSidenotes(body string, notes []string, measure, gutter int, dark bool) string {
+	p := tufteColors(dark)
+	divider := lipgloss.NewStyle().Foreground(lipgloss.Color(p.muted)).Render("┆")
+	noteStyle := lipgloss.NewStyle().Foreground(lipgloss.Color(p.note))
 	lines := strings.Split(strings.TrimRight(body, "\n"), "\n")
 	// gutterRows[i] is the note text (already numbered/wrapped) for output row i.
 	gutterRows := map[int]string{}
@@ -273,10 +287,10 @@ func layoutSidenotes(body string, notes []string, measure, gutter int) string {
 		}
 		b.WriteString(padTo(bodyLine, measure))
 		b.WriteString(" ")
-		b.WriteString(sidenoteDivider)
+		b.WriteString(divider)
 		b.WriteString(" ")
 		if g, ok := gutterRows[i]; ok {
-			b.WriteString(sidenoteText.Render(g))
+			b.WriteString(noteStyle.Render(g))
 		}
 		if i < maxRow {
 			b.WriteString("\n")

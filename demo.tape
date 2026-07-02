@@ -45,7 +45,24 @@ Sleep 1.5s
 Down
 Sleep 0.8s
 Enter
-Sleep 3s
+Sleep 2.5s
+
+# Collapse the file panel for a full-width writing surface.
+Ctrl+B
+Sleep 2s
+
+# Open the inspector and cycle its tabs: Words -> Outline -> Goals -> Analysis;
+# a fifth Ctrl+Y closes it again.
+Ctrl+Y
+Sleep 2s
+Ctrl+Y
+Sleep 2s
+Ctrl+Y
+Sleep 2s
+Ctrl+Y
+Sleep 2s
+Ctrl+Y
+Sleep 1s
 
 # Markdown preview, then the Tufte book view: the chapter's footnotes float into
 # margin sidenotes (the pane widens; the prose stays at the 72-col measure).

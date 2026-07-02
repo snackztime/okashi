@@ -2180,7 +2180,7 @@ func sidenotePlan(avail, colWidth int, buffer string) (measure, gutter int, body
 func (m *model) renderPreview() {
 	if m.previewTufte {
 		if measure, gutter, body, notes, ok := sidenotePlan(m.previewAvail, m.colWidth, m.editor.Value()); ok {
-			r, err := glamour.NewTermRenderer(glamour.WithStyles(tufteGlamourStyle()), glamour.WithWordWrap(measure))
+			r, err := glamour.NewTermRenderer(glamour.WithStyles(tufteGlamourStyle(m.mdStyle == "dark")), glamour.WithWordWrap(measure))
 			if err != nil {
 				m.status = "preview unavailable: " + err.Error()
 				return
@@ -2191,7 +2191,7 @@ func (m *model) renderPreview() {
 				return
 			}
 			m.preview.Width = measure + 3 + gutter // widen the pane to hold the margin
-			m.preview.SetContent(layoutSidenotes(out, notes, measure, gutter))
+			m.preview.SetContent(layoutSidenotes(out, notes, measure, gutter, m.mdStyle == "dark"))
 			m.sidenotesActive = true
 			return
 		}
@@ -2204,7 +2204,7 @@ func (m *model) renderPreview() {
 	m.preview.Width = wrap
 	styleOpt := glamour.WithStandardStyle(m.mdStyle)
 	if m.previewTufte {
-		styleOpt = glamour.WithStyles(tufteGlamourStyle())
+		styleOpt = glamour.WithStyles(tufteGlamourStyle(m.mdStyle == "dark"))
 	}
 	r, err := glamour.NewTermRenderer(styleOpt, glamour.WithWordWrap(wrap))
 	if err != nil {
