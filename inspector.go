@@ -143,7 +143,10 @@ type projStats struct {
 	manuscript      bool
 }
 
-type goalStats struct{ today, dailyGoal, project, projectGoal, sessionSecs, sessionGoalMin int }
+type goalStats struct {
+	today, dailyGoal, project, projectGoal, sessionSecs, sessionGoalMin, todayActiveSecs int
+	idle                                                                                 bool
+}
 
 type analysisState struct{ spell, grammar, adverb, adjective, passive bool }
 
@@ -322,10 +325,15 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 			b.WriteString("  " + progressBar(goals.project, goals.projectGoal, max(4, width-10)) + "\n")
 			b.WriteString("  " + fmt.Sprintf("%s / %s", commafy(goals.project), commafy(goals.projectGoal)))
 		}
-		b.WriteString("\n\n" + sectionHeader("Session", width) + "\n")
-		b.WriteString("  Elapsed  " + fmtDuration(time.Duration(goals.sessionSecs)*time.Second) + "\n")
+		b.WriteString("\n\n" + sectionHeader("Time", width) + "\n")
+		sess := "  Session   " + fmtDuration(time.Duration(goals.sessionSecs)*time.Second)
+		if goals.idle {
+			sess += " ⏸"
+		}
+		b.WriteString(sess + "\n")
 		if goals.sessionGoalMin > 0 {
-			mins := goals.sessionSecs / 60
+			mins := goals.todayActiveSecs / 60
+			b.WriteString("  Today\n")
 			b.WriteString("  " + progressBar(mins, goals.sessionGoalMin, max(4, width-10)) + "\n")
 			b.WriteString("  " + fmt.Sprintf("%d / %d min\n", mins, goals.sessionGoalMin))
 			if mins >= goals.sessionGoalMin {
@@ -333,6 +341,8 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 			} else {
 				b.WriteString("  " + lipgloss.NewStyle().Foreground(subtle).Render(fmt.Sprintf("%d min to go", goals.sessionGoalMin-mins)))
 			}
+		} else {
+			b.WriteString("  Today     " + fmtDuration(time.Duration(goals.todayActiveSecs)*time.Second) + "\n")
 		}
 	default: // tabWords
 		b.WriteString(sectionHeader("Document", width) + "\n")

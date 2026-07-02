@@ -219,7 +219,6 @@ type model struct {
 	smartQuotes       bool
 	sessionBaseline   int // word count when the current file was opened/created
 	now               time.Time
-	sessionStart      time.Time
 	activeSecs        int
 	activeSaveCtr     int
 	sprintActive      bool
@@ -260,7 +259,7 @@ type model struct {
 	exportPrompt bool
 
 	goalsAll        map[string]projectGoals
-	goalPromptField int // 0 off, 1 daily, 2 project, 3 session
+	goalPromptField int // 0 off, 1 daily words, 2 project words, 3 daily minutes
 
 	analysis analysisState
 
@@ -338,7 +337,6 @@ func initialModel() model {
 		snippets:       newSnippetCache(),
 		searchInput:    newSearchInput(),
 		now:            time.Now(),
-		sessionStart:   time.Now(),
 	}
 	m.resetHomeSelection()
 	return m
@@ -1509,7 +1507,8 @@ func (m model) View() string {
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
 		pg := m.goalsAll[m.files.dir].applyEnvDefaults()
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal,
-			sessionSecs: int(m.now.Sub(m.sessionStart).Seconds()), sessionGoalMin: pg.SessionGoalMin}
+			sessionSecs: m.activeSecs, sessionGoalMin: pg.SessionGoalMin,
+			todayActiveSecs: pg.ActiveSecsToday, idle: !isWritingActive(m.now, m.lastEditAt, activeIdle)}
 		m.inspector.grammarBackend = ""
 		if m.grammarChecker != nil {
 			m.inspector.grammarBackend = m.grammarChecker.Name()
@@ -2405,7 +2404,7 @@ func (m model) statusBar() string {
 		return "project goal ▸ " + m.nameInput.View()
 	}
 	if m.goalPromptField == 3 {
-		return "session minutes ▸ " + m.nameInput.View()
+		return "daily minutes ▸ " + m.nameInput.View()
 	}
 	if m.exportPrompt {
 		return "export: m manuscript · t tufte · esc cancel"

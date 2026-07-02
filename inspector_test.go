@@ -339,9 +339,12 @@ func TestFramedPanelAction(t *testing.T) {
 
 func TestInspectorGoalsSessionSection(t *testing.T) {
 	in := inspectorModel{visible: true, tab: tabGoals}
-	out := ansi.Strip(in.View(28, docStats{}, projStats{}, "", goalStats{sessionSecs: 600, sessionGoalMin: 30}, analysisState{}))
-	if !strings.Contains(out, "SESSION") || !strings.Contains(out, "10 / 30 min") {
-		t.Fatalf("expected a SESSION section with 10/30 min, got:\n%s", out)
+	out := ansi.Strip(in.View(28, docStats{}, projStats{}, "", goalStats{sessionSecs: 300, todayActiveSecs: 600, sessionGoalMin: 30, idle: true}, analysisState{}))
+	if !strings.Contains(out, "TIME") || !strings.Contains(out, "10 / 30 min") {
+		t.Fatalf("expected a TIME section with 10/30 min, got:\n%s", out)
+	}
+	if !strings.Contains(out, "⏸") {
+		t.Fatalf("idle should show ⏸, got:\n%s", out)
 	}
 }
 
