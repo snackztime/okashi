@@ -64,12 +64,17 @@ Sleep 2s
 Ctrl+Y
 Sleep 1s
 
-# Markdown preview, then the Tufte book view: the chapter's footnotes float into
-# margin sidenotes (the pane widens; the prose stays at the 72-col measure).
+# Markdown preview, then the Tufte book view (warm, markerless headings). Scroll down
+# to reveal the footnotes rendered as numbered endnotes at the foot of the chapter.
 Ctrl+P
 Sleep 2.5s
 Type "t"
-Sleep 5s
+Sleep 3s
+Down
+Down
+Down
+Down
+Sleep 3.5s
 
 # Back to editing, then quit.
 Ctrl+P

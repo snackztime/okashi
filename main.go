@@ -201,18 +201,17 @@ type model struct {
 	searchHighlight string // transient: highlight this query on the editor's visible lines
 	searchReturn    screen // where ctrl+f was invoked from (esc returns here)
 
-	sidebarVisible  bool
-	inspector       inspectorModel
-	focus           focus
-	creatingFile    bool
-	creatingFolder  bool
-	addingSource    bool // home screen: typing a folder path into nameInput to add a source
-	previewing      bool
-	previewTufte    bool
-	sidenotesActive bool
-	previewAvail    int
-	typewriter      bool
-	dimEnabled      bool
+	sidebarVisible bool
+	inspector      inspectorModel
+	focus          focus
+	creatingFile   bool
+	creatingFolder bool
+	addingSource   bool // home screen: typing a folder path into nameInput to add a source
+	previewing     bool
+	previewTufte   bool
+	previewAvail   int
+	typewriter     bool
+	dimEnabled     bool
 
 	mdStyle           string // glamour theme, detected once at startup
 	colWidth          int
@@ -1415,9 +1414,6 @@ func (m model) View() string {
 		style := "Default"
 		if m.previewTufte {
 			style = "Tufte"
-			if m.sidenotesActive {
-				style = "Tufte · sidenotes"
-			}
 		}
 		header := breadcrumbStyle.Render("▌ PREVIEW · "+name) + lipgloss.NewStyle().Foreground(subtle).Render("  · "+style+" (t)")
 		pane = lipgloss.JoinVertical(lipgloss.Left, header, m.preview.View())
@@ -2137,6 +2133,10 @@ func (m *model) togglePreview() {
 	m.status = "preview (read-only) · ctrl+p edit · t style · ↑/↓ scroll"
 }
 
+// NOTE: the sidenote helpers below (sidenoteGeometry, sidenotePlan, and in preview.go
+// footnotesToSidenotes / layoutSidenotes) are DORMANT — the Tufte preview now renders footnotes
+// as bottom endnotes. They are retained (with tests) to seed the planned margin/revision-notes
+// feature, which will reuse the right-margin gutter for author annotations. Not currently wired.
 const (
 	sidenoteMinGutter = 18
 	sidenoteMaxGutter = 30
@@ -2178,25 +2178,6 @@ func sidenotePlan(avail, colWidth int, buffer string) (measure, gutter int, body
 // renderPreview rebuilds the preview viewport from the buffer: footnotes folded to endnotes
 // (glamour can't render them), styled Default (the detected theme) or Tufte.
 func (m *model) renderPreview() {
-	if m.previewTufte {
-		if measure, gutter, body, notes, ok := sidenotePlan(m.previewAvail, m.colWidth, m.editor.Value()); ok {
-			r, err := glamour.NewTermRenderer(glamour.WithStyles(tufteGlamourStyle(m.mdStyle == "dark")), glamour.WithWordWrap(measure))
-			if err != nil {
-				m.status = "preview unavailable: " + err.Error()
-				return
-			}
-			out, err := r.Render(body)
-			if err != nil {
-				m.status = "preview failed: " + err.Error()
-				return
-			}
-			m.preview.Width = measure + 3 + gutter // widen the pane to hold the margin
-			m.preview.SetContent(layoutSidenotes(out, notes, measure, gutter, m.mdStyle == "dark"))
-			m.sidenotesActive = true
-			return
-		}
-	}
-	m.sidenotesActive = false
 	wrap := min(m.colWidth, m.previewAvail)
 	if wrap <= 0 {
 		wrap = m.colWidth // pre-layout (previewAvail not set yet)
