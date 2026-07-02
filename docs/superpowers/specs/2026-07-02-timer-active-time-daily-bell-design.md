@@ -97,9 +97,10 @@ dir's daily total, and persist ~once a minute:
 		}
 	}
 ```
-Add model field `activeSaveCtr int`. **Also persist on quit:** in the `ctrl+c` / `tea.Quit` path
-(the editor-screen quit and the other `ctrl+c` handlers), call `saveGoals(goalsPath(), m.goalsAll)`
-before returning `tea.Quit`, so the last <60 s isn't lost.
+Add model field `activeSaveCtr int`. **No persist-on-quit** — okashi has many `ctrl+c`/`tea.Quit`
+sites (each prompt handles its own), so the ~1/min cadence is the single, uniform persistence path;
+a quit loses at most the last <60 s of accumulated active time. (Persist-on-quit is a possible
+later nicety.)
 
 **Tests (`goals_test.go`):** `rolloverActive` resets `ActiveSecsToday`+sets `TimeDay` on a date
 change and is a no-op same-day; `ActiveSecsToday`/`TimeDay` round-trip through `saveGoals`/`loadGoals`.
