@@ -221,6 +221,7 @@ type model struct {
 	now               time.Time
 	sessionStart      time.Time
 	activeSecs        int
+	activeSaveCtr     int
 	sprintActive      bool
 	sprintEnd         time.Time
 	sprintOnBreak     bool
@@ -725,6 +726,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.now = now
 		if isWritingActive(m.now, m.lastEditAt, activeIdle) {
 			m.activeSecs++
+			if m.goalsAll == nil {
+				m.goalsAll = map[string]projectGoals{}
+			}
+			pg := m.goalsAll[m.files.dir]
+			pg, _ = rolloverActive(pg, today())
+			pg.ActiveSecsToday++
+			m.goalsAll[m.files.dir] = pg
+			m.activeSaveCtr++
+			if m.activeSaveCtr >= 60 {
+				saveGoals(goalsPath(), m.goalsAll)
+				m.activeSaveCtr = 0
+			}
 		}
 		if m.sprintActive && !m.now.Before(m.sprintEnd) {
 			end, onBreak, active, msg := advanceSprint(m.now, m.sprintEnd, m.sprintOnBreak, 5*time.Minute)

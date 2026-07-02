@@ -68,3 +68,25 @@ func TestSessionGoalRoundTrips(t *testing.T) {
 		t.Fatalf("SessionGoalMin round-trip = %d, want 30", got["/p"].SessionGoalMin)
 	}
 }
+
+func TestRolloverActive(t *testing.T) {
+	pg := projectGoals{TimeDay: "2026-07-01", ActiveSecsToday: 900}
+	got, changed := rolloverActive(pg, "2026-07-02")
+	if !changed || got.ActiveSecsToday != 0 || got.TimeDay != "2026-07-02" {
+		t.Fatalf("date change should reset: %+v changed=%v", got, changed)
+	}
+	same, changed2 := rolloverActive(got, "2026-07-02")
+	if changed2 || same.ActiveSecsToday != 0 {
+		t.Fatalf("same day should be a no-op: %+v changed=%v", same, changed2)
+	}
+}
+
+func TestActiveSecsTodayRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "goals.json")
+	saveGoals(path, map[string]projectGoals{"/p": {ActiveSecsToday: 1234, TimeDay: "2026-07-02"}})
+	got := loadGoals(path)
+	if got["/p"].ActiveSecsToday != 1234 || got["/p"].TimeDay != "2026-07-02" {
+		t.Fatalf("round-trip lost active time: %+v", got["/p"])
+	}
+}

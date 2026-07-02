@@ -11,12 +11,14 @@ import (
 // projectGoals is one project's goal state, stored in the global goals.json
 // keyed by project dir path.
 type projectGoals struct {
-	DailyGoal      int    `json:"dailyGoal"`
-	ProjectGoal    int    `json:"projectGoal"`
-	SessionGoalMin int    `json:"sessionGoalMin"`
-	SprintMin      int    `json:"sprintMin"`
-	DayBaseline    int    `json:"dayBaseline"`
-	Day            string `json:"day"`
+	DailyGoal       int    `json:"dailyGoal"`
+	ProjectGoal     int    `json:"projectGoal"`
+	SessionGoalMin  int    `json:"sessionGoalMin"`
+	SprintMin       int    `json:"sprintMin"`
+	DayBaseline     int    `json:"dayBaseline"`
+	Day             string `json:"day"`
+	ActiveSecsToday int    `json:"activeSecsToday"`
+	TimeDay         string `json:"timeDay"`
 }
 
 func goalsPath() string {
@@ -74,6 +76,16 @@ func (pg projectGoals) applyEnvDefaults() projectGoals {
 }
 
 func today() string { return time.Now().Format("2006-01-02") }
+
+// rolloverActive resets the daily active-time accumulator when the date changed.
+func rolloverActive(pg projectGoals, today string) (projectGoals, bool) {
+	if pg.TimeDay != today {
+		pg.TimeDay = today
+		pg.ActiveSecsToday = 0
+		return pg, true
+	}
+	return pg, false
+}
 
 // rolloverIfNeeded resets the daily baseline when the date changed; changed=true
 // means the caller should persist.
