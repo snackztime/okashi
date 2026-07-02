@@ -111,5 +111,5 @@ func appleGrammarChecker() grammarChecker
 ## Shared-contract note
 
 This adds NO on-disk format and touches no manifest/markdown-flavor contract — it's a local,
-read-only analysis backend. No `../inkmere` mirroring required. (If the macOS app later wants
+read-only analysis backend. No companion-app mirroring required. (If the companion macOS app later wants
 the same backend, the Swift/ObjC bridges are reusable, but that's the app's concern.)

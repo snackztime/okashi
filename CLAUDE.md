@@ -4,9 +4,9 @@ Terminal writing app for long-form manuscripts and prose. Go + Bubble Tea (Elm-s
 Model/Update/View) + lipgloss. Two real roles:
 
 1. **A shipped product** — the CLI/agent face of a plain-`.md` writing corpus.
-2. **The scope oracle** for the sibling macOS app (`../inkmere`). The app matches okashi's
+2. **The scope oracle** for a companion macOS app. The companion app matches okashi's
    feature set; okashi defines what "lean" means. The shared design + contracts reference
-   lives in that repo's `SPEC.md`.
+   lives in the companion app's repo.
 
 > **Reconciled 2026-06-26** against the shipped okashi; **updated 2026-06-26** (manifest
 > reconciliation — Tasks 1–6). An earlier draft described an aspirational architecture
@@ -101,15 +101,15 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 
 ---
 
-## ⚠️ SHARED CONTRACTS — MIRROR THIS BLOCK IN `../inkmere`
+## ⚠️ SHARED CONTRACTS — keep aligned with the companion app
 
-okashi and the macOS app operate the **same on-disk corpus**. Keep this block aligned across
-both repos.
+okashi and the companion macOS app operate the **same on-disk corpus**. Keep this block aligned
+with the companion app's copy.
 
 ### 1. Manuscript ordering & membership — RESOLVED (2026-06-26)
 - **RESOLVED (2026-06-26); okashi became a writer (2026-06-30):** order, membership, and display
-  titles live in the shared per-manuscript `manifest.json` (see
-  `../inkmere/docs/superpowers/specs/2026-06-26-storage-spine-design.md` §2.1 and §6). okashi
+  titles live in the shared per-manuscript `manifest.json` (see the companion app's storage-spine
+  design doc, §2.1 and §6). okashi
   **reads and writes** it (create + chapter-title retitle, and **structure mode** reorder / insert /
   remove with a commit confirm; cross-container move via the file mover is planned):
   - **Manifest manuscript** (folder with `manifest.json`): `items` order is canonical;
@@ -130,8 +130,8 @@ both repos.
 - **Authority (revised 2026-07-01):** **both apps write the shared manifest.** okashi creates
   manuscripts (New Project) and retitles chapter display titles (`r` on a manifest chapter →
   `items[].title`, no-confirm); **structure mode** (SHIPPED) reorders / inserts / removes chapters
-  behind a commit **confirmation** (`s` from the binder), mirroring wicklight's own confirm sheet.
-  Cross-container **move** (into/out of a manuscript) via the file mover is planned. wicklight owns
+  behind a commit **confirmation** (`s` from the binder), mirroring the companion app's own confirm sheet.
+  Cross-container **move** (into/out of a manuscript) via the file mover is planned. The companion app owns
   the app-side structural writers (`ManuscriptStore.reorder`/`.move`/insert).
   Safety for the shared corpus = atomic writes + `NSFileVersion`; each writer read-modify-writes.
   `r` on a legacy (manifest-less) numbered chapter still does a prefix-preserving file rename (O1).
@@ -196,4 +196,4 @@ both repos.
 - Adopted & shipped: **atomic writes** (pending earlier, now in `save()` + export), **GFM +
   footnotes** in the export parser (shipped with Tasks 1–3 of the 2026-06-22 export refactor),
   and **okashi as a manifest writer** (create + chapter-title retitle; 2026-06-30, shared-contract
-  change mirrored in `../inkmere`).
+  change mirrored in the companion app).

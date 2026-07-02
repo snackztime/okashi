@@ -4,7 +4,7 @@
 
 **Goal:** Make okashi a manifest *writer* — "New Project" creates a real manuscript (folder + `manifest.json` + first chapter you land in), `r` retitles a manifest chapter, and the file pane reads its container's name — then reflect the reversed authority in both repos' contracts.
 
-**Architecture:** Add three pure writers to `manifest.go` (`writeManifest`, `createManuscript`, `renameChapterTitle`) built on the existing `atomicWrite`. Wire them into the two existing UI paths (`confirmCreate` for New Project, the `startRename`/`confirmRename` machinery for retitle), replacing the current "managed by wicklight" refusals. Add a one-method file-pane label. Close with the shared-contract doc updates in okashi **and** wicklight.
+**Architecture:** Add three pure writers to `manifest.go` (`writeManifest`, `createManuscript`, `renameChapterTitle`) built on the existing `atomicWrite`. Wire them into the two existing UI paths (`confirmCreate` for New Project, the `startRename`/`confirmRename` machinery for retitle), replacing the current "managed externally" refusals. Add a one-method file-pane label. Close with the shared-contract doc updates in okashi **and** the companion app.
 
 **Tech Stack:** Go 1.25 (`/opt/homebrew/bin/go`), `encoding/json`, existing `atomicWrite` (`atomicwrite.go`), existing `slugify` (`outline.go`), existing `resolveManuscript`/`manuscriptView` (`manuscript.go`).
 
@@ -14,9 +14,9 @@
 - **Manifest schema is EXACTLY v1** — struct is `{schemaVersion:1, title, items:[{file, title}]}` (`manifest`/`manifestItem` in `manifest.go`). No new fields. Any schema change is a HARD-GATE that STOPS work (CLAUDE.md §1 / spec §0).
 - **All manifest writes go through `atomicWrite`** (temp-then-rename). Never write a manifest in place.
 - **Read-modify-write** before any edit to an *existing* manifest: re-read immediately before writing so okashi rewrites the latest on-disk state (spec §0).
-- **Authority (spec §0):** create + chapter-title retitle are **no-confirm** and allowed on **any** source, including the wicklight-shared corpus. Structural edits (reorder/insert/move) are NOT in this step.
+- **Authority (spec §0):** create + chapter-title retitle are **no-confirm** and allowed on **any** source, including the companion app's shared corpus. Structural edits (reorder/insert/move) are NOT in this step.
 - **Default build stays pure-Go.** No new dependencies.
-- **Keep it lean** — surface area here propagates to wicklight.
+- **Keep it lean** — surface area here propagates to the companion app.
 
 ---
 
@@ -160,8 +160,8 @@ Append to `manifest.go` (after line 55). Add `"os"` is already imported; `fmt`, 
 
 ```go
 // writeManifest serializes m to dir/manifest.json atomically, pretty-printed with a
-// trailing newline. okashi owns manifest writes for its own AND the wicklight-shared
-// corpus (design §0); the schema is forced to EXACTLY v1 so wicklight reads it verbatim.
+// trailing newline. okashi owns manifest writes for its own AND the companion app's shared
+// corpus (design §0); the schema is forced to EXACTLY v1 so the companion app reads it verbatim.
 func writeManifest(dir string, m manifest) error {
 	m.SchemaVersion = manifestSchemaVersion
 	data, err := json.MarshalIndent(m, "", "  ")
@@ -345,7 +345,7 @@ git commit -m "feat: New Project creates a manuscript and opens its first chapte
 - Consumes: `renameChapterTitle` (Task 1); `m.files.chapterTitle`, `m.outline.chapterTitle` (existing); `m.beginRename`, `m.refreshAfterRename`, `renameTarget` (existing).
 - Produces: `renameTarget` gains a `manifestChapter bool`; manifest chapters retitle instead of refusing.
 
-**Context:** Manifest chapters currently REFUSE rename ("chapter titles are managed by wicklight") in two entry points. Legacy chapters do a *file* rename via `sectionRetitle` (prefix-preserving) — that path is unchanged. The manifest path is different in kind: edit the title field, keep the filename. A new `manifestChapter` flag routes `confirmRename` to `renameChapterTitle`.
+**Context:** Manifest chapters currently REFUSE rename ("chapter titles are managed externally") in two entry points. Legacy chapters do a *file* rename via `sectionRetitle` (prefix-preserving) — that path is unchanged. The manifest path is different in kind: edit the title field, keep the filename. A new `manifestChapter` flag routes `confirmRename` to `renameChapterTitle`.
 
 - [ ] **Step 1: Add the flag to `renameTarget`**
 
@@ -585,52 +585,51 @@ git commit -m "feat: file-pane header reads project/folder name or Files"
 
 **Files:**
 - Modify: `CLAUDE.md` (okashi) — Project model + SHARED CONTRACTS §1
-- Modify (wicklight, `../inkmere`): `SPEC.md`, `docs/superpowers/specs/2026-06-27-multi-source-library-design.md` (§4), `docs/superpowers/specs/2026-06-27-project-model-design.md` (§4) — wherever the "okashi never writes manifests" line lives
+- Modify (companion app's repo): the companion app's `SPEC.md` and its multi-source-library and project-model design docs (§4 in each) — wherever the "okashi never writes manifests" line lives
 - No test (docs + manual verification)
 
 **Interfaces:**
 - Consumes: nothing (documentation). This is the HARD-GATE mirror step required by spec §0.
 - Produces: both repos' contracts state okashi is a manifest writer (create/retitle no-confirm; structural edits confirm, deferred).
 
-**Context:** okashi's code now writes manifests. Both repos currently say it never does. spec §0 mandates reversing this in BOTH repos together. This is documentation only — **no wicklight code change** — but you MUST verify wicklight picks up an okashi-written manifest.
+**Context:** okashi's code now writes manifests. Both repos currently say it never does. spec §0 mandates reversing this in BOTH repos together. This is documentation only — **no companion-app code change** — but you MUST verify the companion app picks up an okashi-written manifest.
 
 - [ ] **Step 1: Find every "okashi never writes" assertion in both repos**
 
 Run:
 ```bash
-grep -rn "never writes\|okashi reads\|only writers\|ManuscriptStore\|wicklight owns it\|manifest is managed" /Users/michael/dev/okashi/CLAUDE.md /Users/michael/dev/inkmere/SPEC.md /Users/michael/dev/inkmere/docs/superpowers/specs/2026-06-27-multi-source-library-design.md /Users/michael/dev/inkmere/docs/superpowers/specs/2026-06-27-project-model-design.md
+grep -rn "never writes\|okashi reads\|only writers\|ManuscriptStore\|companion app owns it\|manifest is managed" /Users/michael/dev/okashi/CLAUDE.md
 ```
-Record each hit; each must be reconciled below.
+Record each hit; each must be reconciled below. Also search the companion app's repo for the same patterns.
 
 - [ ] **Step 2: Update okashi `CLAUDE.md`**
 
-In the Project model section and SHARED CONTRACTS §1, change the authority lines. The manuscript bullet currently reads "okashi reads it; **wicklight owns it**" and §1 says okashi "reads this and **never writes it**." Replace with the spec §0 model:
-- okashi **is a manifest writer**: create (New Project) and chapter-title retitle are **no-confirm**, allowed on any source including the wicklight-shared corpus, safe via atomic-write + `NSFileVersion` + read-modify-write.
+In the Project model section and SHARED CONTRACTS §1, change the authority lines. The manuscript bullet currently reads "okashi reads it; **the companion app owns it**" and §1 says okashi "reads this and **never writes it**." Replace with the spec §0 model:
+- okashi **is a manifest writer**: create (New Project) and chapter-title retitle are **no-confirm**, allowed on any source including the companion app's shared corpus, safe via atomic-write + `NSFileVersion` + read-modify-write.
 - Structural edits (reorder/insert/remove/move) are **confirm-gated** and NOT yet shipped (a later cycle / structuring mode).
 - Keep the **schema HARD-GATE**: any change to manifest *shape* still STOPS and updates both repos.
 
-Keep the "MIRROR THIS BLOCK IN `../inkmere`" instruction. Edit the mirrored block to the new authority text.
+Keep the "keep this aligned with the companion app's copy" directive. Edit the mirrored block to the new authority text.
 
-- [ ] **Step 3: Update wicklight docs to the identical authority**
+- [ ] **Step 3: Update companion app docs to the identical authority**
 
-In each wicklight file from Step 1, replace "okashi never writes manifests; the only writers are wicklight's `ManuscriptStore`" (and equivalents) with the reciprocal: okashi may write manifests (create + chapter-title retitle no-confirm; structural edits confirm-gated), the shared safety model is atomic-write + `NSFileVersion`, wicklight reloads externally-changed manifests via its file-presenter and rebuilds its per-source index. Mirror the exact authority wording used in okashi's `CLAUDE.md`.
+In each companion app file from Step 1, replace "okashi never writes manifests; the only writers are the companion app's `ManuscriptStore`" (and equivalents) with the reciprocal: okashi may write manifests (create + chapter-title retitle no-confirm; structural edits confirm-gated), the shared safety model is atomic-write + `NSFileVersion`, the companion app reloads externally-changed manifests via its file-presenter and rebuilds its per-source index. Mirror the exact authority wording used in okashi's `CLAUDE.md`.
 
 - [ ] **Step 4: Verify the round-trip**
 
-With a wicklight-owned manuscript folder (or a hand-written v1 manifest), run okashi, create/retitle, then confirm:
+With a companion-app-owned manuscript folder (or a hand-written v1 manifest), run okashi, create/retitle, then confirm:
 ```bash
 # okashi writes a manifest okashi itself re-reads cleanly:
 /opt/homebrew/bin/go test ./... -run 'Manuscript|ChapterTitle' -v
 ```
-Then manually: point okashi at a folder wicklight manages, do a `r` retitle, and confirm wicklight (its resolver/index) reflects the new title on next read. Note the result in the commit body. If wicklight does NOT reload, STOP and escalate — that is a contract gap, not a doc fix.
+Then manually: point okashi at a folder the companion app manages, do a `r` retitle, and confirm the companion app (its resolver/index) reflects the new title on next read. Note the result in the commit body. If the companion app does NOT reload, STOP and escalate — that is a contract gap, not a doc fix.
 
-- [ ] **Step 5: Commit (okashi) and commit (wicklight) separately**
+- [ ] **Step 5: Commit (okashi) and commit (companion app's repo) separately**
 
 ```bash
 git -C /Users/michael/dev/okashi add CLAUDE.md
 git -C /Users/michael/dev/okashi commit -m "docs: okashi is a manifest writer (create/retitle) — mirror the reversed authority"
-git -C /Users/michael/dev/inkmere add SPEC.md docs/superpowers/specs/2026-06-27-multi-source-library-design.md docs/superpowers/specs/2026-06-27-project-model-design.md
-git -C /Users/michael/dev/inkmere commit -m "docs: okashi may write manifests (create/retitle no-confirm, structural confirm) — mirror okashi CLAUDE.md §1"
+# Then commit the companion app's repo with the mirrored authority update.
 ```
 
 ---
@@ -641,9 +640,9 @@ git -C /Users/michael/dev/inkmere commit -m "docs: okashi may write manifests (c
 - Manifest writers `writeManifest`/`createManuscript`/`renameChapterTitle` → Task 1. ✅ (spec §3)
 - New Project = folder+manifest+first chapter, opens it → Task 2. ✅ (spec §5.2)
 - `r` retitle for manifest chapters, remove the block → Task 3. ✅ (spec §5.7)
-- Any source incl. wicklight (no source gating) → Tasks 2/3 use plain paths, no source filter. ✅ (spec §0)
+- Any source incl. the companion app's corpus (no source gating) → Tasks 2/3 use plain paths, no source filter. ✅ (spec §0)
 - File-pane label (folded-in consideration) → Task 4. ✅
-- Both-repos doc update + verify wicklight reload → Task 5. ✅ (spec §0 HARD-GATE)
+- Both-repos doc update + verify companion app reload → Task 5. ✅ (spec §0 HARD-GATE)
 - NOT in this step (correctly deferred): sources model / `sources.json` (step 2), home Recent-on-top + inline `+` + trailing-slash (step 3), structural edits / structuring mode / file mover (roadmap).
 
 **Type consistency:** `createManuscript` returns `(string, error)` in Task 1 and is consumed as `first, err :=` in Task 2 — matches. `renameTarget.manifestChapter` defined in Task 3 Step 1, read in Task 3 Step 6 — matches. `paneLabel()` defined Task 4 Step 3, used Task 4 Step 4 — matches. `renameChapterTitle(dir, file, newTitle)` signature identical across Tasks 1, 3, 5.

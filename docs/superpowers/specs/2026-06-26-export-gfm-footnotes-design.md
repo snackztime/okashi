@@ -4,7 +4,7 @@
 **Status:** Approved (pending spec review)
 **Context:** Honors the `CLAUDE.md` Shared-Contract §2 markdown-flavor HARD GATE — the export
 parser must be **CommonMark + GFM + footnotes** via goldmark, so the shared corpus parses
-identically in okashi and `../inkmere`. Today `export_ast.go` uses `goldmark.DefaultParser()`
+identically in okashi and the companion app. Today `export_ast.go` uses `goldmark.DefaultParser()`
 (CommonMark only). This is the queued "export update pending" follow-up.
 
 ## Goal

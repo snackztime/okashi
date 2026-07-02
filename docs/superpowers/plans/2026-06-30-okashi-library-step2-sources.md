@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Give okashi a multi-source library model — a primary source (`writingDir()`) plus user-added folder sources persisted in `sources.json` — mirroring wicklight's `SourceStore`, as the pure foundation the home source-picker UI will consume.
+**Goal:** Give okashi a multi-source library model — a primary source (`writingDir()`) plus user-added folder sources persisted in `sources.json` — mirroring the companion app's `SourceStore`, as the pure foundation the home source-picker UI will consume.
 
 **Architecture:** A new `source.go` with a `source`/`sourceKind` value type (resolved `root()`, `reachable()`), a synthesized always-present primary source, and a `sources.json` store (`os.UserConfigDir()/okashi/sources.json`) that persists ONLY user-added folder sources — the primary is synthesized at load. No UI in this step; the picker + `◦ Loose` + home layout land in step 3.
 
@@ -11,13 +11,13 @@
 ## Global Constraints
 
 - **Invoke Go as `/opt/homebrew/bin/go`** and gofmt as `/opt/homebrew/bin/gofmt` — neither is on PATH.
-- **`sources.json` persists user-added folder sources ONLY.** The primary source is synthesized at load and NEVER written to the file (mirrors wicklight's `SourceStore`; spec §1).
+- **`sources.json` persists user-added folder sources ONLY.** The primary source is synthesized at load and NEVER written to the file (mirrors the companion app's `SourceStore`; spec §1).
 - **The primary source is always present and non-removable.** Its resolved root is `writingDir()` (which honors `OKASHI_DIR`); its stored `Path` is `""`.
 - **All writes atomic** via `atomicWrite`; create the config dir with `os.MkdirAll` first (as `recent.go` does).
 - **Graceful degradation:** a missing/corrupt `sources.json`, or an unusable config dir, yields just `[primary]` — never an error to the caller (mirrors `loadRecents`).
 - **Per-source isolation:** an unreachable folder source is reported via `reachable()==false` and must never block loading the others (spec §1). This step provides the predicate; the UI skips on it in step 3.
 - **Default build stays pure-Go.** No new dependencies.
-- **Shape alignment:** keep the JSON field names (`id`,`name`,`kind`,`path`) conceptually aligned with wicklight's `Source` so the two apps stay parallel (separate files, same fields; spec §1). This is NOT the manifest schema and carries no HARD-GATE, but keep the field set stable.
+- **Shape alignment:** keep the JSON field names (`id`,`name`,`kind`,`path`) conceptually aligned with the companion app's `Source` so the two apps stay parallel (separate files, same fields; spec §1). This is NOT the manifest schema and carries no HARD-GATE, but keep the field set stable.
 
 ---
 
@@ -127,7 +127,7 @@ const (
 
 const primarySourceID = "primary"
 
-// source is one library root okashi browses. It mirrors wicklight's Source (id/name/kind/path)
+// source is one library root okashi browses. It mirrors the companion app's Source (id/name/kind/path)
 // so the two apps stay conceptually parallel, though each persists its own file. The primary's
 // Path is empty and resolves to writingDir() at runtime; folder sources carry an absolute path.
 type source struct {
@@ -402,8 +402,8 @@ git commit -m "feat: sources.json store (load/save/add/remove; primary synthesiz
 - `sources.json` in `os.UserConfigDir()/okashi` persists user-added only; primary synthesized → Task 2. ✅
 - Primary always present + non-removable → `removeSource` no-ops on primary; `loadSources` always prepends → Tasks 1-2. ✅
 - Per-source isolation (unreachable skipped) → `reachable()` predicate (Task 1); UI skip is step 3. ✅
-- Standalone use (folder source / OKASHI_DIR, no wicklight) → primary honors `writingDir()`/`OKASHI_DIR`; folder sources are plain paths. ✅
-- Field-shape alignment with wicklight's Source → JSON tags `id/name/kind/path`. ✅
+- Standalone use (folder source / OKASHI_DIR, standalone) → primary honors `writingDir()`/`OKASHI_DIR`; folder sources are plain paths. ✅
+- Field-shape alignment with the companion app's Source → JSON tags `id/name/kind/path`. ✅
 - NOT in this step (correctly deferred to step 3): the LIBRARY source picker, `◦ Loose`, switching repopulating LIBRARY/FILES, the home layout.
 
 **Type consistency:** `source`/`sourceKind`/`primarySourceID`/`newFolderSource` defined in Task 1, consumed by Task 2's store. `loadSources`/`saveSources` operate on `[]source`; `addSource`/`removeSource` take and return `[]source`. All signatures consistent.

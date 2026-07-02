@@ -5,7 +5,7 @@
 > **TOOL-CALL WORKAROUND (carry forward):** one tool call per message, as the FIRST element
 > of the reply, explanation AFTER the result. (See memory `tool-call-syntax-court-bug`.)
 
-**Goal:** Switch the export parser to goldmark + GFM + Footnote (matching `../inkmere`'s flavor), render footnotes as per-chapter endnotes, and degrade the rarer GFM constructs (tables, strikethrough, task lists) gracefully.
+**Goal:** Switch the export parser to goldmark + GFM + Footnote (matching the companion app's flavor), render footnotes as per-chapter endnotes, and degrade the rarer GFM constructs (tables, strikethrough, task lists) gracefully.
 
 **Architecture:** A package-level `exportParser` with the extensions feeds the existing walk in `export_ast.go`; new walk cases turn footnote refs into `[N]` markers and the footnote list into an `Endnotes` block (per chapter, since each file parses separately), prefix task-list items with `[ ]`/`[x]`, and degrade tables to pipe-joined rows. The two writers gain one `Endnotes` case each. The glamour preview is unchanged.
 

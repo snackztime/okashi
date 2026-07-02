@@ -12,12 +12,12 @@
 
 - **Invoke Go as `/opt/homebrew/bin/go`** and gofmt as `/opt/homebrew/bin/gofmt` — neither is on PATH.
 - **Manifest schema is EXACTLY v1** — these ops only reorder/insert/remove `items`; no field/shape change.
-- **All manifest writes go through the existing `writeManifest`** (atomic, sorted-keys, no HTML escaping, no trailing newline — the wicklight byte-shape parity). Never marshal a manifest by hand.
+- **All manifest writes go through the existing `writeManifest`** (atomic, sorted-keys, no HTML escaping, no trailing newline — byte-shape parity with the companion app). Never marshal a manifest by hand.
 - **Read-modify-write:** any op that edits an *existing* manifest re-reads it immediately before writing.
 - **Pure transforms never mutate their argument** — they return a new `manifest` value with a fresh `Items` slice.
 - **Refuse, don't guess:** a move refuses a name collision in the destination and refuses to touch a manuscript whose manifest is present-but-unreadable (never auto-rename, never infer structure).
 - **No new third-party dependency;** default build stays pure-Go.
-- **No user-facing change in this chunk.** The shared-contract flip ("structural edits planned → shipped, confirm-gated") rides with chunk 2 (structure mode), the first user-reachable structural edit — do NOT edit `CLAUDE.md`/inkmere here.
+- **No user-facing change in this chunk.** The shared-contract flip ("structural edits planned → shipped, confirm-gated") rides with chunk 2 (structure mode), the first user-reachable structural edit — do NOT edit `CLAUDE.md` or the companion app's repo here.
 
 ---
 

@@ -19,7 +19,7 @@ cycle — Tab keeps flipping Document ↔ Project). In `scopeAll`, search every 
 - `func searchAllSources(sources []source, allowed map[string]bool, query string, limit int) []searchHit`
   — iterate `sources`, skip unreachable (`!s.reachable()`), `searchProject(s.root(), …)` each with a
   shrinking remaining-limit; prefix each hit's display `name` with the source name
-  (`s.Name + "/" + rel`) so results read `Wicklight/my-novel/ch3.md:12`.
+  (`s.Name + "/" + rel`) so results read `Writing/my-novel/ch3.md:12`.
 - `recomputeSearch` (search.go:107) handles `scopeAll` → `searchAllSources(m.sources, m.files.allowed, q, searchLimit)`.
 - The `ctrl+a` key in `updateSearch` sets `m.searchScope = scopeAll` (intercepted before the input,
   like `Tab`) and recomputes. `Tab` from `scopeAll` returns to Project (keeps the 2-way Tab cycle).

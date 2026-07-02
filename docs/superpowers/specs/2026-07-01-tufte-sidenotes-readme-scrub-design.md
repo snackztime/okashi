@@ -98,23 +98,24 @@ Default mode and narrow Tufte mode are untouched.
 Make the shipped surface read as a standalone product. **Genericize, don't delete** — keep the
 architectural "why".
 
-- **User-facing status strings** (main.go, 6 sites): replace `managed by wicklight` /
-  `structure is managed by wicklight` with a neutral phrasing that names no external project,
-  e.g. `manifest.json is read-only (managed externally)` and `structure is read-only (external
-  manifest)`; `chapter files are managed by wicklight` → `chapter files are read-only (external
-  manifest)`. Keep the meaning: okashi won't structurally edit an externally-owned manifest.
-- **Code comments** (manifest.go, manuscript.go, source.go): reword `wicklight`/`inkmere`
+- **User-facing status strings** (main.go, 6 sites): replace strings that name the companion
+  app (e.g., `managed by <companion-app>` / `structure is managed by <companion-app>`) with a
+  neutral phrasing that names no external project, e.g. `manifest.json is read-only (managed
+  externally)` and `structure is read-only (external manifest)`; `chapter files are managed by
+  <companion-app>` → `chapter files are read-only (external manifest)`. Keep the meaning: okashi
+  won't structurally edit an externally-owned manifest.
+- **Code comments** (manifest.go, manuscript.go, source.go): reword companion-app name
   references to "the companion app" / "the external owner of the manifest". Preserve the
   serialization-match rationale (sorted keys, no trailing newline, `[]`-not-null) — just drop the
   proper noun.
-- **Test name** `TestWriteManifestMatchesWicklightSortedKeys` → `TestWriteManifestSortedKeys`
+- **Test name** `TestWriteManifestMatchesCompanionAppSortedKeys` → `TestWriteManifestSortedKeys`
   (or `…MatchesExternalSortedKeys`); keep the assertions.
 - **Left as internal (unchanged):** `CLAUDE.md` (its Shared-Contracts structure *is* the
   companion relationship; genericizing loses dev context) and `docs/superpowers/**` (clearly
   internal planning history).
 
-**Verification:** `grep -rniE 'inkmere|wicklight' --include='*.go'` returns **0**; the suite still
-passes (renamed test still runs).
+**Verification:** `grep -rniE '<companion-app-name>' --include='*.go'` returns **0**; the suite
+still passes (renamed test still runs).
 
 ---
 
@@ -144,7 +145,7 @@ A GitHub-facing README for okashi as a standalone product. No sibling-project re
 11. **License** — placeholder line (match repo's existing license if present).
 
 **Not unit-tested** (prose). Correctness bar: the shortcuts table matches `helpText`; the env-var
-table matches the knobs okashi actually reads; no `inkmere`/`wicklight` strings.
+table matches the knobs okashi actually reads; no companion-app name strings.
 
 ---
 

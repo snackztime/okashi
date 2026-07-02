@@ -43,7 +43,7 @@ than the bottom bar:
 - `tea.KeyDelete` (sidebar focus) on the selected entry → a bottom-bar confirm
   (`delete 'name'? [y]es · [esc] cancel`, `m.deleting bool` + target). `y` → `os.Remove` (file) /
   `os.RemoveAll` (dir) → `refreshAfterRename`-style refresh + clamp selection; any other key cancels.
-- Blocked for manifest chapters (deleting one desyncs the wicklight manifest) and `..`/`manifest.json`
+- Blocked for manifest chapters (deleting one desyncs the shared manifest) and `..`/`manifest.json`
   with the status note. Allowed for loose files, legacy chapters, folders, resources.
 
 ## 4. Duplicate

@@ -15,7 +15,7 @@
 - **Staged, commit-on-exit.** All edits mutate the in-memory buffer; nothing touches disk until the user confirms on `esc`. One atomic `writeManifest` per commit. Cancel discards.
 - **Schema stays v1**; the commit writes `manifest{schemaVersion:1, title, items: structureItems}` through the existing `writeManifest` (sorted-keys / no-HTML / no-trailing-newline parity — never hand-marshal).
 - **Read-modify-write:** on commit, re-read the on-disk manifest's `title` immediately before writing (its `items` is superseded by the buffer).
-- **Contract flip (Task 5, both repos):** this is the first *user-reachable* structural edit, so `CLAUDE.md` §1 + inkmere docs move from "structural edits planned behind a confirmation" → "shipped, confirm-gated." Schema unchanged.
+- **Contract flip (Task 5, both repos):** this is the first *user-reachable* structural edit, so `CLAUDE.md` §1 + the companion app's docs move from "structural edits planned behind a confirmation" → "shipped, confirm-gated." Schema unchanged.
 - **Default build stays pure-Go;** no new dependency.
 
 ---
@@ -890,7 +890,7 @@ git commit -m "feat: structure mode commit-on-exit (confirm; create pending + wr
 
 **Files:**
 - Modify: `CLAUDE.md` (okashi) — SHARED CONTRACTS §1 + the Project-model rename bullet; `main.go` (the binder status line mentions `s`)
-- Modify (inkmere): `docs/superpowers/specs/2026-06-27-multi-source-library-design.md`, `docs/superpowers/specs/2026-06-27-project-model-design.md`, `CLAUDE.md`
+- Modify (companion app's repo): the companion app's multi-source-library and project-model design docs, and its `CLAUDE.md`
 
 **Interfaces:**
 - Consumes: nothing (docs + a status-string tweak).
@@ -904,21 +904,20 @@ Find the §1 "Authority (revised 2026-06-30)" line that says structural edits (r
 
 In `main.go`, the binder status line (search for `"binder · ↑↓ select · enter open · r rename · m read`) — append ` · s structure` so the entry point is discoverable.
 
-- [ ] **Step 3: Mirror in inkmere**
+- [ ] **Step 3: Mirror in the companion app's repo**
 
-In the three inkmere files, change the reciprocal "okashi ... structural edits planned behind a confirmation" wording to "shipped (structure mode; reorder/insert/remove, commit-on-exit confirm)." Keep it aligned with okashi's wording. No wicklight code change; verify wicklight reloads an okashi structural write (its file-presenter + per-source index rebuild).
+In the companion app's files, change the reciprocal "okashi ... structural edits planned behind a confirmation" wording to "shipped (structure mode; reorder/insert/remove, commit-on-exit confirm)." Keep it aligned with okashi's wording. No companion-app code change; verify the companion app reloads an okashi structural write (its file-presenter + per-source index rebuild).
 
 - [ ] **Step 4: Verify build + full suite still green** (docs + a one-line status change only)
 
 Run: `/opt/homebrew/bin/go build ./...` and `/opt/homebrew/bin/go test ./...`. Both pass.
 
-- [ ] **Step 5: Commit (okashi) and commit (inkmere) separately**
+- [ ] **Step 5: Commit (okashi) and commit (companion app's repo) separately**
 
 ```bash
 git -C /Users/michael/dev/okashi add CLAUDE.md main.go
-git -C /Users/michael/dev/okashi commit -m "docs: structure mode ships — structural edits confirm-gated (mirror in inkmere)"
-git -C /Users/michael/dev/inkmere add docs/superpowers/specs/2026-06-27-multi-source-library-design.md docs/superpowers/specs/2026-06-27-project-model-design.md CLAUDE.md
-git -C /Users/michael/dev/inkmere commit -m "docs: okashi ships structural edits (structure mode, confirm-gated) — mirror okashi §1"
+git -C /Users/michael/dev/okashi commit -m "docs: structure mode ships — structural edits confirm-gated (mirror in companion app's repo)"
+# Then commit the companion app's repo with the mirrored contract update.
 ```
 
 ---

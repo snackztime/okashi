@@ -28,30 +28,31 @@
 
 **Interfaces:**
 - Consumes: nothing.
-- Produces: nothing new; a grep-clean tree (`grep -rniE 'inkmere|wicklight' --include='*.go'` → 0).
+- Produces: nothing new; a grep-clean tree (no companion-app names remain in `*.go`).
 
 - [ ] **Step 1: Rewrite the 6 user-facing status strings in main.go**
 
-Find each (they read like `m.status = "…wicklight"`) and replace with a neutral phrasing that names no external project:
-- `"manifest.json is managed by wicklight"` → `"manifest.json is read-only (managed externally)"` (both sites)
-- `"manifest unreadable — structure is managed by wicklight"` → `"manifest unreadable — structure is read-only (external manifest)"` (both sites)
-- `"chapter files are managed by wicklight"` → `"chapter files are read-only (external manifest)"`
+Find each status string that names the companion app (grep for the companion-app name in main.go)
+and replace with a neutral phrasing:
+- `"manifest.json is managed by <companion-app>"` → `"manifest.json is read-only (managed externally)"` (both sites)
+- `"manifest unreadable — structure is managed by <companion-app>"` → `"manifest unreadable — structure is read-only (external manifest)"` (both sites)
+- `"chapter files are managed by <companion-app>"` → `"chapter files are read-only (external manifest)"`
 
-Use `grep -n 'wicklight' main.go` to find all sites; there are 6. Replace each string literal; keep the surrounding code identical.
+Use `grep -n 'companion-app-name' main.go` (substituting the actual name) to find all sites; there are 6. Replace each string literal; keep the surrounding code identical.
 
 - [ ] **Step 2: Reword code comments in manifest.go, manuscript.go, source.go**
 
-Replace `wicklight`/`inkmere` in comments with "the companion app" or "the external owner of the manifest". Keep every technical claim (schema v1, sorted keys, no trailing newline, `[]`-not-null, id/name/kind/path). Example: `// wicklight's manuscript folder` → `// the companion app's manuscript folder`; `matches wicklight's JSONEncoder(...)` → `matches the companion app's JSONEncoder(...)`.
+Replace companion-app names in comments with "the companion app" or "the external owner of the manifest". Keep every technical claim (schema v1, sorted keys, no trailing newline, `[]`-not-null, id/name/kind/path). Example: `// <companion-app>'s manuscript folder` → `// the companion app's manuscript folder`; `matches <companion-app>'s JSONEncoder(...)` → `matches the companion app's JSONEncoder(...)`.
 
 - [ ] **Step 3: Rename the serialization test**
 
-In `manifest_writers_test.go`: rename `TestWriteManifestMatchesWicklightSortedKeys` → `TestWriteManifestSortedKeys`, and reword its doc comment (`locks okashi's serialization to wicklight's` → `locks okashi's serialization to the companion app's`). Leave the assertions and the `t.Fatalf` message wording that references the JSONEncoder behavior; if that message names wicklight, genericize it too. Keep the `null`-vs-`[]` comment's meaning.
+In `manifest_writers_test.go`: rename the serialization test (which was named after the companion app) → `TestWriteManifestSortedKeys`, and reword its doc comment to reference "the companion app's" serialization instead of the old name. Leave the assertions and the `t.Fatalf` message wording that references the JSONEncoder behavior; genericize it if it names the companion app. Keep the `null`-vs-`[]` comment's meaning.
 
 - [ ] **Step 4: Verify grep-clean + suite green**
 
 Run:
 ```
-grep -rniE 'inkmere|wicklight' --include='*.go' .
+grep -rniE '<companion-app-name>' --include='*.go' .
 /opt/homebrew/bin/gofmt -w main.go manifest.go manuscript.go source.go manifest_writers_test.go
 /opt/homebrew/bin/go build ./... && /opt/homebrew/bin/go test ./... && /opt/homebrew/bin/go vet ./...
 ```
@@ -576,7 +577,7 @@ git commit -m "feat(preview): render Tufte sidenotes in renderPreview behind a w
 
 **Interfaces:**
 - Consumes: the current `helpText` (main.go) for the shortcuts table; the env knobs okashi reads; the project model from CLAUDE.md.
-- Produces: a GitHub-facing README with no `inkmere`/`wicklight` strings.
+- Produces: a GitHub-facing README with no companion-app name strings.
 
 - [ ] **Step 1: Transcribe the current shortcuts + env knobs**
 
@@ -588,7 +589,7 @@ Rewrite `README.md` with these sections (see spec §3): Title + tagline; screens
 
 - [ ] **Step 3: Verify**
 
-Run: `grep -niE 'inkmere|wicklight' README.md` → prints nothing. Eyeball the shortcuts table against `helpText` (every row matches). Confirm the Markdown renders (headings, table pipes well-formed).
+Run: `grep -niE '<companion-app-name>' README.md` → prints nothing (no companion-app names). Eyeball the shortcuts table against `helpText` (every row matches). Confirm the Markdown renders (headings, table pipes well-formed).
 
 - [ ] **Step 4: Commit**
 
@@ -816,7 +817,7 @@ Add a short line (in Quick start or a small "Saving" note) describing the shippe
 
 - [ ] **Step 4: Verify + commit**
 
-Run: `grep -niE 'inkmere|wicklight' README.md` (must be empty). Eyeball the shortcuts table still matches `helpText` (minus the regrouping) and that the Preview wording matches Task 6 behavior.
+Run: `grep -niE '<companion-app-name>' README.md` (must be empty — no companion-app names). Eyeball the shortcuts table still matches `helpText` (minus the regrouping) and that the Preview wording matches Task 6 behavior.
 ```
 git add README.md
 git commit -m "docs: correct sidenote trigger wording + ctrl+c grouping + autosave note"

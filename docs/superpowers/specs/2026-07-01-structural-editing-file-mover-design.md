@@ -16,16 +16,16 @@ okashi now performs **structural** manifest edits (reorder / insert / remove / m
 by a **confirmation**. This ships what the library spec's §0 called "planned behind a confirmation."
 
 - **Safety** (unchanged model): atomic temp-then-rename + iCloud `NSFileVersion` + read-modify-write
-  + byte-shape parity with wicklight (`JSONEncoder(.prettyPrinted,.sortedKeys)`: sorted keys, no
+  + byte-shape parity with the companion app (`JSONEncoder(.prettyPrinted,.sortedKeys)`: sorted keys, no
   HTML escaping, no trailing newline) — so the shared corpus doesn't churn. All via the existing
   `writeManifest`.
-- **Bidirectional with wicklight** — both apps read/write the same `manifest.json`.
+- **Bidirectional with the companion app** — both apps read/write the same `manifest.json`.
 - **Scope:** **manifest manuscripts only.** Legacy numbered-prefix manuscripts stay read-only here
   (reordering them would mean renumbering files — a different mechanism, and they are a read-only
   transitional courtesy).
 - **HARD-GATE (authority, not schema):** schema stays v1. Reflect the "planned → shipped
-  (confirm-gated)" change in **both** repos (`../okashi/CLAUDE.md` §1 + inkmere `SPEC.md` /
-  multi-source §4 / project-model §4). No wicklight code change expected; **verify** wicklight
+  (confirm-gated)" change in **both** repos (`../okashi/CLAUDE.md` §1 + the companion app's `SPEC.md` /
+  multi-source §4 / project-model §4). No companion-app code change expected; **verify** the companion app
   reloads an okashi structural write (file-presenter + per-source index rebuild).
 
 ---
@@ -124,9 +124,9 @@ func moveFolder(srcDir, dstDir string) error
 - **Safety:** all manifest writes atomic + read-modify-write + sorted-keys / no-HTML /
   no-trailing-newline parity (existing `writeManifest`); `NSFileVersion` is the concurrent-edit net.
   Every structural / boundary-crossing edit is confirm-gated (§0).
-- **Contract (both repos):** flip `CLAUDE.md` §1 + inkmere docs from "structural edits planned
+- **Contract (both repos):** flip `CLAUDE.md` §1 + companion app's docs from "structural edits planned
   behind a confirmation" → "shipped, confirm-gated (reorder / insert / remove / move)." Schema
-  unchanged. Verify wicklight reloads an okashi structural write.
+  unchanged. Verify the companion app reloads an okashi structural write.
 - **Tests:**
   - `manifestInsert/Remove/Reorder`: order/membership correct, no-op on absent file, index clamping,
     the argument manifest is not mutated.
@@ -137,7 +137,7 @@ func moveFolder(srcDir, dstDir string) error
     move-into-descendant refused.
   - **structure mode:** enter loads `items`; `J/K` reorders the buffer; `a` new-blank creates+inserts
     on commit; `a` promote inserts an existing loose file; `x` demotes; commit writes once atomically;
-    cancel discards (no write); a wicklight manuscript commit round-trips.
+    cancel discards (no write); a companion-app manuscript commit round-trips.
   - **mover:** each confirm branch; contextual + standalone entry; cross-source; render==hit-test on
     both panes.
 
@@ -151,12 +151,12 @@ func moveFolder(srcDir, dstDir string) error
 - **Reordering legacy numbered manuscripts** (would renumber files).
 - **Nested chapters / sub-documents** (manuscripts stay flat).
 - **Per-op undo** in structure mode (`cancel` = coarse undo; `u` deferred).
-- The wicklight **project overlay**.
+- The companion app's **project overlay**.
 
 ## 6. Sequencing (for the plans)
 
 1. **Foundation** — `manifestInsert/Remove/Reorder` + `moveDocument` + `moveFolder` (+ `safeMove`),
-   plus the `CLAUDE.md` §1 + inkmere contract note. Pure/FS, fully unit-tested.
+   plus the `CLAUDE.md` §1 + companion app's contract note. Pure/FS, fully unit-tested.
 2. **Structure mode** (`screenStructure`) on the foundation.
 3. **File mover** (`screenMover`) on the foundation.
 
