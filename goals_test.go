@@ -58,3 +58,13 @@ func TestGoalsPathUnderConfig(t *testing.T) {
 	}
 	_ = os.Getenv // keep os imported
 }
+
+func TestSessionGoalRoundTrips(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "goals.json")
+	saveGoals(path, map[string]projectGoals{"/p": {DailyGoal: 500, SessionGoalMin: 30}})
+	got := loadGoals(path)
+	if got["/p"].SessionGoalMin != 30 {
+		t.Fatalf("SessionGoalMin round-trip = %d, want 30", got["/p"].SessionGoalMin)
+	}
+}

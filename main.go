@@ -254,7 +254,7 @@ type model struct {
 	exportPrompt bool
 
 	goalsAll        map[string]projectGoals
-	goalPromptField int // 0 off, 1 daily, 2 project
+	goalPromptField int // 0 off, 1 daily, 2 project, 3 session
 
 	analysis analysisState
 
@@ -870,8 +870,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.nameInput.SetValue(strconv.Itoa(pg.applyEnvDefaults().ProjectGoal))
 					return m, nil
 				}
+				if m.goalPromptField == 2 {
+					if n >= 0 {
+						pg.ProjectGoal = n
+					}
+					m.goalsAll[m.files.dir] = pg
+					m.goalPromptField = 3
+					m.nameInput.SetValue(strconv.Itoa(pg.SessionGoalMin))
+					return m, nil
+				}
 				if n >= 0 {
-					pg.ProjectGoal = n
+					pg.SessionGoalMin = n
 				}
 				m.goalsAll[m.files.dir] = pg
 				saveGoals(goalsPath(), m.goalsAll)
@@ -1453,7 +1462,8 @@ func (m model) View() string {
 		doc := computeDocStats(m.editor.Value())
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
 		pg := m.goalsAll[m.files.dir].applyEnvDefaults()
-		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal}
+		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal,
+			sessionSecs: int(m.now.Sub(m.sessionStart).Seconds()), sessionGoalMin: pg.SessionGoalMin}
 		m.inspector.grammarBackend = ""
 		if m.grammarChecker != nil {
 			m.inspector.grammarBackend = m.grammarChecker.Name()
@@ -2316,6 +2326,9 @@ func (m model) statusBar() string {
 	}
 	if m.goalPromptField == 2 {
 		return "project goal ▸ " + m.nameInput.View()
+	}
+	if m.goalPromptField == 3 {
+		return "session minutes ▸ " + m.nameInput.View()
 	}
 	if m.exportPrompt {
 		return "export: m manuscript · t tufte · esc cancel"

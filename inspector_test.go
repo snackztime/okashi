@@ -337,6 +337,14 @@ func TestFramedPanelAction(t *testing.T) {
 	}
 }
 
+func TestInspectorGoalsSessionSection(t *testing.T) {
+	in := inspectorModel{visible: true, tab: tabGoals}
+	out := ansi.Strip(in.View(28, docStats{}, projStats{}, "", goalStats{sessionSecs: 600, sessionGoalMin: 30}, analysisState{}))
+	if !strings.Contains(out, "SESSION") || !strings.Contains(out, "10 / 30 min") {
+		t.Fatalf("expected a SESSION section with 10/30 min, got:\n%s", out)
+	}
+}
+
 func TestFramedPanelActionNoOverflow(t *testing.T) {
 	// A title longer than the panel + an action must not overflow the width.
 	for _, w := range []int{18, 34, 40} {

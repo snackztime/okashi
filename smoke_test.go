@@ -1095,7 +1095,7 @@ func TestCtrlGSetsGoals(t *testing.T) {
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 140, Height: 40})
 	m = nm.(model)
 
-	// ctrl+g → daily prompt; type 400, enter → project prompt; type 90000, enter.
+	// ctrl+g → daily prompt; type 400, enter → project prompt; type 90000, enter → session prompt; type 45, enter.
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlG})
 	m = nm.(model)
 	if m.goalPromptField != 1 {
@@ -1110,10 +1110,16 @@ func TestCtrlGSetsGoals(t *testing.T) {
 	m.nameInput.SetValue("90000")
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(model)
-	if m.goalPromptField != 0 {
-		t.Fatalf("after project, prompt should close, field=%d", m.goalPromptField)
+	if m.goalPromptField != 3 {
+		t.Fatalf("after project, should prompt session, field=%d", m.goalPromptField)
 	}
-	if m.goalsAll[dir].DailyGoal != 400 || m.goalsAll[dir].ProjectGoal != 90000 {
+	m.nameInput.SetValue("45")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.goalPromptField != 0 {
+		t.Fatalf("after session, prompt should close, field=%d", m.goalPromptField)
+	}
+	if m.goalsAll[dir].DailyGoal != 400 || m.goalsAll[dir].ProjectGoal != 90000 || m.goalsAll[dir].SessionGoalMin != 45 {
 		t.Fatalf("goals not saved: %+v", m.goalsAll[dir])
 	}
 }

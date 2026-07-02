@@ -11,10 +11,11 @@ import (
 // projectGoals is one project's goal state, stored in the global goals.json
 // keyed by project dir path.
 type projectGoals struct {
-	DailyGoal   int    `json:"dailyGoal"`
-	ProjectGoal int    `json:"projectGoal"`
-	DayBaseline int    `json:"dayBaseline"`
-	Day         string `json:"day"`
+	DailyGoal      int    `json:"dailyGoal"`
+	ProjectGoal    int    `json:"projectGoal"`
+	SessionGoalMin int    `json:"sessionGoalMin"`
+	DayBaseline    int    `json:"dayBaseline"`
+	Day            string `json:"day"`
 }
 
 func goalsPath() string {
