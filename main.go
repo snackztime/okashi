@@ -54,6 +54,7 @@ ctrl+t   typewriter
 ctrl+d   focus dim
 ctrl+s   save
 ctrl+g   set goals
+ctrl+u   start/stop writing sprint
 ctrl+r   spelling suggestions
 ctrl+f   search (tab scope · ctrl+a all sources)
 ctrl+o   home
