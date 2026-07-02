@@ -23,11 +23,26 @@ const (
 	moverFolder                         // "▸ name/"
 	moverFile                           // "› name" (a document — selectable as the source)
 	moverMoveThis                       // "→ move this folder (<current>)" (pick the browsed folder as the source)
+	moverSource                         // a library source root (destination target)
 )
 
 type moverEntry struct {
 	name, path string
 	kind       moverEntryKind
+}
+
+// moverBoundingSource returns the reachable library source whose root contains (or equals) dir.
+func (m model) moverBoundingSource(dir string) (source, bool) {
+	for _, s := range m.sources {
+		if !s.reachable() {
+			continue
+		}
+		r := s.root()
+		if dir == r || withinRoot(dir, r) {
+			return s, true
+		}
+	}
+	return source{}, false
 }
 
 // enterMover opens the file mover for the file pane's selected entry (contextual entry). The
@@ -124,24 +139,36 @@ func (m *model) pickMoverSource(e moverEntry) {
 	m.moverReload()
 }
 
-// moverReload rebuilds the destination browser rows for moverDestDir: a leading "move here" row,
-// a ".." row when below the active source root, then the subfolders (alpha-sorted).
+// moverReload rebuilds the destination browser rows. When moverDestDir == "" the list shows all
+// reachable library sources (moverSource rows). Otherwise it shows the usual move-here / .. /
+// subfolders list, with ".." ascending to the sources list when at a source root.
 func (m *model) moverReload() {
-	root := m.activeSourceRoot()
 	var rows []moverEntry
-	rows = append(rows, moverEntry{name: filepath.Base(m.moverDestDir), path: m.moverDestDir, kind: moverMoveHere})
-	if m.moverDestDir != root && withinRoot(m.moverDestDir, root) {
-		rows = append(rows, moverEntry{name: "..", path: filepath.Dir(m.moverDestDir), kind: moverUp})
-	}
-	if ents, err := os.ReadDir(m.moverDestDir); err == nil {
-		var dirs []moverEntry
-		for _, e := range ents {
-			if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
-				dirs = append(dirs, moverEntry{name: e.Name(), path: filepath.Join(m.moverDestDir, e.Name()), kind: moverFolder})
+	if m.moverDestDir == "" {
+		for _, s := range m.sources {
+			if s.reachable() {
+				rows = append(rows, moverEntry{name: s.Name, path: s.root(), kind: moverSource})
 			}
 		}
-		sort.Slice(dirs, func(i, j int) bool { return dirs[i].name < dirs[j].name })
-		rows = append(rows, dirs...)
+	} else {
+		rows = append(rows, moverEntry{name: filepath.Base(m.moverDestDir), path: m.moverDestDir, kind: moverMoveHere})
+		if src, ok := m.moverBoundingSource(m.moverDestDir); ok {
+			up := filepath.Dir(m.moverDestDir)
+			if m.moverDestDir == src.root() {
+				up = "" // step up to the sources list
+			}
+			rows = append(rows, moverEntry{name: "..", path: up, kind: moverUp})
+		}
+		if ents, err := os.ReadDir(m.moverDestDir); err == nil {
+			var dirs []moverEntry
+			for _, e := range ents {
+				if e.IsDir() && !strings.HasPrefix(e.Name(), ".") {
+					dirs = append(dirs, moverEntry{name: e.Name(), path: filepath.Join(m.moverDestDir, e.Name()), kind: moverFolder})
+				}
+			}
+			sort.Slice(dirs, func(i, j int) bool { return dirs[i].name < dirs[j].name })
+			rows = append(rows, dirs...)
+		}
 	}
 	m.moverEntries = rows
 	if m.moverSel >= len(rows) {
@@ -234,7 +261,7 @@ func (m model) updateMover(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			e := m.moverEntries[m.moverSel]
 			switch e.kind {
-			case moverUp, moverFolder:
+			case moverUp, moverFolder, moverSource:
 				m.moverDestDir = e.path
 				m.moverSel = 0
 				m.moverReload()
@@ -320,6 +347,8 @@ func (m model) moverView() string {
 				text = "→ move into " + e.name + "/"
 			case moverUp:
 				text = "‹ .."
+			case moverSource:
+				text = "◆ " + e.name
 			default:
 				text = "▸ " + e.name + "/"
 			}
@@ -328,7 +357,18 @@ func (m model) moverView() string {
 			}
 			rows = append(rows, text)
 		}
-		rightPanel = framedPanel("TO "+filepath.Base(m.moverDestDir), strings.Join(rows, "\n"), rightW, len(rows)+2, "")
+		toTitle := "TO · SOURCES"
+		if m.moverDestDir != "" {
+			toTitle = "TO · " + filepath.Base(m.moverDestDir)
+			if src, ok := m.moverBoundingSource(m.moverDestDir); ok {
+				if m.moverDestDir == src.root() {
+					toTitle = "TO · " + src.Name
+				} else {
+					toTitle = "TO · " + src.Name + "/" + filepath.Base(m.moverDestDir)
+				}
+			}
+		}
+		rightPanel = framedPanel(toTitle, strings.Join(rows, "\n"), rightW, len(rows)+2, "")
 	}
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
@@ -352,7 +392,7 @@ func (m model) moverView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ browse · enter drill/select · esc cancel")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ browse · enter drill/select · .. → sources · esc cancel")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

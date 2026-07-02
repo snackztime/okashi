@@ -234,3 +234,67 @@ func TestMoverStandaloneDrillAndPickFolder(t *testing.T) {
 		t.Fatalf("'move this folder' should pick worldbuild as a folder source; phase=%d isDir=%v src=%q", m.moverPhase, m.moverIsDir, m.moverSource)
 	}
 }
+
+// twoSourceModel builds a model with two FOLDER sources. Folder sources' root() == Path, so a
+// test controls the dirs; a PRIMARY source's root() is writingDir(), which a test can't set.
+func twoSourceModel(t *testing.T, a, b string) model {
+	t.Helper()
+	return model{sources: []source{
+		{ID: "a", Name: "Writing", Kind: sourceKindFolder, Path: a},
+		{ID: "b", Name: "Notes", Kind: sourceKindFolder, Path: b},
+	}}
+}
+
+func TestMoverBoundingSource(t *testing.T) {
+	p, f := t.TempDir(), t.TempDir()
+	m := twoSourceModel(t, p, f)
+	if s, ok := m.moverBoundingSource(filepath.Join(p, "book")); !ok || s.ID != "a" {
+		t.Fatalf("dir under source a should bind to a: %v %v", s, ok)
+	}
+	if s, ok := m.moverBoundingSource(f); !ok || s.ID != "b" {
+		t.Fatalf("folder root should bind to source b: %v %v", s, ok)
+	}
+	if _, ok := m.moverBoundingSource("/nowhere/else"); ok {
+		t.Fatalf("unrelated path should not bind")
+	}
+}
+
+func TestMoverReloadSourcesList(t *testing.T) {
+	p, f := t.TempDir(), t.TempDir()
+	m := twoSourceModel(t, p, f)
+	m.moverDestDir = "" // the sources list
+	m.moverReload()
+	if len(m.moverEntries) != 2 {
+		t.Fatalf("want 2 source rows, got %d", len(m.moverEntries))
+	}
+	for _, e := range m.moverEntries {
+		if e.kind != moverSource {
+			t.Fatalf("sources list should only hold moverSource rows, got kind %d", e.kind)
+		}
+	}
+}
+
+func TestMoverReloadUpFromSourceRootGoesToSourcesList(t *testing.T) {
+	p, f := t.TempDir(), t.TempDir()
+	m := twoSourceModel(t, p, f)
+	m.moverDestDir = p // a source root
+	m.moverReload()
+	if m.moverEntries[0].kind != moverMoveHere {
+		t.Fatalf("first row should be move-here")
+	}
+	if m.moverEntries[1].kind != moverUp || m.moverEntries[1].path != "" {
+		t.Fatalf("`..` at a source root must target the sources list (path \"\"), got %q", m.moverEntries[1].path)
+	}
+}
+
+func TestMoverReloadUpBelowSourceRootGoesToParent(t *testing.T) {
+	p, f := t.TempDir(), t.TempDir()
+	sub := filepath.Join(p, "book")
+	os.MkdirAll(sub, 0o755)
+	m := twoSourceModel(t, p, f)
+	m.moverDestDir = sub
+	m.moverReload()
+	if m.moverEntries[1].kind != moverUp || m.moverEntries[1].path != p {
+		t.Fatalf("`..` below a source root must go to the parent %q, got %q", p, m.moverEntries[1].path)
+	}
+}
