@@ -106,5 +106,11 @@ func moveFolder(srcDir, dstParent string) error {
 	if _, err := os.Stat(dst); err == nil {
 		return fmt.Errorf("%s already exists in the destination", base)
 	}
-	return os.Rename(srcDir, dst)
+	if err := os.Rename(srcDir, dst); err != nil {
+		if errors.Is(err, syscall.EXDEV) {
+			return fmt.Errorf("can't move a folder across volumes yet — move its files individually")
+		}
+		return err
+	}
+	return nil
 }

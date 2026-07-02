@@ -184,3 +184,32 @@ func TestMoveFolderRefusesCollisionAndSelf(t *testing.T) {
 		t.Fatal("moving a folder into the parent it already lives in must be refused")
 	}
 }
+
+func TestMoveFolderSameVolumeSucceeds(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "chapters")
+	if err := os.MkdirAll(filepath.Join(src, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dstParent := filepath.Join(root, "book")
+	if err := os.MkdirAll(dstParent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := moveFolder(src, dstParent); err != nil {
+		t.Fatalf("same-volume move should succeed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dstParent, "chapters", "sub")); err != nil {
+		t.Fatalf("folder not moved: %v", err)
+	}
+}
+
+func TestMoveFolderCollisionRefused(t *testing.T) {
+	root := t.TempDir()
+	src := filepath.Join(root, "chapters")
+	os.MkdirAll(src, 0o755)
+	dstParent := filepath.Join(root, "book")
+	os.MkdirAll(filepath.Join(dstParent, "chapters"), 0o755) // collision
+	if err := moveFolder(src, dstParent); err == nil {
+		t.Fatalf("expected a collision error")
+	}
+}
