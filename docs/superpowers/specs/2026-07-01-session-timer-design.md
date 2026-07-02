@@ -23,11 +23,11 @@ Three sub-features, built in order (increasing surface): **stopwatch → time go
   (pauses on idle, using the existing `lastEditAt`) is the paired later upgrade.
 - **Pomodoro:** default **25 min work / 5 min break**; a **visual cue** at each transition (accent
   status message + a single terminal `\a` bell — no audio dependency).
-- **⚠ OPEN FOR REVIEW — time-goal scope.** v1 makes the time goal a **per-session** goal ("write N
-  minutes this session") that shares the stopwatch's since-launch clock. A *daily-accumulated* time
-  goal (like the daily word goal) is deferred because, under wall-clock, an app left open all day
-  would inflate it — daily accumulation only becomes honest once active-time lands. If you'd rather
-  have daily accumulation now, say so and we add a persisted `SecondsToday` with a `Day` reset.
+- **Time-goal scope — RESOLVED: per-session (v1).** The time goal is "write N minutes this session,"
+  sharing the stopwatch's since-launch clock. A *daily-accumulated* time goal (like the daily word
+  goal) is deferred: under wall-clock, an app left open idle all day would inflate it — daily
+  accumulation only becomes honest once active-time lands. That pairing (active-time + daily
+  accumulation) is the future upgrade.
 
 ---
 
