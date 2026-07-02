@@ -219,6 +219,9 @@ type model struct {
 	sessionBaseline   int // word count when the current file was opened/created
 	now               time.Time
 	sessionStart      time.Time
+	sprintActive      bool
+	sprintEnd         time.Time
+	sprintOnBreak     bool
 	currentFile       string
 	outlineReturnFile string // chapter to return to after editing outline.md (ctrl+l)
 	status            string
@@ -710,6 +713,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if t, ok := msg.(autosaveTickMsg); ok {
 		now := time.Time(t)
 		m.now = now
+		if m.sprintActive && !m.now.Before(m.sprintEnd) {
+			end, onBreak, active, msg := advanceSprint(m.now, m.sprintEnd, m.sprintOnBreak, 5*time.Minute)
+			m.sprintEnd, m.sprintOnBreak, m.sprintActive = end, onBreak, active
+			m.status = msg
+		}
 		if m.autosaveDue(now) {
 			m.save()
 		}
@@ -1239,6 +1247,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.goalPromptField = 1
 			m.nameInput.SetValue(strconv.Itoa(pg.DailyGoal))
 			m.nameInput.Focus()
+			return m, nil
+		case "ctrl+u":
+			if m.sprintActive {
+				m.sprintActive = false
+				m.status = "sprint stopped"
+			} else {
+				mins := m.goalsAll[m.files.dir].applyEnvDefaults().SprintMin
+				m.sprintActive = true
+				m.sprintOnBreak = false
+				m.sprintEnd = m.now.Add(time.Duration(mins) * time.Minute)
+				m.status = fmt.Sprintf("sprint started — %d min", mins)
+			}
 			return m, nil
 		case "esc":
 			if m.previewing {
@@ -2262,12 +2282,40 @@ func fmtDuration(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", m, sec)
 }
 
+// sprintDisplay renders a pomodoro countdown: 🍅 for work, ☕ for a break.
+func sprintDisplay(remaining time.Duration, onBreak bool) string {
+	icon := "🍅"
+	if onBreak {
+		icon = "☕"
+	}
+	return icon + " " + fmtDuration(remaining)
+}
+
+// advanceSprint transitions a sprint that has reached its end: work → a break of breakDur, then
+// break → complete (inactive). Returns the new end, the new on-break flag, whether it's still
+// active, and a status message for the transition.
+func advanceSprint(now, end time.Time, onBreak bool, breakDur time.Duration) (time.Time, bool, bool, string) {
+	if onBreak {
+		return end, false, false, "✓ sprint complete"
+	}
+	return now.Add(breakDur), true, true, "🍅 done — break time"
+}
+
 // statsText is the live readout shown on the right of the status bar:
 // total words in the buffer, plus net words added since this file was opened.
 func (m model) statsText() string {
 	words := wordCount(m.editor.Value())
 	delta := words - m.sessionBaseline
-	return fmt.Sprintf("%s words · %s session · ⏱ %s", commafy(words), signedComma(delta), fmtDuration(m.now.Sub(m.sessionStart)))
+	timeSeg := "⏱ " + fmtDuration(m.now.Sub(m.sessionStart))
+	if m.sprintActive {
+		remaining := m.sprintEnd.Sub(m.now)
+		disp := sprintDisplay(remaining, m.sprintOnBreak)
+		if remaining <= time.Minute {
+			disp = lipgloss.NewStyle().Foreground(accent).Render(disp)
+		}
+		timeSeg = disp
+	}
+	return fmt.Sprintf("%s words · %s session · %s", commafy(words), signedComma(delta), timeSeg)
 }
 
 // statusBar composes the bottom line: the status message on the left, the live

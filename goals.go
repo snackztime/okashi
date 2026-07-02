@@ -14,6 +14,7 @@ type projectGoals struct {
 	DailyGoal      int    `json:"dailyGoal"`
 	ProjectGoal    int    `json:"projectGoal"`
 	SessionGoalMin int    `json:"sessionGoalMin"`
+	SprintMin      int    `json:"sprintMin"`
 	DayBaseline    int    `json:"dayBaseline"`
 	Day            string `json:"day"`
 }
@@ -65,6 +66,9 @@ func (pg projectGoals) applyEnvDefaults() projectGoals {
 	}
 	if pg.ProjectGoal == 0 {
 		pg.ProjectGoal = envGoal("OKASHI_PROJECT_GOAL", 0)
+	}
+	if pg.SprintMin == 0 {
+		pg.SprintMin = 25
 	}
 	return pg
 }
