@@ -220,6 +220,7 @@ type model struct {
 	sessionBaseline   int // word count when the current file was opened/created
 	now               time.Time
 	sessionStart      time.Time
+	activeSecs        int
 	sprintActive      bool
 	sprintEnd         time.Time
 	sprintOnBreak     bool
@@ -434,6 +435,14 @@ func checkGrammarCmd(c grammarChecker, file, text string) tea.Cmd {
 		f, err := c.Check(text)
 		return grammarResultMsg{file, f, err}
 	}
+}
+
+// activeIdle is the inactivity window after which the active-time stopwatch pauses.
+const activeIdle = 2 * time.Minute
+
+// isWritingActive reports whether the writer edited within the idle window.
+func isWritingActive(now, lastEdit time.Time, idle time.Duration) bool {
+	return now.Sub(lastEdit) < idle
 }
 
 // autosaveDue reports whether the buffer should be flushed: there are unsaved
@@ -714,6 +723,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if t, ok := msg.(autosaveTickMsg); ok {
 		now := time.Time(t)
 		m.now = now
+		if isWritingActive(m.now, m.lastEditAt, activeIdle) {
+			m.activeSecs++
+		}
 		if m.sprintActive && !m.now.Before(m.sprintEnd) {
 			end, onBreak, active, msg := advanceSprint(m.now, m.sprintEnd, m.sprintOnBreak, 5*time.Minute)
 			m.sprintEnd, m.sprintOnBreak, m.sprintActive = end, onBreak, active
@@ -2307,7 +2319,10 @@ func advanceSprint(now, end time.Time, onBreak bool, breakDur time.Duration) (ti
 func (m model) statsText() string {
 	words := wordCount(m.editor.Value())
 	delta := words - m.sessionBaseline
-	timeSeg := "⏱ " + fmtDuration(m.now.Sub(m.sessionStart))
+	timeSeg := "⏱ " + fmtDuration(time.Duration(m.activeSecs)*time.Second)
+	if !isWritingActive(m.now, m.lastEditAt, activeIdle) {
+		timeSeg += " ⏸"
+	}
 	if m.sprintActive {
 		remaining := m.sprintEnd.Sub(m.now)
 		disp := sprintDisplay(remaining, m.sprintOnBreak)

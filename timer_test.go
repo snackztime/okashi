@@ -45,3 +45,16 @@ func TestFmtDuration(t *testing.T) {
 		}
 	}
 }
+
+func TestIsWritingActive(t *testing.T) {
+	now := time.Unix(1_700_000_000, 0)
+	if !isWritingActive(now, now.Add(-30*time.Second), activeIdle) {
+		t.Fatal("edited 30s ago should be active")
+	}
+	if isWritingActive(now, now.Add(-3*time.Minute), activeIdle) {
+		t.Fatal("edited 3 min ago should be idle")
+	}
+	if isWritingActive(now, time.Time{}, activeIdle) {
+		t.Fatal("never edited (zero lastEdit) should be idle")
+	}
+}
