@@ -298,3 +298,36 @@ func TestMoverReloadUpBelowSourceRootGoesToParent(t *testing.T) {
 		t.Fatalf("`..` below a source root must go to the parent %q, got %q", p, m.moverEntries[1].path)
 	}
 }
+
+func TestMoverFailedMoveStaysOpenWithError(t *testing.T) {
+	root := t.TempDir()
+	// Source file + a colliding file at the destination so applyMove fails.
+	srcDir := filepath.Join(root, "src")
+	os.MkdirAll(srcDir, 0o755)
+	os.WriteFile(filepath.Join(srcDir, "ch.md"), []byte("x"), 0o644)
+	dstDir := filepath.Join(root, "dst")
+	os.MkdirAll(dstDir, 0o755)
+	os.WriteFile(filepath.Join(dstDir, "ch.md"), []byte("y"), 0o644) // collision
+
+	m := twoSourceModel(t, root, root)
+	m.screen = screenMover
+	m.moverPhase = moverPickDest
+	m.moverSource = filepath.Join(srcDir, "ch.md")
+	m.moverFromDir = srcDir
+	m.moverIsDir = false
+	m.moverDestDir = dstDir
+	m.moverConfirm = true
+	m.moverReturn = screenWriting
+
+	nm, _ := m.updateMover(tea.KeyMsg{Type: tea.KeyEnter})
+	got := nm.(model)
+	if got.moverError == "" {
+		t.Fatalf("a failed move should set moverError")
+	}
+	if got.screen != screenMover {
+		t.Fatalf("the mover must stay open on failure, screen=%v", got.screen)
+	}
+	if got.moverConfirm {
+		t.Fatalf("confirm should be dismissed after the failed attempt")
+	}
+}

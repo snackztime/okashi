@@ -62,6 +62,7 @@ func (m *model) enterMover() {
 	m.moverSel = 0
 	m.moverConfirm = false
 	m.moverAsChapter = true
+	m.moverError = ""
 	m.moverReturn = screenWriting
 	m.moverPhase = moverPickDest
 	m.moverReload()
@@ -76,6 +77,7 @@ func (m *model) enterMoverStandalone() {
 	m.moverSrcSel = 0
 	m.moverConfirm = false
 	m.moverAsChapter = true
+	m.moverError = ""
 	m.moverReturn = screenWriting
 	m.moverSrcReload()
 	m.screen = screenMover
@@ -133,6 +135,7 @@ func (m *model) pickMoverSource(e moverEntry) {
 	default:
 		return
 	}
+	m.moverError = "" // a fresh source pick starts clean — don't carry a prior failure's error
 	m.moverPhase = moverPickDest
 	m.moverDestDir = m.activeSourceRoot()
 	m.moverSel = 0
@@ -196,10 +199,13 @@ func (m model) updateMover(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			case "y", "enter":
 				if err := m.applyMove(); err != nil {
-					m.status = "move failed: " + err.Error()
-				} else {
-					m.status = "moved " + filepath.Base(m.moverSource)
+					m.moverError = "move failed: " + err.Error()
+					m.moverConfirm = false
+					m.moverReload()
+					return m, nil
 				}
+				m.moverError = ""
+				m.status = "moved " + filepath.Base(m.moverSource)
 				m.moverConfirm = false
 				m.files.SetDir(m.files.dir) // refresh the pane (source may have left it)
 				m.screen = m.moverReturn
@@ -232,6 +238,7 @@ func (m model) updateMover(msg tea.Msg) (tea.Model, tea.Cmd) {
 				e := m.moverSrcEntries[m.moverSrcSel]
 				switch e.kind {
 				case moverUp, moverFolder:
+					m.moverError = ""
 					m.moverSrcDir = e.path
 					m.moverSrcSel = 0
 					m.moverSrcReload()
@@ -262,6 +269,7 @@ func (m model) updateMover(msg tea.Msg) (tea.Model, tea.Cmd) {
 			e := m.moverEntries[m.moverSel]
 			switch e.kind {
 			case moverUp, moverFolder, moverSource:
+				m.moverError = ""
 				m.moverDestDir = e.path
 				m.moverSel = 0
 				m.moverReload()
@@ -390,6 +398,11 @@ func (m model) moverView() string {
 		}
 		bar := lipgloss.NewStyle().Foreground(accent).Render(line)
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
+		return b.String()
+	}
+	if m.moverError != "" {
+		errLine := lipgloss.NewStyle().Foreground(errColor).Render("⚠ " + m.moverError + "   (browse to dismiss · esc cancel)")
+		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, errLine))
 		return b.String()
 	}
 	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ browse · enter drill/select · .. → sources · esc cancel")

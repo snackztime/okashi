@@ -242,6 +242,7 @@ type model struct {
 	moverConfirm   bool
 	moverAsChapter bool
 	moverReturn    screen
+	moverError     string
 
 	moverPhase      int          // moverPickSource | moverPickDest
 	moverSrcDir     string       // left-pane browse dir (pick-source phase)

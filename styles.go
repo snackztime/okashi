@@ -7,8 +7,9 @@ const sidebarWidth = 34
 
 // The Crush-ish palette. Tweak freely — this is where the "vibe" lives.
 var (
-	accent = lipgloss.Color("#7D56F4") // Charm purple
-	subtle = lipgloss.Color("#6C6C6C")
+	accent   = lipgloss.Color("#7D56F4") // Charm purple
+	subtle   = lipgloss.Color("#6C6C6C")
+	errColor = lipgloss.Color("#ff5555") // red (Dracula)
 )
 
 // Per-type icon colors (Dracula palette). The base palette above is unchanged.
