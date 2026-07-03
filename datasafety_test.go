@@ -103,3 +103,30 @@ func TestExternalChangeDivertsToConflict(t *testing.T) {
 		t.Fatalf("currentFile should repoint to the conflict copy, got %q", m.currentFile)
 	}
 }
+
+func TestLoadFileAbortsOnFlushFailure(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses directory permissions")
+	}
+	dir := t.TempDir()
+	a := filepath.Join(dir, "a.md")
+	b := filepath.Join(dir, "b.md")
+	os.WriteFile(a, []byte("a-orig"), 0o644)
+	os.WriteFile(b, []byte("b-orig"), 0o644)
+	m := initialModel()
+	m.loadFile(a)
+	m.editor.SetValue("a-edited")
+	m.dirty = true
+	// Make the dir non-writable so the outgoing flush (atomicWrite temp+rename) fails.
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Skip("cannot restrict dir perms")
+	}
+	defer os.Chmod(dir, 0o755)
+	m.loadFile(b) // flush fails → load must abort, buffer preserved
+	if m.currentFile != a {
+		t.Fatalf("load must abort on flush failure and stay on a, currentFile=%q", m.currentFile)
+	}
+	if m.editor.Value() != "a-edited" {
+		t.Fatalf("unsaved buffer must be preserved on flush failure, got %q", m.editor.Value())
+	}
+}

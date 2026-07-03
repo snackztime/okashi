@@ -1869,6 +1869,12 @@ func (m *model) enterOutline() {
 func (m *model) loadFile(path string) {
 	if m.dirty && m.currentFile != "" && m.currentFile != path {
 		m.save() // flush the outgoing buffer before clobbering it
+		if m.dirty {
+			// The flush failed (I/O error) — save() left dirty=true. Don't clobber the
+			// unsaved buffer; stay on the current file and surface the error.
+			m.status = "save failed — staying on " + filepath.Base(m.currentFile)
+			return
+		}
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -2541,10 +2547,14 @@ func pruneBackups(dir, base string, keep int) {
 	if err != nil {
 		return
 	}
+	// Match only "<base>.<15-char timestamp>" so a shorter base (a.md) can't thin a longer
+	// base's ring (a.md.old) whose backups live in the same .okashi-bak/ dir.
+	const stampLen = len("20060102-150405")
 	var snaps []string
 	for _, e := range entries {
-		if !e.IsDir() && strings.HasPrefix(e.Name(), base+".") {
-			snaps = append(snaps, e.Name())
+		name := e.Name()
+		if !e.IsDir() && strings.HasPrefix(name, base+".") && len(name) == len(base)+1+stampLen {
+			snaps = append(snaps, name)
 		}
 	}
 	if len(snaps) <= keep {
