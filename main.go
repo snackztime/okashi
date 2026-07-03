@@ -205,17 +205,18 @@ type model struct {
 	searchHighlight string // transient: highlight this query on the editor's visible lines
 	searchReturn    screen // where ctrl+f was invoked from (esc returns here)
 
-	sidebarVisible bool
-	inspector      inspectorModel
-	focus          focus
-	creatingFile   bool
-	creatingFolder bool
-	addingSource   bool // home screen: typing a folder path into nameInput to add a source
-	previewing     bool
-	previewTufte   bool
-	previewAvail   int
-	typewriter     bool
-	dimEnabled     bool
+	sidebarVisible      bool
+	inspector           inspectorModel
+	focus               focus
+	creatingFile        bool
+	creatingFolder      bool
+	addingSource        bool // home screen: typing a folder path into nameInput to add a source
+	confirmRemoveSource bool // home screen: y-confirm before detaching the active library source
+	previewing          bool
+	previewTufte        bool
+	previewAvail        int
+	typewriter          bool
+	dimEnabled          bool
 
 	mdStyle           string // glamour theme, detected once at startup
 	colWidth          int

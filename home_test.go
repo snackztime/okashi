@@ -606,3 +606,29 @@ func TestPinnedStripRendersAndHitTests(t *testing.T) {
 		t.Fatalf("want 2 pinned cells, got %d", pinnedCells)
 	}
 }
+
+func TestHomeRemoveSourceConfirmArmsAndCancels(t *testing.T) {
+	dir := t.TempDir()
+	m := model{screen: screenHome, activeSource: 1, sources: []source{
+		{ID: "p", Name: "Writing", Kind: sourceKindPrimary},
+		{ID: "f", Name: "Notes", Kind: sourceKindFolder, Path: dir},
+	}}
+	// `d` on a removable source ARMS the confirm — it must not remove anything yet.
+	armed, _ := m.updateHome(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	am := armed.(model)
+	if !am.confirmRemoveSource {
+		t.Fatal("d should arm the removal confirm")
+	}
+	if len(am.sources) != 2 {
+		t.Fatalf("d must not remove before confirmation, sources=%d", len(am.sources))
+	}
+	// A non-y key cancels and keeps the source.
+	cancelled, _ := am.updateHome(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	cm := cancelled.(model)
+	if cm.confirmRemoveSource {
+		t.Fatal("n should clear the confirm")
+	}
+	if len(cm.sources) != 2 {
+		t.Fatalf("n should keep the source, sources=%d", len(cm.sources))
+	}
+}

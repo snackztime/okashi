@@ -416,6 +416,19 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.nameInput, cmd = m.nameInput.Update(msg)
 			return m, cmd
 		}
+		// While confirming a source removal, only y/enter removes; anything else cancels.
+		if m.confirmRemoveSource {
+			m.confirmRemoveSource = false
+			switch msg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "y", "enter":
+				m.removeActiveSource()
+			default:
+				m.status = "removal cancelled"
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -440,7 +453,12 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.nameInput.Focus()
 			return m, textinput.Blink
 		case "d":
-			m.removeActiveSource()
+			if m.activeSource >= 0 && m.activeSource < len(m.sources) && m.sources[m.activeSource].Kind != sourceKindPrimary {
+				m.confirmRemoveSource = true
+				m.status = "remove source \"" + m.sources[m.activeSource].Name + "\"? y = remove · re-add with a"
+			} else {
+				m.status = "the primary source can't be removed"
+			}
 		case "p":
 			if m.homeRegion == regionLibrary {
 				lib := m.library()
@@ -1145,6 +1163,13 @@ func (m model) homeView() string {
 	if m.addingSource {
 		prompt := "add source ▸ " + m.nameInput.View()
 		bottom := statusStyle.Width(m.width).Render(prompt)
+		return lipgloss.JoinVertical(lipgloss.Left,
+			lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, block),
+			bottom,
+		)
+	}
+	if m.confirmRemoveSource {
+		bottom := statusStyle.Width(m.width).Align(lipgloss.Center).Render(m.status)
 		return lipgloss.JoinVertical(lipgloss.Left,
 			lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, block),
 			bottom,

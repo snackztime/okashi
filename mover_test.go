@@ -331,3 +331,22 @@ func TestMoverFailedMoveStaysOpenWithError(t *testing.T) {
 		t.Fatalf("confirm should be dismissed after the failed attempt")
 	}
 }
+
+func TestMoverBoundingSourceNestedPrefersDeepest(t *testing.T) {
+	outer := t.TempDir()
+	inner := filepath.Join(outer, "drafts")
+	if err := os.MkdirAll(inner, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// outer is listed FIRST — the old first-match code returned it; the fix returns the deepest.
+	m := model{sources: []source{
+		{ID: "outer", Name: "Writing", Kind: sourceKindFolder, Path: outer},
+		{ID: "inner", Name: "Drafts", Kind: sourceKindFolder, Path: inner},
+	}}
+	if s, ok := m.moverBoundingSource(filepath.Join(inner, "ch1")); !ok || s.ID != "inner" {
+		t.Fatalf("a dir under the nested source should bind to it, got %q ok=%v", s.ID, ok)
+	}
+	if s, ok := m.moverBoundingSource(filepath.Join(outer, "notes")); !ok || s.ID != "outer" {
+		t.Fatalf("a dir only under outer should bind to outer, got %q", s.ID)
+	}
+}

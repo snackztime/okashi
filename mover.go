@@ -33,16 +33,22 @@ type moverEntry struct {
 
 // moverBoundingSource returns the reachable library source whose root contains (or equals) dir.
 func (m model) moverBoundingSource(dir string) (source, bool) {
+	var best source
+	found := false
 	for _, s := range m.sources {
 		if !s.reachable() {
 			continue
 		}
 		r := s.root()
 		if dir == r || withinRoot(dir, r) {
-			return s, true
+			// Prefer the most-specific (longest-root) match, so a source nested inside
+			// another source's tree binds to the nested one, not the outer.
+			if !found || len(r) > len(best.root()) {
+				best, found = s, true
+			}
 		}
 	}
-	return source{}, false
+	return best, found
 }
 
 // enterMover opens the file mover for the file pane's selected entry (contextual entry). The
