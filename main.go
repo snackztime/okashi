@@ -802,6 +802,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Global quit: flush unsaved work first, from any screen.
+	if key, ok := msg.(tea.KeyMsg); ok && key.String() == "ctrl+c" {
+		m.saveIfDirty()
+		return m, tea.Quit
+	}
+
 	// Global help overlay — F1 from anywhere, or `?` where the user isn't typing; any key closes it.
 	if m.showHelp {
 		if key, ok := msg.(tea.KeyMsg); ok {
@@ -2516,6 +2522,16 @@ func (m *model) save() {
 	if base := filepath.Base(m.currentFile); filepath.Dir(m.currentFile) == m.files.dir && !m.files.has(base) {
 		m.files.SetDir(m.files.dir)
 		m.files.selectName(base)
+	}
+}
+
+// saveIfDirty flushes unsaved work before the app exits.
+func (m *model) saveIfDirty() {
+	if m.dirty && m.currentFile != "" {
+		m.save()
+	}
+	if m.goalsAll != nil {
+		saveGoals(goalsPath(), m.goalsAll)
 	}
 }
 
