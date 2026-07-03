@@ -62,12 +62,15 @@ func (m *model) loadFile(path string) {
 **Gap:** no backup/snapshot exists; an accidental select-all-delete + autosave, or a bad
 spell-replace, is unrecoverable (no undo either — that's a separate spec).
 
-**Design — one snapshot per file per app-session** (NOT every save; autosave fires every ~2 s):
-the first time a file is saved in this run, copy its **prior on-disk** version (the state as you
-opened it) into a hidden sibling, then let the save proceed. Cheap (one extra write per file per
-session), and gives a "restore to how it was when I opened it" hatch; because most users restart
-daily, it also yields a rough daily snapshot.
+**Design — a timestamped snapshot ring, one snapshot per file per app-session** (NOT every save;
+autosave fires every ~2 s). The first time a file is saved in this run, copy its **prior on-disk**
+version (the state as you opened it) into a hidden sibling with a timestamped name, then prune to the
+newest N per file. Restart-daily → ~N days of "the file at the start of each session"; the
+terminal-native user restores by hand (`cp .okashi-bak/<base>.<ts> <base>`). A browse/restore UI is a
+deliberate Tier-2 follow-up.
 ```go
+const backupKeep = 10 // snapshots retained per file
+
 // model field:
 backedUp map[string]bool // files snapshotted this session
 
@@ -76,13 +79,14 @@ if m.backedUp == nil {
 	m.backedUp = map[string]bool{}
 }
 if !m.backedUp[m.currentFile] {
-	backupBeforeSave(m.currentFile) // best-effort; never blocks the save
+	snapshotBackup(m.currentFile) // best-effort; never blocks the save
 	m.backedUp[m.currentFile] = true
 }
 
-// backupBeforeSave copies the current on-disk file into <dir>/.okashi-bak/<base> (dot-prefixed →
-// excluded from the pane + manuscript detection). Best-effort: any error is ignored.
-func backupBeforeSave(path string) {
+// snapshotBackup copies the current on-disk file into <dir>/.okashi-bak/<base>.<YYYYMMDD-HHMMSS>
+// (the dir is dot-prefixed → excluded from the pane + manuscript detection), then keeps only the
+// newest backupKeep snapshots for that base. Best-effort: any error is ignored.
+func snapshotBackup(path string) {
 	data, err := os.ReadFile(path)
 	if err != nil { // new file or unreadable → nothing to back up
 		return
@@ -91,11 +95,15 @@ func backupBeforeSave(path string) {
 	if os.MkdirAll(bakDir, 0o755) != nil {
 		return
 	}
-	_ = atomicWrite(filepath.Join(bakDir, filepath.Base(path)), data, 0o644)
+	base := filepath.Base(path)
+	stamp := time.Now().Format("20060102-150405")
+	_ = atomicWrite(filepath.Join(bakDir, base+"."+stamp), data, 0o644)
+	pruneBackups(bakDir, base, backupKeep) // keep newest N matching "<base>.*"
 }
 ```
-*(A timestamped multi-version ring — real version history — is a deliberate Tier-2 follow-up; this
-is the minimal, lean escape hatch.)*
+`pruneBackups(dir, base, keep)` lists `dir`, selects entries with the `base+"."` prefix, sorts by
+name (timestamp suffix sorts chronologically), and `os.Remove`s all but the newest `keep`.
+Best-effort. (Uses `time.Now()` — fine; this is app code, not a workflow.)
 
 ## 4. External-change guard (iCloud / other-device lost-update)
 
@@ -116,8 +124,8 @@ clobbers it (lost update). No `loadedMtime` exists today.
 **Tests:**
 - save-on-quit: a dirty buffer + the global ctrl+c path calls save (buffer flushed to disk).
 - save-on-switch: dirty A, `loadFile(B)` writes A first, then loads B.
-- backup: first save of an existing file creates `.okashi-bak/<base>` with the pre-edit content;
-  a second save does not re-snapshot.
+- backup: first save of an existing file creates a `.okashi-bak/<base>.<ts>` snapshot with the
+  pre-edit content; a second save in the same session adds no snapshot; `pruneBackups` keeps ≤ N.
 - external-change: a save where on-disk mtime advanced writes a `.conflict-*.md` and does NOT
   overwrite the original; `currentFile` repoints; the original on disk is unchanged.
 
