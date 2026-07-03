@@ -46,3 +46,29 @@ func TestLoadFileFlushesOutgoingBuffer(t *testing.T) {
 		t.Fatalf("after switch the editor should show b, got %q", m.editor.Value())
 	}
 }
+
+func TestBackupSnapshotOncePerSession(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "ch.md")
+	os.WriteFile(p, []byte("v1"), 0o644)
+	m := initialModel()
+	m.loadFile(p)
+	m.editor.SetValue("v2")
+	m.dirty = true
+	m.save() // first save: snapshots the pre-edit "v1"
+	bakDir := filepath.Join(dir, ".okashi-bak")
+	entries, _ := os.ReadDir(bakDir)
+	if len(entries) != 1 {
+		t.Fatalf("first save should create exactly one snapshot, got %d", len(entries))
+	}
+	if b, _ := os.ReadFile(filepath.Join(bakDir, entries[0].Name())); string(b) != "v1" {
+		t.Fatalf("snapshot should hold the pre-edit content, got %q", b)
+	}
+	m.editor.SetValue("v3")
+	m.dirty = true
+	m.save() // second save this session: no new snapshot
+	entries2, _ := os.ReadDir(bakDir)
+	if len(entries2) != 1 {
+		t.Fatalf("second same-session save should not add a snapshot, got %d", len(entries2))
+	}
+}

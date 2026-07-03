@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -275,6 +276,8 @@ type model struct {
 
 	lastClickRow  int
 	lastClickTime time.Time
+
+	backedUp map[string]bool // files snapshotted this session
 
 	dirty      bool
 	lastEditAt time.Time
@@ -2507,10 +2510,56 @@ func (m model) composeStatus(status, stats string) string {
 	return strings.Repeat(" ", left) + stats + strings.Repeat(" ", statusStart-used) + st
 }
 
+const backupKeep = 10 // timestamped snapshots retained per file
+
+// snapshotBackup copies the current on-disk file into <dir>/.okashi-bak/<base>.<YYYYMMDD-HHMMSS>,
+// then keeps only the newest backupKeep snapshots for that base. Best-effort — never blocks a save.
+func snapshotBackup(path string) {
+	data, err := os.ReadFile(path)
+	if err != nil { // new/unreadable file → nothing to back up
+		return
+	}
+	bakDir := filepath.Join(filepath.Dir(path), ".okashi-bak")
+	if os.MkdirAll(bakDir, 0o755) != nil {
+		return
+	}
+	base := filepath.Base(path)
+	_ = atomicWrite(filepath.Join(bakDir, base+"."+time.Now().Format("20060102-150405")), data, 0o644)
+	pruneBackups(bakDir, base, backupKeep)
+}
+
+// pruneBackups removes all but the newest `keep` snapshots named "<base>.*" in dir.
+func pruneBackups(dir, base string, keep int) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	var snaps []string
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasPrefix(e.Name(), base+".") {
+			snaps = append(snaps, e.Name())
+		}
+	}
+	if len(snaps) <= keep {
+		return
+	}
+	sort.Strings(snaps) // timestamp suffix sorts chronologically; oldest first
+	for _, name := range snaps[:len(snaps)-keep] {
+		_ = os.Remove(filepath.Join(dir, name))
+	}
+}
+
 func (m *model) save() {
 	if m.currentFile == "" {
 		m.status = "no file open — pick one from the sidebar first"
 		return
+	}
+	if m.backedUp == nil {
+		m.backedUp = map[string]bool{}
+	}
+	if !m.backedUp[m.currentFile] {
+		snapshotBackup(m.currentFile)
+		m.backedUp[m.currentFile] = true
 	}
 	if err := atomicWrite(m.currentFile, []byte(m.editor.Value()), 0o644); err != nil {
 		m.status = "save failed: " + err.Error()
