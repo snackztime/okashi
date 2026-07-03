@@ -1863,6 +1863,9 @@ func (m *model) enterOutline() {
 }
 
 func (m *model) loadFile(path string) {
+	if m.dirty && m.currentFile != "" && m.currentFile != path {
+		m.save() // flush the outgoing buffer before clobbering it
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		m.status = "couldn't open: " + filepath.Base(path)
