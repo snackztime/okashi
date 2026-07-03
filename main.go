@@ -39,25 +39,28 @@ Files open in $OKASHI_DIR, else iCloud Drive's okashi folder, else
 // measure" is ~66). Override with OKASHI_WIDTH.
 const defaultColumnWidth = 72
 
-const helpText = `ctrl+b   toggle sidebar
+const helpText = `F1 / ?   show / hide this help
+ctrl+o   home
+ctrl+b   toggle sidebar
 ctrl+y   inspector tabs
-ctrl+n   new file (+  new, right-click / F2  rename)
+ctrl+f   search (tab: scope · ctrl+a: all)
+ctrl+l   outline.md (planning notes)
+ctrl+k   binder (chapter list)
+s        structure mode (from binder)
+ctrl+n   new file (F2 / right-click rename)
 r        rename file
+d        duplicate file
 M        move file/folder
 del      delete file
-d        duplicate file
-ctrl+l   outline
-ctrl+k   binder
 ctrl+e   export
-ctrl+p   preview
+ctrl+p   preview (t: toggle style)
 ctrl+t   typewriter
 ctrl+d   focus dim
+tab/⇧tab indent / outdent
 ctrl+s   save
 ctrl+g   set goals
 ctrl+u   start/stop writing sprint
 ctrl+r   spelling suggestions
-ctrl+f   search (tab scope · ctrl+a all sources)
-ctrl+o   home
 ⌥/⇧+drag select text (native) · ⌘C copy
 esc      switch focus / back
 ctrl+c   quit`
@@ -582,6 +585,24 @@ func (m *model) wordUnderCursor() (word string, start, end int, ok bool) {
 	return "", 0, 0, false
 }
 
+// capturingText reports whether a text field currently has focus, so a literal `?`
+// should be typed rather than opening the help overlay. (F1 always opens help;
+// `?` only opens it where the user isn't typing.)
+func (m model) capturingText() bool {
+	if m.renaming || m.goalPromptField != 0 || m.suggesting || m.exportPrompt || m.creatingFile || m.addingSource {
+		return true
+	}
+	switch m.screen {
+	case screenSearch:
+		return true
+	case screenStructure:
+		return m.structureRenaming
+	case screenWriting:
+		return m.focus == focusEditor && !m.previewing
+	}
+	return false
+}
+
 // cursorSpellHint returns the misspelled word under the cursor and its suggestions
 // for passive display, or ok=false. Active only when spellcheck is on, on the
 // writing screen, and no modal/prompt is up.
@@ -780,6 +801,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Global help overlay — F1 from anywhere, or `?` where the user isn't typing; any key closes it.
+	if m.showHelp {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			if key.String() == "ctrl+c" {
+				return m, tea.Quit
+			}
+			m.showHelp = false
+			return m, nil
+		}
+		return m, nil
+	}
+	if key, ok := msg.(tea.KeyMsg); ok {
+		if key.Type == tea.KeyF1 || (key.String() == "?" && !m.capturingText()) {
+			m.showHelp = true
+			return m, nil
+		}
+	}
+
 	if m.screen == screenHome {
 		return m.updateHome(msg)
 	}
@@ -935,22 +974,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.nameInput, cmd = m.nameInput.Update(msg)
 		return m, cmd
-	}
-
-	if m.showHelp {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			if key.String() == "ctrl+c" {
-				return m, tea.Quit
-			}
-			m.showHelp = false
-			return m, nil
-		}
-		return m, nil
-	}
-
-	if key, ok := msg.(tea.KeyMsg); ok && key.Type == tea.KeyF1 {
-		m.showHelp = true
-		return m, nil
 	}
 
 	if m.suggesting {
@@ -1429,6 +1452,17 @@ func (m model) View() string {
 		return "loading…"
 	}
 
+	// Help overlay renders over any screen (F1 / ? open it from anywhere).
+	if m.showHelp {
+		hH := m.height - 1
+		if hH < 1 {
+			hH = 1
+		}
+		card := framedPanel("Keys", helpText, 50, min(hH, lipgloss.Height(helpText)+2), "")
+		body := lipgloss.Place(m.width, hH, lipgloss.Center, lipgloss.Center, card)
+		return lipgloss.JoinVertical(lipgloss.Left, body, statusStyle.Width(m.width).Render("F1 · ? · esc  close"))
+	}
+
 	if m.screen == screenHome {
 		return m.homeView()
 	}
@@ -1456,12 +1490,6 @@ func (m model) View() string {
 	bodyH := m.height - 1 // status only; no banner in the writing zone
 	if bodyH < 1 {
 		bodyH = 1
-	}
-
-	if m.showHelp {
-		card := framedPanel("Keys", helpText, 36, min(bodyH, lipgloss.Height(helpText)+2), "")
-		body := lipgloss.Place(m.width, bodyH, lipgloss.Center, lipgloss.Center, card)
-		return lipgloss.JoinVertical(lipgloss.Left, body, statusStyle.Width(m.width).Render("F1/esc close"))
 	}
 
 	// Refresh the decorator so the grammar "don't nag the line you're typing" rule

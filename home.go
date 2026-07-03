@@ -1150,7 +1150,11 @@ func (m model) homeView() string {
 			bottom,
 		)
 	}
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, block)
+	hint := statusStyle.Width(m.width).Align(lipgloss.Center).Render("F1 · ?  keybindings")
+	return lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, block),
+		hint,
+	)
 }
 
 // homeItemAt maps an absolute screen (x,y) to a launch (region, index).
