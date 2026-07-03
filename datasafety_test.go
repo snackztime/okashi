@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 // editorModelAt builds a model whose editor holds `content` for `path`, marked dirty.
@@ -70,5 +71,35 @@ func TestBackupSnapshotOncePerSession(t *testing.T) {
 	entries2, _ := os.ReadDir(bakDir)
 	if len(entries2) != 1 {
 		t.Fatalf("second same-session save should not add a snapshot, got %d", len(entries2))
+	}
+}
+
+func TestExternalChangeDivertsToConflict(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "ch.md")
+	os.WriteFile(p, []byte("orig"), 0o644)
+	m := initialModel()
+	m.loadFile(p) // records loadedMtime
+	m.editor.SetValue("my edits")
+	m.dirty = true
+	// Simulate an external change: rewrite p with a strictly newer mtime.
+	os.WriteFile(p, []byte("external version"), 0o644)
+	future := time.Now().Add(2 * time.Second)
+	os.Chtimes(p, future, future)
+	m.save()
+	// The original on disk must NOT be overwritten.
+	if got, _ := os.ReadFile(p); string(got) != "external version" {
+		t.Fatalf("save must not clobber the externally-changed file, got %q", got)
+	}
+	// A conflict copy must hold our edits, and currentFile must repoint to it.
+	matches, _ := filepath.Glob(filepath.Join(dir, "ch.conflict-*.md"))
+	if len(matches) != 1 {
+		t.Fatalf("expected one conflict copy, got %d", len(matches))
+	}
+	if b, _ := os.ReadFile(matches[0]); string(b) != "my edits" {
+		t.Fatalf("conflict copy should hold our edits, got %q", b)
+	}
+	if m.currentFile != matches[0] {
+		t.Fatalf("currentFile should repoint to the conflict copy, got %q", m.currentFile)
 	}
 }

@@ -277,7 +277,8 @@ type model struct {
 	lastClickRow  int
 	lastClickTime time.Time
 
-	backedUp map[string]bool // files snapshotted this session
+	backedUp    map[string]bool      // files snapshotted this session
+	loadedMtime map[string]time.Time // file → mtime at load, for the external-change guard
 
 	dirty      bool
 	lastEditAt time.Time
@@ -1876,6 +1877,12 @@ func (m *model) loadFile(path string) {
 	}
 	m.editor.SetValue(string(data))
 	m.currentFile = path
+	if m.loadedMtime == nil {
+		m.loadedMtime = map[string]time.Time{}
+	}
+	if fi, err := os.Stat(path); err == nil {
+		m.loadedMtime[path] = fi.ModTime()
+	}
 	m.sessionBaseline = wordCount(string(data))
 	m.previewing = false
 	m.status = "opened " + filepath.Base(path)
@@ -2554,6 +2561,28 @@ func (m *model) save() {
 		m.status = "no file open — pick one from the sidebar first"
 		return
 	}
+	// External-change guard: never overwrite a file that changed on disk since we loaded it.
+	if fi, err := os.Stat(m.currentFile); err == nil {
+		if loaded, ok := m.loadedMtime[m.currentFile]; ok && fi.ModTime().After(loaded) {
+			ext := filepath.Ext(m.currentFile)
+			confl := strings.TrimSuffix(m.currentFile, ext) + ".conflict-" + time.Now().Format("20060102-150405") + ext
+			if werr := atomicWrite(confl, []byte(m.editor.Value()), 0o644); werr != nil {
+				m.status = "save failed (conflict): " + werr.Error()
+				return
+			}
+			m.status = "⚠ " + filepath.Base(m.currentFile) + " changed on disk — your edits saved to " + filepath.Base(confl)
+			m.currentFile = confl
+			if m.loadedMtime == nil {
+				m.loadedMtime = map[string]time.Time{}
+			}
+			if cfi, err := os.Stat(confl); err == nil {
+				m.loadedMtime[confl] = cfi.ModTime()
+			}
+			m.dirty = false
+			addRecent(recentPath(), confl)
+			return
+		}
+	}
 	if m.backedUp == nil {
 		m.backedUp = map[string]bool{}
 	}
@@ -2568,6 +2597,12 @@ func (m *model) save() {
 	m.dirty = false
 	addRecent(recentPath(), m.currentFile)
 	m.status = "saved " + filepath.Base(m.currentFile)
+	if m.loadedMtime == nil {
+		m.loadedMtime = map[string]time.Time{}
+	}
+	if fi, err := os.Stat(m.currentFile); err == nil {
+		m.loadedMtime[m.currentFile] = fi.ModTime()
+	}
 
 	// Surface a newly-created file in the sidebar if we're browsing its folder.
 	// Re-saving an already-listed file leaves the selection undisturbed.
