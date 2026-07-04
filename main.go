@@ -60,6 +60,7 @@ ctrl+e   export
 ctrl+p   preview (t: toggle style)
 ctrl+t   typewriter
 ctrl+d   focus dim
+ctrl+x   selection mode (plain-drag select)
 tab/⇧tab indent / outdent
 ctrl+s   save
 ctrl+z   undo
@@ -326,6 +327,8 @@ type model struct {
 	suggestWord              string
 
 	showHelp bool
+
+	selectMode bool // native drag-select mode: okashi's mouse capture is released (ctrl+x toggles)
 
 	properties propertiesModel
 	snapshots  snapshotsModel
@@ -1299,6 +1302,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+p":
 			m.togglePreview()
 			return m, nil
+		case "ctrl+x":
+			// Toggle native selection: release okashi's mouse capture so a plain drag selects
+			// text (and the terminal's own copy works), then restore capture so clicks work again.
+			m.selectMode = !m.selectMode
+			if m.selectMode {
+				m.status = "-- SELECT -- · drag to select, copy with your terminal · ctrl+x exits"
+				return m, tea.DisableMouse
+			}
+			m.status = "select mode off"
+			return m, tea.EnableMouseCellMotion
 		case "ctrl+t":
 			m.typewriter = !m.typewriter
 			m.editor.Typewriter = m.typewriter
@@ -2554,6 +2567,9 @@ func (m model) statusBar() string {
 		mark = "●"
 	}
 	stats := mark + " " + m.statsText()
+	if m.selectMode {
+		stats = lipgloss.NewStyle().Foreground(accent).Bold(true).Render("-- SELECT --") + "  " + stats
+	}
 	return m.composeStatus(m.status, stats)
 }
 

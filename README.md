@@ -228,10 +228,13 @@ The folder is created on first run.
 ## Text selection
 
 okashi enables mouse reporting so the scroll wheel and click-to-focus work.
-This suppresses the terminal's native drag-to-select. To select text:
+This suppresses the terminal's native drag-to-select. Two ways to select text:
 
-- **iTerm2 / Ghostty / Terminal.app** — hold **⌥ Option** and drag.
-- **Most other terminals** — hold **Shift** and drag.
+- **Quick modifier drag** — hold **⌥ Option** (iTerm2 / Ghostty / Terminal.app)
+  or **Shift** (most other terminals) and drag.
+- **Selection mode** — press **`ctrl+x`** to release okashi's mouse capture so a
+  **plain drag** selects; a `-- SELECT --` marker shows in the status bar. Press
+  `ctrl+x` again to restore clicking.
 
 Then **⌘C** (or your terminal's copy key) to copy.
 
