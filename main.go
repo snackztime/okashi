@@ -55,6 +55,7 @@ r        rename file
 d        duplicate file
 M        move file/folder
 b        snapshots / restore (sidebar; d/D to diff)
+g        writing history heatmap (sidebar)
 del      delete file
 ctrl+e   export
 ctrl+p   preview (t: toggle style)
@@ -180,6 +181,7 @@ const (
 	screenProperties
 	screenSnapshots
 	screenDiff
+	screenHeatmap
 )
 
 const (
@@ -334,6 +336,7 @@ type model struct {
 	properties propertiesModel
 	snapshots  snapshotsModel
 	diff       diffModel
+	heatmap    heatmapModel
 }
 
 func initialModel() model {
@@ -918,6 +921,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenDiff {
 		return m.updateDiff(msg)
+	}
+
+	if m.screen == screenHeatmap {
+		return m.updateHeatmap(msg)
 	}
 
 	// While naming a new file, the prompt captures all input.
@@ -1521,6 +1528,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.enterMover()
 				case "b":
 					m.enterSnapshots()
+				case "g":
+					m.enterHeatmap()
 				}
 			}
 		}
@@ -1611,6 +1620,10 @@ func (m model) View() string {
 
 	if m.screen == screenDiff {
 		return m.diffView()
+	}
+
+	if m.screen == screenHeatmap {
+		return m.heatmapView()
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone

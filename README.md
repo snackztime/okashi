@@ -168,6 +168,19 @@ exports skip the title page.
 
 ---
 
+## Goals & pace
+
+Set writing goals with `ctrl+g`: a daily word target, a project word target, daily
+writing minutes, and an optional **deadline**. With a project target + deadline, the Goals
+inspector tab shows a live **burndown** — "≈850/day to hit 80,000 by Mar 1" — that adjusts
+as you write.
+
+okashi keeps a per-project **word-count history**. The Goals tab shows a recent sparkline
+and your current **streak**; press `g` (in the sidebar) to open the full **writing-history
+heatmap** — a contributions-style grid of how much you wrote each day.
+
+---
+
 ## Preview
 
 `ctrl+p` opens a rendered Markdown preview of the current document (powered by

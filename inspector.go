@@ -449,6 +449,14 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 		} else {
 			b.WriteString("  Today     " + fmtDuration(time.Duration(goals.todayActiveSecs)*time.Second) + "\n")
 		}
+		if len(goals.spark) > 0 {
+			b.WriteString("\n\n" + sectionHeader("History", width) + "\n")
+			hist := "  " + sparkline(goals.spark)
+			if goals.streakDays > 0 {
+				hist += lipgloss.NewStyle().Foreground(accent).Render(fmt.Sprintf("  %d-day streak", goals.streakDays))
+			}
+			b.WriteString(hist + "\n  " + lipgloss.NewStyle().Foreground(subtle).Render("g → full history"))
+		}
 	default: // tabWords
 		b.WriteString(sectionHeader("Document", width) + "\n")
 		b.WriteString("  " + kvRow("Words", doc.words, width-2) + "\n")
