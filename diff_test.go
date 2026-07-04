@@ -163,3 +163,30 @@ func TestDiffEntrySnapshotVsCurrent(t *testing.T) {
 		t.Fatalf("diff should show OLD removed, CURRENT added (del=%v add=%v)", del, add)
 	}
 }
+
+// TestDiffLinesExhaustiveSmall verifies the reconstruct invariant across every pair of short
+// sequences over a 3-symbol alphabet — a deterministic stress test that catches Myers
+// backtrack off-by-ones far better than a handful of hand cases.
+func TestDiffLinesExhaustiveSmall(t *testing.T) {
+	alpha := []string{"A", "B", "C"}
+	var seqs [][]string
+	seqs = append(seqs, nil)
+	for _, x := range alpha {
+		seqs = append(seqs, []string{x})
+		for _, y := range alpha {
+			seqs = append(seqs, []string{x, y})
+			for _, z := range alpha {
+				seqs = append(seqs, []string{x, y, z})
+			}
+		}
+	}
+	for _, a := range seqs {
+		for _, b := range seqs {
+			ops := diffLines(a, b)
+			ra, rb := reconstruct(ops)
+			if joinEq(ra) != joinEq(a) || joinEq(rb) != joinEq(b) {
+				t.Fatalf("reconstruct failed for a=%v b=%v → ra=%v rb=%v", a, b, ra, rb)
+			}
+		}
+	}
+}
