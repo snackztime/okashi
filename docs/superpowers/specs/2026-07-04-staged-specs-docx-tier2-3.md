@@ -156,10 +156,11 @@ Small, independent items; group into one stage/plan.
 - **8a. Discoverable selection mode** — a key toggles `tea.DisableMouse`/`tea.EnableMouseCellMotion`
   so native drag-select works, with a `-- SELECT --` status indicator; toggles back to okashi's
   mouse handling. Fixes the "selection feels broken" first impression. **DECISION:** the toggle key.
-- **8b. Per-project settings** — width + smartquotes per project. Store in `manifest.json` as a
-  `settings` object (or a per-dir `.okashi.json`). Read in place of the global `OKASHI_*` when
-  present. **DECISION:** manifest stanza (touches the shared-contract shape → HARD GATE, confirm
-  with the companion app) vs a separate per-dir config file (no contract impact — recommend).
+- **8b. Per-project settings** — **ABSORBED** into the Project Properties feature
+  (`2026-07-04-project-properties-design.md`), built next, before Stage 7. Resolved: per-project
+  `.okashi.json` (width + smartquotes), a personal global `config.json` (author + contact), and an
+  editable Properties screen. No manifest schema change → no HARD GATE. Do **not** build 8b
+  separately.
 - **8c. Non-UTF-8 guard in `loadFile`** — `utf8.Valid` check; on invalid, warn and don't mark dirty
   until an intentional edit (today a Latin-1 file is silently mutated on first save). Small.
 - **8d. Lock-in messaging** — README paragraph: work is plain `.md` + readable `manifest.json`
