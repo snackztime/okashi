@@ -55,6 +55,11 @@ full-screen writing surface.
 **Saving:** okashi autosaves as you write and shows a save indicator in the
 status bar. Press `ctrl+s` to save explicitly at any time.
 
+**Snapshots:** every file keeps a ring of timestamped backups in a `.okashi-bak/`
+folder beside it. Select a file in the sidebar and press `b` to browse them —
+preview any snapshot, take one on demand with `n`, or restore one with `⏎`
+(your current version is backed up first, so a restore is never destructive).
+
 ---
 
 ## Keyboard shortcuts

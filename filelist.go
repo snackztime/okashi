@@ -276,6 +276,18 @@ func (f *filelist) activate() (string, bool) {
 	return filepath.Join(f.dir, e.name), true
 }
 
+// selectedFile returns the selected entry's path if it's a regular file (not a dir or "..").
+func (f filelist) selectedFile() (string, bool) {
+	if f.selected < 0 || f.selected >= len(f.entries) {
+		return "", false
+	}
+	e := f.entries[f.selected]
+	if e.isDir {
+		return "", false
+	}
+	return filepath.Join(f.dir, e.name), true
+}
+
 // paneLabel is the file-pane header: "Files" at the source root, the manuscript title
 // for a manuscript (manifest or legacy), else the folder name for a category.
 func (f filelist) paneLabel() string {

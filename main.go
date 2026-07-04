@@ -53,6 +53,7 @@ ctrl+n   new file (F2 / right-click rename)
 r        rename file
 d        duplicate file
 M        move file/folder
+b        snapshots / restore (sidebar)
 del      delete file
 ctrl+e   export
 ctrl+p   preview (t: toggle style)
@@ -175,6 +176,7 @@ const (
 	screenStructure
 	screenMover
 	screenProperties
+	screenSnapshots
 )
 
 const (
@@ -325,6 +327,7 @@ type model struct {
 	showHelp bool
 
 	properties propertiesModel
+	snapshots  snapshotsModel
 }
 
 func initialModel() model {
@@ -898,6 +901,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateProperties(msg)
 	}
 
+	if m.screen == screenSnapshots {
+		return m.updateSnapshots(msg)
+	}
+
 	// While naming a new file, the prompt captures all input.
 	if m.creatingFile {
 		if key, ok := msg.(tea.KeyMsg); ok {
@@ -1465,6 +1472,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.duplicateSelected()
 				case "M":
 					m.enterMover()
+				case "b":
+					m.enterSnapshots()
 				}
 			}
 		}
@@ -1547,6 +1556,10 @@ func (m model) View() string {
 
 	if m.screen == screenProperties {
 		return m.propertiesView()
+	}
+
+	if m.screen == screenSnapshots {
+		return m.snapshotsView()
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone

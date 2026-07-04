@@ -88,7 +88,9 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   **retitle** the `items[].title` — filename stays birth-stable; legacy numbered chapters,
   loose files, Resources, and folders rename on disk); markdown **preview** (`ctrl+p`,
   glamour); **Properties** (`i` from the hub: edit title / author / contact / width /
-  smartquotes — see below).
+  smartquotes — see below); **Snapshots** (`b` from the sidebar: browse / preview / restore a
+  file's `.okashi-bak/` timestamped backups; `n` takes one on demand, restore backs up the current
+  version first).
 - **Properties** (`i` on a hub project): okashi's one *editable* metadata surface. Personal
   identity (author, contact) → global `config.json` in the OS user-config dir (`os.UserConfigDir()`,
   alongside `recent.json`; macOS `~/Library/Application Support/okashi`); per-project width +
