@@ -206,6 +206,8 @@ type model struct {
 	searchOffset    int
 	searchHighlight string // transient: highlight this query on the editor's visible lines
 	searchReturn    screen // where ctrl+f was invoked from (esc returns here)
+	replaceInput    textinput.Model
+	replaceMode     bool // in the search screen: entering a replacement for the current query
 
 	sidebarVisible      bool
 	inspector           inspectorModel
@@ -347,6 +349,7 @@ func initialModel() model {
 		appleFindings:  map[string][]grammarFinding{},
 		snippets:       newSnippetCache(),
 		searchInput:    newSearchInput(),
+		replaceInput:   newSearchInput(),
 		now:            time.Now(),
 	}
 	m.resetHomeSelection()

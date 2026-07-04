@@ -228,6 +228,24 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case tea.KeyMsg:
+		// Replace mode: typing the replacement for the current query; enter replaces all in the doc.
+		if m.replaceMode {
+			switch msg.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "esc":
+				m.replaceMode = false
+				m.replaceInput.Blur()
+				m.searchInput.Focus()
+				return m, nil
+			case "enter":
+				m.replaceAllInDoc()
+				return m, nil
+			}
+			var cmd tea.Cmd
+			m.replaceInput, cmd = m.replaceInput.Update(msg)
+			return m, cmd
+		}
 		switch msg.String() {
 		case "ctrl+c":
 			return m, tea.Quit
@@ -235,6 +253,15 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = m.searchReturn
 			if m.screen == screenSearch {
 				m.screen = screenWriting
+			}
+			return m, nil
+		case "ctrl+r":
+			// Enter replace mode for the current query (replaces in the current chapter only).
+			if strings.TrimSpace(m.searchInput.Value()) != "" {
+				m.replaceMode = true
+				m.searchInput.Blur()
+				m.replaceInput.SetValue("")
+				m.replaceInput.Focus()
 			}
 			return m, nil
 		case "enter":
@@ -267,6 +294,32 @@ func (m model) updateSearch(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// replaceAllInDoc replaces every literal occurrence of the current query with the replacement text
+// in the OPEN document (current chapter only), then closes search. checkpointUndo makes it undoable.
+func (m *model) replaceAllInDoc() {
+	q := m.searchInput.Value()
+	r := m.replaceInput.Value()
+	m.replaceMode = false
+	m.replaceInput.Blur()
+	m.screen = m.searchReturn
+	if m.screen == screenSearch {
+		m.screen = screenWriting
+	}
+	if q == "" {
+		return
+	}
+	cur := m.editor.Value()
+	n := strings.Count(cur, q)
+	if n == 0 {
+		m.status = "no matches for \"" + q + "\""
+		return
+	}
+	m.checkpointUndo()
+	m.editor.SetValue(strings.ReplaceAll(cur, q, r))
+	m.dirty = true
+	m.status = fmt.Sprintf("replaced %d × \"%s\" → \"%s\"", n, q, r)
+}
+
 // searchView renders the search screen.
 func (m model) searchView() string {
 	width := m.width
@@ -286,6 +339,10 @@ func (m model) searchView() string {
 	var b strings.Builder
 	b.WriteString(head + strings.Repeat(" ", gap) + right + "\n")
 	b.WriteString(rule + "\n")
+	if m.replaceMode {
+		b.WriteString("Replace ▸ " + m.replaceInput.View() + "\n")
+		b.WriteString(rule + "\n")
+	}
 
 	vis := m.searchVisibleRows()
 	end := m.searchOffset + vis
@@ -323,7 +380,11 @@ func (m model) searchView() string {
 	} else if len(m.searchHits) == 0 {
 		note = "(no matches)"
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render(note + " · ↑↓ select · ⏎ open · Tab scope · ctrl+a all sources · esc back")
+	footText := note + " · ↑↓ select · ⏎ open · Tab scope · ctrl+r replace · esc back"
+	if m.replaceMode {
+		footText = "⏎ replace all in this chapter · esc cancel"
+	}
+	foot := lipgloss.NewStyle().Foreground(subtle).Render(footText)
 	b.WriteString(foot)
 	return b.String()
 }

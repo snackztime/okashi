@@ -18,8 +18,14 @@ func (m *model) checkpointUndo() {
 	}
 }
 
-// undo (ctrl+z) restores the buffer to the previous checkpoint. No-op with nothing to undo.
+// undo (ctrl+z) restores the buffer to the previous checkpoint. It first ensures the CURRENT
+// buffer is on the ring (capturing edits since the last tick, or a mutation like replace/spell-apply
+// that changed the buffer without its own post-checkpoint), then pops it and restores the prior
+// state. No-op with nothing to undo.
 func (m *model) undo() {
+	if cur := m.editor.Value(); len(m.undoStack) == 0 || m.undoStack[len(m.undoStack)-1] != cur {
+		m.undoStack = append(m.undoStack, cur)
+	}
 	if len(m.undoStack) < 2 {
 		m.status = "nothing to undo"
 		return
