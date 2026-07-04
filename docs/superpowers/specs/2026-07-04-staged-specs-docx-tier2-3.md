@@ -171,10 +171,11 @@ Small, independent items; group into one stage/plan.
 
 ---
 
-## Build order (stages)
-1 DOCX → 2 Undo → 3 Find&Replace → 4 Resume-cursor → 5 Title page → 6 Readability → 7 Snapshots →
-8 Tier-3 bundle. Stages are independent enough to reorder on request. Each: full plan + SDD when
-scheduled; DOCX first.
+## Build order (stages) — ALL COMPLETE (2026-07-04)
+1 DOCX ✅ → 2 Undo ✅ → 3 Find&Replace ✅ → 4 Resume-cursor ✅ → 5 Title page ✅ → 6 Readability ✅ →
+**Project Properties** ✅ (new; absorbed 8b) → 7 Snapshots ✅ → 8 Tier-3 bundle ✅ (8a select mode,
+8c UTF-8 guard, 8d lock-in copy, 8e commitStructure ordering; 8b absorbed into Properties). Every
+stage shipped to `main` with tests; Properties/Snapshots/Tier-3 each got an adversarial review pass.
 
 ## Non-goals (unchanged, hold the lean/anti-PKM ethos)
 EPUB; character/timeline metadata; multiple cursors / split view.
