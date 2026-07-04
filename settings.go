@@ -2,11 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 )
 
-// userConfig is personal, machine-global identity (stored in ~/.config/okashi/config.json,
+// userConfig is personal, machine-global identity (stored in the OS user-config dir under
+// okashi/config.json — macOS: ~/Library/Application Support/okashi; Linux: ~/.config/okashi —
 // alongside recent.json) used on the export title page. Applies to every project.
 type userConfig struct {
 	Author  string `json:"author,omitempty"`
@@ -52,8 +54,12 @@ func loadUserConfig(path string) userConfig {
 	return c
 }
 
-// saveUserConfig writes the personal config atomically, creating the config dir if needed.
+// saveUserConfig writes the personal config atomically, creating the config dir if needed. Guards
+// the no-config-dir case (path == "") so it never touches the cwd (mirrors loadUserConfig).
 func saveUserConfig(path string, c userConfig) error {
+	if path == "" {
+		return errors.New("no user config directory available")
+	}
 	data, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err

@@ -192,17 +192,20 @@ func (p *propertiesModel) save() (projectChanged bool, err error) {
 }
 
 // savePropertiesAndApply saves the Properties form and, if the edited dir is the open project,
-// re-applies width/smartquotes and a possibly-retitled manifest to the live view.
-func (m *model) savePropertiesAndApply() {
+// re-applies width/smartquotes and a possibly-retitled manifest to the live view. Returns the save
+// error so callers that navigate away (the confirm-exit prompt) can refuse to on failure — leaving
+// the user's edits intact rather than discarding them.
+func (m *model) savePropertiesAndApply() error {
 	if _, err := m.properties.save(); err != nil {
 		m.status = "properties save failed: " + err.Error()
-		return
+		return err
 	}
 	if m.properties.dir == m.files.dir {
 		m.files.SetDir(m.files.dir) // reflect a retitled manifest in the sidebar
 		m.applyProjectSettings()    // reflect width/smartquotes live
 	}
 	m.status = "properties saved"
+	return nil
 }
 
 func (m model) updateProperties(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -224,8 +227,11 @@ func (m model) updateProperties(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if p.confirmExit {
 		switch ks {
 		case "s":
-			m.savePropertiesAndApply()
-			m.screen = screenHome
+			if err := m.savePropertiesAndApply(); err == nil {
+				m.screen = screenHome
+			} else {
+				p.confirmExit = false // stay on the form: edits preserved, error shown in the status
+			}
 		case "d":
 			m.screen = screenHome
 		case "esc":

@@ -1,12 +1,42 @@
 package main
 
 import (
+	"os"
 	"strconv"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// A failed save from the unsaved-changes prompt must NOT navigate home (which would drop the edits).
+func TestPropertiesSaveFailureFromConfirmStaysOnScreen(t *testing.T) {
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permissions")
+	}
+	t.Setenv("OKASHI_WIDTH", "")
+	dir := t.TempDir()
+	m := model{properties: newPropertiesModel(dir)}
+	m.files.dir = dir
+	m.screen = screenProperties
+	m.properties.width.SetValue("80") // dirty (per-project store)
+	m.properties.confirmExit = true
+
+	// Make the project dir unwritable so saveProjectSettings fails.
+	if err := os.Chmod(dir, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	defer os.Chmod(dir, 0o755)
+
+	mm, _ := m.updateProperties(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'s'}})
+	got := mm.(model)
+	if got.screen == screenHome {
+		t.Fatal("a failed save must not navigate home — edits would be lost")
+	}
+	if got.properties.width.Value() != "80" {
+		t.Fatal("edits must be preserved after a failed save")
+	}
+}
 
 func TestPropertiesViewRendersFields(t *testing.T) {
 	dir := t.TempDir()

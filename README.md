@@ -179,7 +179,8 @@ things you'd otherwise set via env vars:
 
 - **Title** — the manuscript display title (written to `manifest.json`; manuscripts only).
 - **Author** and **Contact** — your name and a multi-line contact block for the export title page,
-  saved to a personal `~/.config/okashi/config.json` (set once, applies to every project).
+  saved to a personal `config.json` in your OS config dir (macOS `~/Library/Application
+  Support/okashi/`, Linux `~/.config/okashi/`) — set once, applies to every project.
 - **Width** and **Smart quotes** — per-project editor preferences, saved to `<project>/.okashi.json`.
 
 `⇥` moves between fields, `⏎` edits, `space` toggles, `ctrl+s` saves, `esc` backs out. Both stores

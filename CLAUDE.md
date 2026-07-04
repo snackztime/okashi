@@ -90,7 +90,8 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   glamour); **Properties** (`i` from the hub: edit title / author / contact / width /
   smartquotes — see below).
 - **Properties** (`i` on a hub project): okashi's one *editable* metadata surface. Personal
-  identity (author, contact) → global `~/.config/okashi/config.json`; per-project width +
+  identity (author, contact) → global `config.json` in the OS user-config dir (`os.UserConfigDir()`,
+  alongside `recent.json`; macOS `~/Library/Application Support/okashi`); per-project width +
   smartquotes → `<project>/.okashi.json`; title → `manifest.json`. Effective value resolves
   **file → env → default** per field (`resolveSettings` in `settings.go`), so `OKASHI_*` stays a
   working default. **No manifest schema change** — the shared-contract HARD GATE is untriggered.
