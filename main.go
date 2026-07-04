@@ -67,25 +67,36 @@ ctrl+r   spelling suggestions
 esc      switch focus / back
 ctrl+c   quit`
 
-// resolveColumnWidth reads OKASHI_WIDTH (a column count in [20,200]); otherwise
-// defaultColumnWidth.
-func resolveColumnWidth() int {
+// resolveColumnWidthEnv reads OKASHI_WIDTH (a column count in [20,200]); the bool reports whether a
+// valid value was present (so a higher tier can decide whether to override it).
+func resolveColumnWidthEnv() (int, bool) {
 	if v := os.Getenv("OKASHI_WIDTH"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil && n >= 20 && n <= 200 {
-			return n
+			return n, true
 		}
 	}
-	return defaultColumnWidth
+	return defaultColumnWidth, false
 }
 
-// resolveSmartQuotes reads OKASHI_SMARTQUOTES; off/false/0 disable, default on.
-func resolveSmartQuotes() bool {
-	switch strings.ToLower(os.Getenv("OKASHI_SMARTQUOTES")) {
-	case "off", "false", "0":
-		return false
+// resolveColumnWidth is the env-or-default column width (thin wrapper over the Env variant).
+func resolveColumnWidth() int { n, _ := resolveColumnWidthEnv(); return n }
+
+// resolveSmartQuotesEnv reads OKASHI_SMARTQUOTES; off/false/0 disable, any other non-empty value
+// enables. The bool reports whether the env var was set (present) at all.
+func resolveSmartQuotesEnv() (bool, bool) {
+	v := strings.ToLower(os.Getenv("OKASHI_SMARTQUOTES"))
+	if v == "" {
+		return true, false
 	}
-	return true
+	switch v {
+	case "off", "false", "0":
+		return false, true
+	}
+	return true, true
 }
+
+// resolveSmartQuotes is the env-or-default smart-quote setting (thin wrapper).
+func resolveSmartQuotes() bool { b, _ := resolveSmartQuotesEnv(); return b }
 
 // smartQuote returns the curly form of a straight quote. It's an opening quote
 // at the start of a line or after whitespace / an opening bracket; otherwise
