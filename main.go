@@ -1280,6 +1280,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.screen = screenHome
 			m.homeItems = buildHomeItems(loadRecents(recentPath()), m.activeSourceRoot(), m.pinned)
 			m.resetHomeSelection()
+			if m.selectMode {
+				// Select mode disabled mouse capture; the hub needs clicks, and ctrl+x can't be
+				// reached there — so restore the mouse on the way out.
+				m.selectMode = false
+				return m, tea.EnableMouseCellMotion
+			}
 			return m, nil
 		case "ctrl+f":
 			m.previewing = false // leave preview if active

@@ -30,6 +30,20 @@ func TestSelectModeToggle(t *testing.T) {
 	}
 }
 
+// Leaving the writing screen for the hub must restore the mouse — the hub needs clicks and
+// ctrl+x is unreachable there, so a lingering select mode would trap the user with a dead mouse.
+func TestSelectModeRestoredOnGoHome(t *testing.T) {
+	m := model{screen: screenWriting, selectMode: true, editor: textarea.New()}
+	mm, cmd := m.Update(tea.KeyMsg{Type: tea.KeyCtrlO})
+	m = mm.(model)
+	if m.selectMode {
+		t.Fatal("going to the hub must clear select mode")
+	}
+	if cmd == nil {
+		t.Fatal("going to the hub from select mode must return a mouse-enable command")
+	}
+}
+
 func TestSelectModeStatusIndicator(t *testing.T) {
 	m := model{width: 100, colWidth: 72, selectMode: true, editor: textarea.New()}
 	if !containsSubstr(m.statusBar(), "SELECT") {
