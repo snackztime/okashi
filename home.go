@@ -755,7 +755,7 @@ func (m model) libraryColumn(h int) ([]string, []innerCell) {
 		}
 	}
 	if len(rows) == 0 {
-		return []string{homeDim("(empty)")}, nil
+		return []string{homeDim("no projects — + to create")}, nil
 	}
 	// Find the active row (the selected library item) and window around it.
 	activeRow := 0
@@ -784,7 +784,7 @@ func (m model) libraryColumn(h int) ([]string, []innerCell) {
 // two lines (name+count, dim snippet) + cells.
 func (m model) filesColumn(h, contentW int) ([]string, []innerCell) {
 	if len(m.homeFiles) == 0 {
-		return []string{homeDim("(empty)")}, nil
+		return []string{homeDim("no files — ctrl+n for a doc")}, nil
 	}
 	active := 0
 	if m.homeRegion == regionFiles {
