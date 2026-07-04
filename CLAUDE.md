@@ -91,7 +91,7 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
 - Env knobs: `OKASHI_DIR`, `OKASHI_WIDTH`, `OKASHI_SMARTQUOTES`, `OKASHI_THEME`,
   `OKASHI_ICONS` (`nerd`/`plain`/`auto`; unset = auto — Nerd Font glyphs except on
   Terminal.app / Linux VT console, which get plain glyphs since the font isn't patched),
-  `OKASHI_AUTHOR` (export header).
+  `OKASHI_AUTHOR` (export header + title page), `OKASHI_CONTACT` (title-page contact block).
 
 ### Scope discipline
 - **okashi defines the lean feature set — keep it lean.** New surface area here propagates to

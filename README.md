@@ -145,7 +145,11 @@ When invoked from the outline, the full manuscript is exported (all chapters
 concatenated). When invoked from the editor, only the current document is
 exported.
 
-Set `OKASHI_AUTHOR` to include your name in the Manuscript running header.
+A whole-manuscript Manuscript-style export opens with a standard title page:
+your name and contact block (`OKASHI_AUTHOR` / `OKASHI_CONTACT`) top-left, an
+approximate word count top-right, and the title centered below. Set
+`OKASHI_AUTHOR` to also stamp your name into the running header. Single-chapter
+exports skip the title page.
 
 ---
 
@@ -175,7 +179,8 @@ with `OKASHI_THEME=dark` or `OKASHI_THEME=light`.
 | `OKASHI_SMARTQUOTES` | `on` | Smart curly quotes as you type; set `off`, `false`, or `0` to disable |
 | `OKASHI_THEME` | _(auto)_ | Force `dark` or `light` for the Markdown preview |
 | `OKASHI_ICONS` | _(auto)_ | Glyph set: `nerd` (Nerd Font glyphs), `plain` (Unicode only), or unset for auto-detect |
-| `OKASHI_AUTHOR` | _(none)_ | Author name for the Manuscript export running header |
+| `OKASHI_AUTHOR` | _(none)_ | Author name for the Manuscript running header + title page |
+| `OKASHI_CONTACT` | _(none)_ | Free-text contact block (address/email; newlines allowed) for the Manuscript title page |
 
 ### Writing folder
 

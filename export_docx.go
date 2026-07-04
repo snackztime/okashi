@@ -67,10 +67,14 @@ func writeDOCX(doc ManuscriptDoc, st ExportStyle, meta Meta) ([]byte, error) {
 	var body strings.Builder
 	body.WriteString(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` + "\n")
 	body.WriteString(`<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>`)
+	titlePage := st == StyleManuscript && meta.TitlePage
+	if titlePage {
+		writeTitlePageDOCX(&body, meta, font, manuscriptWordCount(doc))
+	}
 	for i, sec := range doc {
-		// Chapter title: centered, bold, new page (except the first).
+		// Chapter title: centered, bold, new page (except the first — unless a title page precedes it).
 		pageBreak := ""
-		if i > 0 {
+		if i > 0 || titlePage {
 			pageBreak = "<w:pageBreakBefore/>"
 		}
 		body.WriteString(docxPara([]Run{{Text: sec.Title, Bold: true}}, font,
@@ -104,6 +108,22 @@ func writeDOCX(doc ManuscriptDoc, st ExportStyle, meta Meta) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// writeTitlePageDOCX prepends a Shunn title page: word count top-right, contact block top-left,
+// title + byline pushed toward the vertical middle. The first chapter gets pageBreakBefore.
+func writeTitlePageDOCX(b *strings.Builder, meta Meta, font string, words int) {
+	b.WriteString(docxPara([]Run{{Text: approxWords(words)}}, font, `<w:jc w:val="right"/>`))
+	if meta.Author != "" {
+		b.WriteString(docxPara([]Run{{Text: meta.Author}}, font, ""))
+	}
+	for _, ln := range contactLines(meta.Contact) {
+		b.WriteString(docxPara([]Run{{Text: ln}}, font, ""))
+	}
+	b.WriteString(docxPara([]Run{{Text: meta.Title}}, font, `<w:jc w:val="center"/><w:spacing w:before="5760"/>`))
+	if meta.Author != "" {
+		b.WriteString(docxPara([]Run{{Text: "by " + meta.Author}}, font, `<w:jc w:val="center"/>`))
+	}
 }
 
 // writeBlockDOCX mirrors writeBlockRTF's block handling. Degrade decisions:

@@ -42,7 +42,13 @@ func (m *model) runExport(st ExportStyle) {
 		return
 	}
 
-	meta := Meta{Author: os.Getenv("OKASHI_AUTHOR"), Title: title}
+	// A Shunn title page is for a whole-manuscript submission, not a single-chapter export.
+	meta := Meta{
+		Author:    os.Getenv("OKASHI_AUTHOR"),
+		Title:     title,
+		Contact:   os.Getenv("OKASHI_CONTACT"),
+		TitlePage: m.screen == screenOutline,
+	}
 	outDir := filepath.Join(dir, "export")
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		m.status = "export failed: " + err.Error()

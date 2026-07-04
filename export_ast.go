@@ -27,8 +27,11 @@ const (
 
 // Meta is the document-level metadata both writers stamp in.
 type Meta struct {
-	Author string
-	Title  string
+	Author  string
+	Title   string
+	Contact string // OKASHI_CONTACT: free-text address/email block for the title page
+	// TitlePage requests a Shunn-style manuscript title page (whole-manuscript exports only).
+	TitlePage bool
 }
 
 // Run is a span of text with emphasis flags.

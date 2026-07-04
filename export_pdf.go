@@ -92,7 +92,11 @@ func writePDF(doc ManuscriptDoc, st ExportStyle, meta Meta) (out []byte, err err
 	} else {
 		pdf.SetMargins(72, 72, 72)
 		pdf.AliasNbPages("{nb}")
+		hasTitle := meta.TitlePage
 		pdf.SetHeaderFunc(func() {
+			if hasTitle && pdf.PageNo() == 1 {
+				return // the title page carries no running header
+			}
 			pdf.SetFont("Courier", "", 12)
 			hdr := fmt.Sprintf("%s / %s / %d", meta.Author, strings.ToUpper(meta.Title), pdf.PageNo())
 			pdf.CellFormat(0, 14, pdfEnc(st, hdr), "", 0, "R", false, 0, "")
@@ -101,6 +105,9 @@ func writePDF(doc ManuscriptDoc, st ExportStyle, meta Meta) (out []byte, err err
 	}
 	pdf.SetAutoPageBreak(true, 72)
 
+	if st == StyleManuscript && meta.TitlePage {
+		writeTitlePagePDF(pdf, st, meta, manuscriptWordCount(doc))
+	}
 	for _, sec := range doc {
 		pdf.AddPage()
 		pdf.SetFont(cfg.font, "B", cfg.titleSize)
@@ -116,6 +123,33 @@ func writePDF(doc ManuscriptDoc, st ExportStyle, meta Meta) (out []byte, err err
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// writeTitlePagePDF renders the Shunn title page as page 1: contact block top-left and word
+// count top-right (same top band), title + byline centered near the vertical middle. The
+// header func suppresses the running header on this page; the first section's AddPage follows.
+func writeTitlePagePDF(pdf *fpdf.Fpdf, st ExportStyle, meta Meta, words int) {
+	pdf.AddPage()
+	pdf.SetFont("Courier", "", 12)
+	topY := pdf.GetY()
+	// Word count, top-right.
+	pdf.CellFormat(0, 14, pdfEnc(st, approxWords(words)), "", 1, "R", false, 0, "")
+	// Contact block, top-left, starting on the same band.
+	pdf.SetXY(72, topY)
+	var left []string
+	if meta.Author != "" {
+		left = append(left, meta.Author)
+	}
+	left = append(left, contactLines(meta.Contact)...)
+	for _, ln := range left {
+		pdf.CellFormat(0, 14, pdfEnc(st, ln), "", 1, "L", false, 0, "")
+	}
+	// Title + byline near the vertical middle (Letter is 792pt tall).
+	pdf.SetY(360)
+	pdf.CellFormat(0, 14, pdfEnc(st, meta.Title), "", 1, "C", false, 0, "")
+	if meta.Author != "" {
+		pdf.CellFormat(0, 14, pdfEnc(st, "by "+meta.Author), "", 1, "C", false, 0, "")
+	}
 }
 
 func writeBlockPDF(pdf *fpdf.Fpdf, blk Block, st ExportStyle, cfg pdfStyle) {

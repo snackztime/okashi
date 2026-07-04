@@ -60,7 +60,12 @@ func writeRTF(doc ManuscriptDoc, st ExportStyle, meta Meta) []byte {
 	if st == StyleTufte {
 		b.WriteString(`\margl2160\margr2880\margt1440\margb1440` + "\n")
 	} else {
-		b.WriteString(`\margl1440\margr1440\margt1440\margb1440` + "\n")
+		b.WriteString(`\margl1440\margr1440\margt1440\margb1440`)
+		if st == StyleManuscript && meta.TitlePage {
+			// \titlepg + an empty first-page header keeps the running header off the title page.
+			b.WriteString(`\titlepg{\headerf\pard\par}`)
+		}
+		b.WriteString("\n")
 		fmt.Fprintf(&b, `{\header\pard\qr\f0\fs24 %s / %s / \chpgn\par}`+"\n",
 			rtfEscape(meta.Author), rtfEscape(strings.ToUpper(meta.Title)))
 	}
@@ -68,6 +73,9 @@ func writeRTF(doc ManuscriptDoc, st ExportStyle, meta Meta) []byte {
 		b.WriteString(`\f1\fs24` + "\n")
 	} else {
 		b.WriteString(`\f0\fs24` + "\n")
+	}
+	if st == StyleManuscript && meta.TitlePage {
+		writeTitlePageRTF(&b, meta, manuscriptWordCount(doc))
 	}
 	for _, sec := range doc {
 		b.WriteString(`\page` + "\n")
@@ -78,6 +86,29 @@ func writeRTF(doc ManuscriptDoc, st ExportStyle, meta Meta) []byte {
 	}
 	b.WriteString("}")
 	return []byte(b.String())
+}
+
+// writeTitlePageRTF emits the Shunn title page as page 1: contact block top-left, word count
+// top-right, title + byline pushed toward the vertical middle. The following section's \page
+// starts the story on page 2.
+func writeTitlePageRTF(b *strings.Builder, meta Meta, words int) {
+	fmt.Fprintf(b, `{\pard\qr\f0\fs24 %s\par}`+"\n", rtfEscape(approxWords(words)))
+	var left []string
+	if meta.Author != "" {
+		left = append(left, meta.Author)
+	}
+	left = append(left, contactLines(meta.Contact)...)
+	if len(left) > 0 {
+		esc := make([]string, len(left))
+		for i, ln := range left {
+			esc[i] = rtfEscape(ln)
+		}
+		fmt.Fprintf(b, `{\pard\ql\f0\fs24 %s\par}`+"\n", strings.Join(esc, `\line `))
+	}
+	fmt.Fprintf(b, `{\pard\qc\sb5760\f0\fs24 %s\par}`+"\n", rtfEscape(meta.Title))
+	if meta.Author != "" {
+		fmt.Fprintf(b, `{\pard\qc\f0\fs24 by %s\par}`+"\n", rtfEscape(meta.Author))
+	}
 }
 
 func writeBlockRTF(b *strings.Builder, blk Block, st ExportStyle) {
