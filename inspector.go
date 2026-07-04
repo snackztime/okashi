@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -136,7 +138,18 @@ func renderOutline(text string, width int) string {
 	return b.String()
 }
 
-type docStats struct{ words, chars, paragraphs int }
+type docStats struct {
+	words, chars, paragraphs int
+	readSecs                 int        // estimated reading time at 238 wpm
+	sentMean, sentStdDev     float64    // sentence length in words (mean ± population stddev)
+	overused                 []wordFreq // top repeated content words
+}
+
+// wordFreq is one word and how often it appears — for the overused-word list.
+type wordFreq struct {
+	word string
+	n    int
+}
 
 type projStats struct {
 	words, chapters int
@@ -243,7 +256,84 @@ func computeDocStats(text string) docStats {
 			ds.paragraphs++
 		}
 	}
+	ds.readSecs = ds.words * 60 / 238 // ~238 wpm silent adult reading
+	ds.sentMean, ds.sentStdDev = sentenceStats(text)
+	ds.overused = overusedWords(text, 5)
 	return ds
+}
+
+var sentenceSplitRe = regexp.MustCompile(`[.!?]+`)
+
+// sentenceStats returns the mean and population standard deviation of sentence length (in
+// words), splitting on runs of . ! ? — an approximation (abbreviations end a "sentence"),
+// but a cheap, useful signal for prose rhythm.
+func sentenceStats(text string) (mean, std float64) {
+	var lens []float64
+	for _, s := range sentenceSplitRe.Split(text, -1) {
+		if n := len(strings.Fields(s)); n > 0 {
+			lens = append(lens, float64(n))
+		}
+	}
+	if len(lens) == 0 {
+		return 0, 0
+	}
+	var sum float64
+	for _, l := range lens {
+		sum += l
+	}
+	mean = sum / float64(len(lens))
+	var v float64
+	for _, l := range lens {
+		d := l - mean
+		v += d * d
+	}
+	return mean, math.Sqrt(v / float64(len(lens)))
+}
+
+var wordTokenRe = regexp.MustCompile(`[\p{L}']+`)
+
+// overusedWords returns the top content words by frequency (case-folded, stop words and
+// very short words removed), each appearing at least 3 times, ordered by count then
+// alphabetically for stable rendering. Returns at most `top` entries.
+func overusedWords(text string, top int) []wordFreq {
+	counts := map[string]int{}
+	for _, w := range wordTokenRe.FindAllString(strings.ToLower(text), -1) {
+		w = strings.Trim(w, "'")
+		if len(w) < 4 || stopWords[w] {
+			continue
+		}
+		counts[w]++
+	}
+	var fs []wordFreq
+	for w, n := range counts {
+		if n >= 3 {
+			fs = append(fs, wordFreq{w, n})
+		}
+	}
+	sort.Slice(fs, func(i, j int) bool {
+		if fs[i].n != fs[j].n {
+			return fs[i].n > fs[j].n
+		}
+		return fs[i].word < fs[j].word
+	})
+	if len(fs) > top {
+		fs = fs[:top]
+	}
+	return fs
+}
+
+// stopWords are common function words excluded from the overused-word list (they're always
+// frequent and carry no craft signal). Length-<4 words are already dropped, so this only
+// needs the frequent 4+-letter function words.
+var stopWords = map[string]bool{
+	"that": true, "this": true, "with": true, "from": true, "they": true, "them": true,
+	"then": true, "than": true, "were": true, "have": true, "here": true, "there": true,
+	"what": true, "when": true, "which": true, "while": true, "would": true, "could": true,
+	"should": true, "been": true, "your": true, "yours": true, "into": true,
+	"over": true, "some": true, "such": true, "only": true, "will": true, "shall": true,
+	"upon": true, "about": true, "their": true, "these": true, "those": true, "does": true,
+	// Crutch words like "just", "very", "really" are deliberately NOT excluded — flagging
+	// their overuse is the point.
 }
 
 // computeProjStats sums the resolved manuscript's chapter word counts (or, for a
@@ -268,13 +358,22 @@ func computeProjStats(dir string, v manuscriptView, wc *wordCountCache) projStat
 
 // kvRow renders "  label" left, a subtle right-aligned number, fit to width.
 func kvRow(label string, n, width int) string {
+	return kvStrRow(label, commafy(n), width)
+}
+
+// kvStrRow is kvRow with a pre-formatted string value.
+func kvStrRow(label, val string, width int) string {
 	lbl := "  " + label
-	val := commafy(n)
 	gap := width - lipgloss.Width(lbl) - lipgloss.Width(val)
 	if gap < 1 {
 		gap = 1
 	}
 	return lbl + strings.Repeat(" ", gap) + lipgloss.NewStyle().Foreground(subtle).Render(val)
+}
+
+// fmtReadTime formats a reading-time estimate as m:ss.
+func fmtReadTime(secs int) string {
+	return fmt.Sprintf("%d:%02d", secs/60, secs%60)
 }
 
 // View renders the tab bar + the active tab's body, fit to the given inner width.
@@ -353,6 +452,20 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 		b.WriteString("  " + kvRow("Words", proj.words, width-2))
 		if proj.manuscript {
 			b.WriteString("\n  " + kvRow("Chapters", proj.chapters, width-2))
+		}
+		if doc.words > 0 {
+			b.WriteString("\n\n" + sectionHeader("Readability", width) + "\n")
+			b.WriteString("  " + kvStrRow("Reading time", fmtReadTime(doc.readSecs), width-2) + "\n")
+			b.WriteString("  " + kvStrRow("Avg sentence", fmt.Sprintf("%.0f±%.0f wd", doc.sentMean, doc.sentStdDev), width-2))
+			if len(doc.overused) > 0 {
+				b.WriteString("\n\n" + sectionHeader("Overused", width) + "\n")
+				for i, wf := range doc.overused {
+					b.WriteString("  " + kvRow(wf.word, wf.n, width-2))
+					if i < len(doc.overused)-1 {
+						b.WriteString("\n")
+					}
+				}
+			}
 		}
 	}
 	return b.String()
