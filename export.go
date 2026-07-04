@@ -64,5 +64,15 @@ func (m *model) runExport(st ExportStyle) {
 		m.status = "export failed: " + err.Error()
 		return
 	}
-	m.status = "exported " + slug + ".rtf + .pdf to export/"
+	docxPath := filepath.Join(outDir, slug+".docx")
+	docxBytes, err := writeDOCX(doc, st, meta)
+	if err != nil {
+		m.status = "export failed (docx): " + err.Error()
+		return
+	}
+	if err := atomicWrite(docxPath, docxBytes, 0o644); err != nil {
+		m.status = "export failed: " + err.Error()
+		return
+	}
+	m.status = "exported " + slug + ".rtf + .pdf + .docx to export/"
 }

@@ -92,6 +92,37 @@ func TestExportManifestManuscriptUsesManifestOrder(t *testing.T) {
 	}
 }
 
+func TestExportEmitsDOCX(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv("OKASHI_DIR", root)
+	proj := filepath.Join(root, "novel")
+	os.MkdirAll(proj, 0o755)
+	os.WriteFile(filepath.Join(proj, "02-the-letter.md"), []byte("She wrote **back**."), 0o644)
+	m := initialModel()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m = nm.(model)
+	m.screen = screenWriting
+	m.files.SetDir(proj)
+	m.currentFile = filepath.Join(proj, "02-the-letter.md")
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
+	m = nm.(model)
+	if !m.exportPrompt {
+		t.Fatal("ctrl+e should raise the export chooser")
+	}
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	m = nm.(model)
+	// single-doc title = sectionTitle -> "the letter" -> slug "the-letter"
+	docxPath := filepath.Join(proj, "export", "the-letter.docx")
+	b, err := os.ReadFile(docxPath)
+	if err != nil {
+		t.Fatalf("expected a DOCX at %s: %v", docxPath, err)
+	}
+	if !hasZipEntry(b, "word/document.xml") {
+		t.Fatalf("DOCX at %s is not a valid zip or missing word/document.xml", docxPath)
+	}
+}
+
 func TestExportCancel(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
