@@ -173,6 +173,7 @@ const (
 	screenSearch
 	screenStructure
 	screenMover
+	screenProperties
 )
 
 const (
@@ -321,6 +322,8 @@ type model struct {
 	suggestWord              string
 
 	showHelp bool
+
+	properties propertiesModel
 }
 
 func initialModel() model {
@@ -888,6 +891,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenMover {
 		return m.updateMover(msg)
+	}
+
+	if m.screen == screenProperties {
+		return m.updateProperties(msg)
 	}
 
 	// While naming a new file, the prompt captures all input.
@@ -1535,6 +1542,10 @@ func (m model) View() string {
 
 	if m.screen == screenMover {
 		return m.moverView()
+	}
+
+	if m.screen == screenProperties {
+		return m.propertiesView()
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone

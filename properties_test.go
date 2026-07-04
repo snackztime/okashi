@@ -1,0 +1,120 @@
+package main
+
+import (
+	"strconv"
+	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
+
+func TestPropertiesSaveOnlyChangedStores(t *testing.T) {
+	t.Setenv("OKASHI_WIDTH", "")
+	t.Setenv("OKASHI_SMARTQUOTES", "")
+	dir := t.TempDir()
+
+	p := newPropertiesModel(dir)
+	p.width.SetValue("80") // change width only
+
+	changed, err := p.save()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !changed {
+		t.Fatal("a width change should report projectChanged=true")
+	}
+	ps := loadProjectSettings(dir)
+	if ps.Width == nil || *ps.Width != 80 {
+		t.Fatalf("width not saved: %+v", ps)
+	}
+	// Smartquotes was untouched → must stay unwritten (per-field save, not force-materialized).
+	if ps.Smartquotes != nil {
+		t.Fatal("unchanged smartquotes must not be written to .okashi.json")
+	}
+	// A second save with nothing changed writes nothing new.
+	if changed, _ := p.save(); changed {
+		t.Fatal("no-op save should report projectChanged=false")
+	}
+}
+
+func TestPropertiesNonManuscriptTitleReadOnly(t *testing.T) {
+	dir := t.TempDir() // no manifest
+	p := newPropertiesModel(dir)
+	if p.isManuscript {
+		t.Fatal("a bare temp dir is not a manuscript")
+	}
+	for _, k := range p.fields {
+		if k == propTitle {
+			t.Fatal("Title must be skipped in the tab order for a non-manifest dir")
+		}
+	}
+}
+
+func TestPropertiesManuscriptTitleSavedPreservingItems(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeManifest(dir, manifest{
+		SchemaVersion: manifestSchemaVersion,
+		Title:         "Old Title",
+		Items:         []manifestItem{{File: "01-one.md", Title: "One"}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	p := newPropertiesModel(dir)
+	if !p.isManuscript || len(p.fields) == 0 || p.fields[0] != propTitle {
+		t.Fatalf("manuscript should have Title as the first field: %+v", p.fields)
+	}
+	if p.origTitle != "Old Title" {
+		t.Fatalf("title seeded from manifest, got %q", p.origTitle)
+	}
+	p.title.SetValue("New Title")
+	if _, err := p.save(); err != nil {
+		t.Fatal(err)
+	}
+	mani, _, _ := readManifest(dir)
+	if mani.Title != "New Title" {
+		t.Fatalf("manifest title = %q, want New Title", mani.Title)
+	}
+	if len(mani.Items) != 1 || mani.Items[0].File != "01-one.md" {
+		t.Fatalf("items must be preserved by the read-modify-write: %+v", mani.Items)
+	}
+}
+
+func TestPropertiesWidthRevertsOnInvalid(t *testing.T) {
+	t.Setenv("OKASHI_WIDTH", "")
+	dir := t.TempDir()
+	m := model{properties: newPropertiesModel(dir)}
+	p := &m.properties
+	for i, k := range p.fields {
+		if k == propWidth {
+			p.focus = i
+		}
+	}
+	p.editing = true
+	p.width.SetValue("999") // out of [20,200]
+
+	mm, _ := m.updatePropertiesEditing(tea.KeyMsg{Type: tea.KeyEsc})
+	got := mm.(model)
+	want := strconv.Itoa(got.properties.origWidth)
+	if got.properties.width.Value() != want {
+		t.Fatalf("invalid width should revert to %q, got %q", want, got.properties.width.Value())
+	}
+	if got.properties.editing {
+		t.Fatal("commit should leave editing mode")
+	}
+}
+
+func TestPropertiesDirtyTracking(t *testing.T) {
+	t.Setenv("OKASHI_WIDTH", "")
+	dir := t.TempDir()
+	p := newPropertiesModel(dir)
+	if p.dirty() {
+		t.Fatal("a freshly loaded model is not dirty")
+	}
+	p.author.SetValue(p.origAuthor + "X")
+	if !p.dirty() {
+		t.Fatal("a changed author should be dirty")
+	}
+	p.author.SetValue(p.origAuthor)
+	if p.dirty() {
+		t.Fatal("reverting a field to its original should clear dirty")
+	}
+}
