@@ -59,6 +59,7 @@ ctrl+t   typewriter
 ctrl+d   focus dim
 tab/⇧tab indent / outdent
 ctrl+s   save
+ctrl+z   undo
 ctrl+g   set goals
 ctrl+u   start/stop writing sprint
 ctrl+r   spelling suggestions
@@ -279,6 +280,7 @@ type model struct {
 
 	backedUp    map[string]bool      // files snapshotted this session
 	loadedMtime map[string]time.Time // file → mtime at load, for the external-change guard
+	undoStack   []string             // coarse per-file buffer checkpoints for ctrl+z undo
 
 	dirty      bool
 	lastEditAt time.Time
@@ -715,6 +717,7 @@ func (m *model) applySuggestion(i int) {
 		return
 	}
 	chosen := matchCase(m.suggestWord, m.suggestions[i])
+	m.checkpointUndo() // capture pre-apply state so ctrl+z can undo the fix
 	m.editor.ReplaceRange(m.suggestStart, m.suggestEnd, chosen)
 	m.status = "'" + m.suggestWord + "' → '" + chosen + "'"
 	m.suggesting = false
@@ -772,6 +775,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeSaveCtr = 0
 			}
 		}
+		m.checkpointUndo() // coarse per-tick undo checkpoint (no-op if unchanged)
 		cmds := []tea.Cmd{autosaveTick()}
 		if m.autoRecheckDue(now) {
 			m.checkingGrammar = true
@@ -1361,6 +1365,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "ctrl+s":
 			m.save()
 			return m, nil
+		case "ctrl+z":
+			m.undo()
+			return m, nil
 		case "ctrl+r":
 			if !m.renaming && m.goalPromptField == 0 && !m.suggesting && !m.previewing {
 				w, s, e, ok := m.wordUnderCursor()
@@ -1883,6 +1890,7 @@ func (m *model) loadFile(path string) {
 		return
 	}
 	m.editor.SetValue(string(data))
+	m.undoStack = []string{string(data)} // reset the undo ring per opened file, seeded with its content
 	m.currentFile = path
 	if m.loadedMtime == nil {
 		m.loadedMtime = map[string]time.Time{}
