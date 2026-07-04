@@ -54,7 +54,7 @@ ctrl+n   new file (F2 / right-click rename)
 r        rename file
 d        duplicate file
 M        move file/folder
-b        snapshots / restore (sidebar)
+b        snapshots / restore (sidebar; d/D to diff)
 del      delete file
 ctrl+e   export
 ctrl+p   preview (t: toggle style)
@@ -179,6 +179,7 @@ const (
 	screenMover
 	screenProperties
 	screenSnapshots
+	screenDiff
 )
 
 const (
@@ -332,6 +333,7 @@ type model struct {
 
 	properties propertiesModel
 	snapshots  snapshotsModel
+	diff       diffModel
 }
 
 func initialModel() model {
@@ -907,6 +909,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenSnapshots {
 		return m.updateSnapshots(msg)
+	}
+
+	if m.screen == screenDiff {
+		return m.updateDiff(msg)
 	}
 
 	// While naming a new file, the prompt captures all input.
@@ -1580,6 +1586,10 @@ func (m model) View() string {
 
 	if m.screen == screenSnapshots {
 		return m.snapshotsView()
+	}
+
+	if m.screen == screenDiff {
+		return m.diffView()
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone

@@ -1,6 +1,20 @@
 package main
 
-import "regexp"
+import (
+	"regexp"
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+)
+
+var (
+	diffDelStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1"))            // red
+	diffAddStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("2"))            // green
+	diffDelHi    = lipgloss.NewStyle().Foreground(lipgloss.Color("9")).Bold(true) // changed words
+	diffAddHi    = lipgloss.NewStyle().Foreground(lipgloss.Color("10")).Bold(true)
+)
 
 // diffOp classifies a line in an edit script.
 type diffOp int
@@ -127,4 +141,197 @@ func diffWords(a, b string) (aRuns, bRuns []wordRun) {
 		}
 	}
 	return aRuns, bRuns
+}
+
+// diffModel backs the diff screen: a rendered edit script with intra-line word highlights,
+// windowed for O(visible) rendering.
+type diffModel struct {
+	aLabel, bLabel string
+	lines          []diffLine
+	wordRuns       map[int][]wordRun // line index → highlighted runs, for paired del/add lines
+	offset         int
+}
+
+func splitLines(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return strings.Split(strings.TrimRight(s, "\n"), "\n")
+}
+
+// newDiffModel diffs two contents and precomputes word-level highlights for changed line pairs.
+func newDiffModel(aLabel, aContent, bLabel, bContent string) diffModel {
+	ops := diffLines(splitLines(aContent), splitLines(bContent))
+	wr := map[int][]wordRun{}
+	// Pair a run of deletions immediately followed by an equal-length run of additions; when the
+	// paired lines are similar prose, highlight only the words that differ.
+	i := 0
+	for i < len(ops) {
+		if ops[i].op != opDel {
+			i++
+			continue
+		}
+		ds := i
+		for i < len(ops) && ops[i].op == opDel {
+			i++
+		}
+		de := i
+		as := i
+		for i < len(ops) && ops[i].op == opAdd {
+			i++
+		}
+		ae := i
+		if de-ds == ae-as {
+			for j := 0; j < de-ds; j++ {
+				delIdx, addIdx := ds+j, as+j
+				if similarLine(ops[delIdx].text, ops[addIdx].text) {
+					aR, bR := diffWords(ops[delIdx].text, ops[addIdx].text)
+					wr[delIdx] = aR
+					wr[addIdx] = bR
+				}
+			}
+		}
+	}
+	return diffModel{aLabel: aLabel, bLabel: bLabel, lines: ops, wordRuns: wr}
+}
+
+// similarLine reports whether two lines share enough words to be worth word-level highlighting.
+func similarLine(a, b string) bool {
+	at, bt := strings.Fields(a), strings.Fields(b)
+	if len(at) == 0 || len(bt) == 0 {
+		return false
+	}
+	set := map[string]bool{}
+	for _, w := range at {
+		set[w] = true
+	}
+	common := 0
+	for _, w := range bt {
+		if set[w] {
+			common++
+		}
+	}
+	minLen := len(at)
+	if len(bt) < minLen {
+		minLen = len(bt)
+	}
+	return float64(common)/float64(minLen) >= 0.3
+}
+
+// jumpChange returns the offset of the next/prev changed line relative to the current top.
+func (d diffModel) jumpChange(offset, dir, maxOff int) int {
+	if dir > 0 {
+		for i := offset + 1; i < len(d.lines); i++ {
+			if d.lines[i].op != opEqual {
+				return min(i, maxOff)
+			}
+		}
+		return offset
+	}
+	for i := offset - 1; i >= 0; i-- {
+		if d.lines[i].op != opEqual {
+			return i
+		}
+	}
+	return offset
+}
+
+func renderDiffLine(dl diffLine, runs []wordRun) string {
+	var gutter string
+	var base, hi lipgloss.Style
+	switch dl.op {
+	case opDel:
+		gutter, base, hi = "-", diffDelStyle, diffDelHi
+	case opAdd:
+		gutter, base, hi = "+", diffAddStyle, diffAddHi
+	default:
+		gutter, base = " ", lipgloss.NewStyle().Foreground(subtle)
+	}
+	var body string
+	if runs != nil {
+		var b strings.Builder
+		for _, r := range runs {
+			if r.changed {
+				b.WriteString(hi.Render(r.text))
+			} else {
+				b.WriteString(base.Render(r.text))
+			}
+		}
+		body = b.String()
+	} else {
+		body = base.Render(dl.text)
+	}
+	return base.Render(gutter+" ") + body
+}
+
+func (m model) diffView() string {
+	d := m.diff
+	header := lipgloss.NewStyle().Foreground(accent).Bold(true).Render("── diff · " + d.aLabel + " → " + d.bLabel + " ")
+	h := m.height - 4
+	if h < 1 {
+		h = 1
+	}
+	end := d.offset + h
+	if end > len(d.lines) {
+		end = len(d.lines)
+	}
+	var rows []string
+	for i := d.offset; i < end; i++ {
+		rows = append(rows, ansi.Truncate(renderDiffLine(d.lines[i], d.wordRuns[i]), max(4, m.width-1), "…"))
+	}
+	if len(d.lines) == 0 {
+		rows = append(rows, lipgloss.NewStyle().Foreground(subtle).Render("  (files are identical)"))
+	}
+	for len(rows) < h {
+		rows = append(rows, "")
+	}
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ scroll · n/N next/prev change · esc back")
+	return header + "\n\n" + strings.Join(rows, "\n") + "\n" + foot
+}
+
+func (m model) updateDiff(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if sz, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width, m.height = sz.Width, sz.Height
+		return m, nil
+	}
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	d := &m.diff
+	h := m.height - 4
+	if h < 1 {
+		h = 1
+	}
+	maxOff := len(d.lines) - h
+	if maxOff < 0 {
+		maxOff = 0
+	}
+	switch key.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc", "d":
+		m.screen = screenSnapshots
+	case "up", "k":
+		if d.offset > 0 {
+			d.offset--
+		}
+	case "down", "j":
+		if d.offset < maxOff {
+			d.offset++
+		}
+	case "pgup":
+		if d.offset -= h; d.offset < 0 {
+			d.offset = 0
+		}
+	case "pgdown", " ":
+		if d.offset += h; d.offset > maxOff {
+			d.offset = maxOff
+		}
+	case "n":
+		d.offset = d.jumpChange(d.offset, 1, maxOff)
+	case "N":
+		d.offset = d.jumpChange(d.offset, -1, maxOff)
+	}
+	return m, nil
 }

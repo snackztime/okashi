@@ -1,6 +1,8 @@
 package main
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -106,5 +108,58 @@ func TestDiffWordsHighlightsOnlyChanged(t *testing.T) {
 	}
 	if len(changedA) != 1 || changedA[0] != "quick" {
 		t.Fatalf("only 'quick' should be highlighted on the a side, got %v", changedA)
+	}
+}
+
+func TestDiffModelWindowsAndHighlights(t *testing.T) {
+	a := "line one\nthe quick brown fox\nline three"
+	b := "line one\nthe slow brown fox\nline three\nadded"
+	d := newDiffModel("old", a, "new", b)
+	if len(d.wordRuns) == 0 {
+		t.Fatal("expected word-level highlights for the changed line pair")
+	}
+	m := model{width: 80, height: 10, screen: screenDiff, diff: d}
+	out := m.diffView()
+	if n := strings.Count(out, "\n"); n > 12 {
+		t.Fatalf("diff view should window to ~height rows, got %d newlines", n)
+	}
+	if !strings.Contains(out, "diff · old → new") {
+		t.Fatalf("diff header missing from view")
+	}
+}
+
+func TestDiffJumpChange(t *testing.T) {
+	d := newDiffModel("a", "x\ny\nz", "b", "x\nY\nz")
+	if got := d.jumpChange(0, 1, 100); got <= 0 {
+		t.Fatalf("jumpChange forward should advance to a change, got %d", got)
+	}
+}
+
+func TestDiffEntrySnapshotVsCurrent(t *testing.T) {
+	file, bak := seedSnapshots(t) // file content = "CURRENT"
+	if err := os.WriteFile(filepath.Join(bak, "a.md.20260704-101500"), []byte("OLD"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := model{snapshots: newSnapshotsModel(file)}
+	m.snapshots.sel = 0
+	m.openDiffSnapshotVsCurrent()
+
+	if m.screen != screenDiff {
+		t.Fatal("should switch to the diff screen")
+	}
+	if m.diff.bLabel != "current" {
+		t.Fatalf("bLabel = %q, want current", m.diff.bLabel)
+	}
+	var del, add bool
+	for _, l := range m.diff.lines {
+		if l.op == opDel && l.text == "OLD" {
+			del = true
+		}
+		if l.op == opAdd && l.text == "CURRENT" {
+			add = true
+		}
+	}
+	if !del || !add {
+		t.Fatalf("diff should show OLD removed, CURRENT added (del=%v add=%v)", del, add)
 	}
 }

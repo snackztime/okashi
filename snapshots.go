@@ -29,6 +29,7 @@ type snapshotsModel struct {
 	previewing     bool
 	preview        string
 	confirmRestore bool
+	markA          int // first endpoint for a two-snapshot diff (-1 = none)
 }
 
 // listSnapshots reads a file's .okashi-bak/ ring, newest first. Missing dir → nil.
@@ -64,6 +65,7 @@ func newSnapshotsModel(file string) snapshotsModel {
 		base:   filepath.Base(file),
 		bakDir: filepath.Join(filepath.Dir(file), ".okashi-bak"),
 		snaps:  listSnapshots(file),
+		markA:  -1,
 	}
 }
 
@@ -156,6 +158,9 @@ func (m model) updateSnapshots(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if s.previewing {
 			s.previewing = false
 			s.preview = ""
+		} else if s.markA >= 0 {
+			s.markA = -1
+			m.status = "diff mark cleared"
 		} else {
 			m.screen = screenWriting
 			m.focus = focusSidebar
@@ -190,8 +195,59 @@ func (m model) updateSnapshots(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if len(s.snaps) > 0 {
 			s.confirmRestore = true
 		}
+	case "d":
+		if len(s.snaps) > 0 {
+			m.openDiffSnapshotVsCurrent()
+		}
+	case "D":
+		if len(s.snaps) > 0 {
+			if s.markA < 0 {
+				s.markA = s.sel
+				m.status = "marked A · pick another snapshot, D to diff (esc clears)"
+			} else {
+				m.openDiffTwoSnapshots(s.markA, s.sel)
+				s.markA = -1
+			}
+		}
 	}
 	return m, nil
+}
+
+// openDiffSnapshotVsCurrent diffs the selected snapshot against the file's current on-disk content.
+func (m *model) openDiffSnapshotVsCurrent() {
+	s := &m.snapshots
+	if s.sel < 0 || s.sel >= len(s.snaps) {
+		return
+	}
+	snap := s.snaps[s.sel]
+	aContent, err := os.ReadFile(filepath.Join(s.bakDir, snap.name))
+	if err != nil {
+		m.status = "couldn't read snapshot"
+		return
+	}
+	bContent, _ := os.ReadFile(s.file) // current version on disk (buffer was flushed on entry)
+	m.diff = newDiffModel(snap.when.Format("2006-01-02 15:04:05"), string(aContent), "current", string(bContent))
+	m.screen = screenDiff
+}
+
+// openDiffTwoSnapshots diffs two snapshots against each other.
+func (m *model) openDiffTwoSnapshots(ai, bi int) {
+	s := &m.snapshots
+	if ai < 0 || ai >= len(s.snaps) || bi < 0 || bi >= len(s.snaps) {
+		return
+	}
+	aSnap, bSnap := s.snaps[ai], s.snaps[bi]
+	aC, err1 := os.ReadFile(filepath.Join(s.bakDir, aSnap.name))
+	bC, err2 := os.ReadFile(filepath.Join(s.bakDir, bSnap.name))
+	if err1 != nil || err2 != nil {
+		m.status = "couldn't read snapshots"
+		return
+	}
+	m.diff = newDiffModel(
+		aSnap.when.Format("2006-01-02 15:04:05"), string(aC),
+		bSnap.when.Format("2006-01-02 15:04:05"), string(bC),
+	)
+	m.screen = screenDiff
 }
 
 // relTime renders a compact "(… ago)" for a snapshot time against now. Empty when now is unset.
@@ -262,7 +318,11 @@ func (m model) snapshotsView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ select · space preview · ⏎ restore · n new · esc back")
+	hint := "↑↓ select · space preview · d diff vs current · D diff two · ⏎ restore · n new · esc back"
+	if s.markA >= 0 {
+		hint = "A marked (" + s.snaps[s.markA].when.Format("15:04:05") + ") · D on another to diff · esc clears"
+	}
+	foot := lipgloss.NewStyle().Foreground(subtle).Render(hint)
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

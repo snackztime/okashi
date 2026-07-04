@@ -59,6 +59,9 @@ status bar. Press `ctrl+s` to save explicitly at any time.
 folder beside it. Select a file in the sidebar and press `b` to browse them —
 preview any snapshot, take one on demand with `n`, or restore one with `⏎`
 (your current version is backed up first, so a restore is never destructive).
+Press `d` to **diff** the selected snapshot against the current file, or `D`
+twice to diff two snapshots — a scrollable, color-coded view (removed red, added
+green, changed words highlighted) so you can see exactly what a draft changed.
 
 ---
 
