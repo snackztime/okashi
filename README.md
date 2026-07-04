@@ -172,15 +172,33 @@ with `OKASHI_THEME=dark` or `OKASHI_THEME=light`.
 
 ## Configuration
 
+### Properties (in-app)
+
+Press `i` on a project in the launch hub to open **Properties** — an editable screen for the
+things you'd otherwise set via env vars:
+
+- **Title** — the manuscript display title (written to `manifest.json`; manuscripts only).
+- **Author** and **Contact** — your name and a multi-line contact block for the export title page,
+  saved to a personal `~/.config/okashi/config.json` (set once, applies to every project).
+- **Width** and **Smart quotes** — per-project editor preferences, saved to `<project>/.okashi.json`.
+
+`⇥` moves between fields, `⏎` edits, `space` toggles, `ctrl+s` saves, `esc` backs out. Both stores
+are plain JSON you can read or edit by hand.
+
+### Environment variables
+
+Each variable below is a **default** that the matching Properties field overrides when set. An
+env-only setup keeps working unchanged.
+
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `OKASHI_DIR` | _(see below)_ | Override the writing folder — set this to point okashi anywhere |
-| `OKASHI_WIDTH` | `72` | Editor column width, 20–200 |
+| `OKASHI_WIDTH` | `72` | Editor column width, 20–200 (per-project override in Properties) |
 | `OKASHI_SMARTQUOTES` | `on` | Smart curly quotes as you type; set `off`, `false`, or `0` to disable |
 | `OKASHI_THEME` | _(auto)_ | Force `dark` or `light` for the Markdown preview |
 | `OKASHI_ICONS` | _(auto)_ | Glyph set: `nerd` (Nerd Font glyphs), `plain` (Unicode only), or unset for auto-detect |
-| `OKASHI_AUTHOR` | _(none)_ | Author name for the Manuscript running header + title page |
-| `OKASHI_CONTACT` | _(none)_ | Free-text contact block (address/email; newlines allowed) for the Manuscript title page |
+| `OKASHI_AUTHOR` | _(none)_ | Author name for the Manuscript running header + title page (editable in Properties) |
+| `OKASHI_CONTACT` | _(none)_ | Free-text contact block for the Manuscript title page (editable in Properties) |
 
 ### Writing folder
 

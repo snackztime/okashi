@@ -87,8 +87,15 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **rename** (`r`: manifest chapters
   **retitle** the `items[].title` — filename stays birth-stable; legacy numbered chapters,
   loose files, Resources, and folders rename on disk); markdown **preview** (`ctrl+p`,
-  glamour).
-- Env knobs: `OKASHI_DIR`, `OKASHI_WIDTH`, `OKASHI_SMARTQUOTES`, `OKASHI_THEME`,
+  glamour); **Properties** (`i` from the hub: edit title / author / contact / width /
+  smartquotes — see below).
+- **Properties** (`i` on a hub project): okashi's one *editable* metadata surface. Personal
+  identity (author, contact) → global `~/.config/okashi/config.json`; per-project width +
+  smartquotes → `<project>/.okashi.json`; title → `manifest.json`. Effective value resolves
+  **file → env → default** per field (`resolveSettings` in `settings.go`), so `OKASHI_*` stays a
+  working default. **No manifest schema change** — the shared-contract HARD GATE is untriggered.
+- Env knobs (all now **defaults** overridable in Properties where a field exists): `OKASHI_DIR`,
+  `OKASHI_WIDTH`, `OKASHI_SMARTQUOTES`, `OKASHI_THEME`,
   `OKASHI_ICONS` (`nerd`/`plain`/`auto`; unset = auto — Nerd Font glyphs except on
   Terminal.app / Linux VT console, which get plain glyphs since the font isn't patched),
   `OKASHI_AUTHOR` (export header + title page), `OKASHI_CONTACT` (title-page contact block).
