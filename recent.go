@@ -8,8 +8,31 @@ import (
 
 const recentCap = 15
 
+// recentEntry is one recent-files record: the path plus the editor line to resume at.
+type recentEntry struct {
+	Path string `json:"path"`
+	Line int    `json:"line,omitempty"`
+}
+
+// UnmarshalJSON accepts both the new {"path":…,"line":…} object and the legacy bare-string form
+// (older recent.json files stored plain path strings), so upgrades don't lose the list.
+func (e *recentEntry) UnmarshalJSON(data []byte) error {
+	var s string
+	if json.Unmarshal(data, &s) == nil {
+		e.Path, e.Line = s, 0
+		return nil
+	}
+	type alias recentEntry
+	var a alias
+	if err := json.Unmarshal(data, &a); err != nil {
+		return err
+	}
+	*e = recentEntry(a)
+	return nil
+}
+
 type recentFile struct {
-	Files []string `json:"files"`
+	Files []recentEntry `json:"files"`
 }
 
 // recentPath returns the recent-files store path, or "" if there is no usable
@@ -22,40 +45,38 @@ func recentPath() string {
 	return filepath.Join(dir, "okashi", "recent.json")
 }
 
-// loadRecents reads the store, dropping entries whose path no longer exists.
+// loadRecents reads the store as paths, dropping entries whose path no longer exists.
 // Missing/corrupt/empty-path all yield an empty slice.
 func loadRecents(path string) []string {
-	if path == "" {
-		return nil
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	var r recentFile
-	if json.Unmarshal(data, &r) != nil {
-		return nil
-	}
-	out := make([]string, 0, len(r.Files))
-	for _, f := range r.Files {
-		if _, err := os.Stat(f); err == nil {
-			out = append(out, f)
+	out := make([]string, 0, recentCap)
+	for _, e := range readRecentsRaw(path) {
+		if _, err := os.Stat(e.Path); err == nil {
+			out = append(out, e.Path)
 		}
 	}
 	return out
 }
 
-// addRecent prepends file to the store (dedup, cap recentCap). No-ops on an
-// empty path or any write error.
-func addRecent(path, file string) {
+// recentLine returns the stored resume line for file, or 0 if unknown.
+func recentLine(path, file string) int {
+	for _, e := range readRecentsRaw(path) {
+		if e.Path == file {
+			return e.Line
+		}
+	}
+	return 0
+}
+
+// addRecent prepends file to the store with its resume line (dedup by path, cap recentCap).
+// No-ops on an empty path or any write error.
+func addRecent(path, file string, line int) {
 	if path == "" || file == "" {
 		return
 	}
-	existing := readRecentsRaw(path)
-	out := []string{file}
-	for _, f := range existing {
-		if f != file {
-			out = append(out, f)
+	out := []recentEntry{{Path: file, Line: line}}
+	for _, e := range readRecentsRaw(path) {
+		if e.Path != file {
+			out = append(out, e)
 		}
 	}
 	if len(out) > recentCap {
@@ -71,9 +92,12 @@ func addRecent(path, file string) {
 	_ = atomicWrite(path, data, 0o644)
 }
 
-// readRecentsRaw reads the stored list without existence-filtering (so adding a
+// readRecentsRaw reads the stored entries without existence-filtering (so adding a
 // new file doesn't silently drop still-pending entries).
-func readRecentsRaw(path string) []string {
+func readRecentsRaw(path string) []recentEntry {
+	if path == "" {
+		return nil
+	}
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil

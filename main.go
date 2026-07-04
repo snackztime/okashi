@@ -1894,6 +1894,9 @@ func (m *model) loadFile(path string) {
 	}
 	m.editor.SetValue(string(data))
 	m.undoStack = []string{string(data)} // reset the undo ring per opened file, seeded with its content
+	if ln := recentLine(recentPath(), path); ln > 0 {
+		m.editor.MoveToLine(ln) // resume where you left off
+	}
 	m.currentFile = path
 	if m.loadedMtime == nil {
 		m.loadedMtime = map[string]time.Time{}
@@ -1904,7 +1907,7 @@ func (m *model) loadFile(path string) {
 	m.sessionBaseline = wordCount(string(data))
 	m.previewing = false
 	m.status = "opened " + filepath.Base(path)
-	addRecent(recentPath(), path)
+	addRecent(recentPath(), path, m.editor.Line())
 	m.dirty = false
 	m.applyDecorator()
 }
@@ -2601,7 +2604,7 @@ func (m *model) save() {
 				m.loadedMtime[confl] = cfi.ModTime()
 			}
 			m.dirty = false
-			addRecent(recentPath(), confl)
+			addRecent(recentPath(), confl, m.editor.Line())
 			return
 		}
 	}
@@ -2617,7 +2620,7 @@ func (m *model) save() {
 		return // dirty stays true → retried next tick
 	}
 	m.dirty = false
-	addRecent(recentPath(), m.currentFile)
+	addRecent(recentPath(), m.currentFile, m.editor.Line())
 	m.status = "saved " + filepath.Base(m.currentFile)
 	if m.loadedMtime == nil {
 		m.loadedMtime = map[string]time.Time{}
