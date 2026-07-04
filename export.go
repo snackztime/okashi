@@ -43,10 +43,12 @@ func (m *model) runExport(st ExportStyle) {
 	}
 
 	// A Shunn title page is for a whole-manuscript submission, not a single-chapter export.
+	// Identity resolves through Properties (personal config) with the OKASHI_* env as fallback.
+	eff := resolveSettings(dir)
 	meta := Meta{
-		Author:    os.Getenv("OKASHI_AUTHOR"),
+		Author:    eff.Author,
 		Title:     title,
-		Contact:   os.Getenv("OKASHI_CONTACT"),
+		Contact:   eff.Contact,
 		TitlePage: m.screen == screenOutline,
 	}
 	outDir := filepath.Join(dir, "export")

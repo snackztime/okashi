@@ -98,6 +98,22 @@ func resolveSmartQuotesEnv() (bool, bool) {
 // resolveSmartQuotes is the env-or-default smart-quote setting (thin wrapper).
 func resolveSmartQuotes() bool { b, _ := resolveSmartQuotesEnv(); return b }
 
+// applyProjectSettings resolves per-project + personal settings for the current file-pane dir and
+// applies width/smartquotes to the live editor. Called on each hub → writing transition (opening a
+// project can change the measure, since width is now per-project).
+func (m *model) applyProjectSettings() {
+	eff := resolveSettings(m.files.dir)
+	m.colWidth = eff.Width
+	m.smartQuotes = eff.Smartquotes
+	m.layout() // re-apply the measure immediately (guards on unset window size)
+}
+
+// enterWriting switches to the writing screen after applying the opened project's settings.
+func (m *model) enterWriting() {
+	m.applyProjectSettings()
+	m.screen = screenWriting
+}
+
 // smartQuote returns the curly form of a straight quote. It's an opening quote
 // at the start of a line or after whitespace / an opening bracket; otherwise
 // closing (which also yields the right apostrophe in contractions).
@@ -312,6 +328,7 @@ func initialModel() model {
 	fl := newFilelist()
 	fl.root = writingDir()
 	fl.SetDir(writingDir())
+	startupSettings := resolveSettings(writingDir())
 
 	ta := textarea.New()
 	ta.Placeholder = "Start writing…"
@@ -342,8 +359,8 @@ func initialModel() model {
 		nameInput:      ti,
 		preview:        vp,
 		mdStyle:        previewStyle(),
-		colWidth:       resolveColumnWidth(),
-		smartQuotes:    resolveSmartQuotes(),
+		colWidth:       startupSettings.Width,
+		smartQuotes:    startupSettings.Smartquotes,
 		screen:         screenHome,
 		homeItems:      buildHomeItems(loadRecents(recentPath()), writingDir(), loadPins(pinsPath())), // writingDir() == activeSourceRoot() at init (activeSource==0 is the primary)
 		sources:        loadSources(sourcesPath()),

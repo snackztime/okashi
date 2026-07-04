@@ -199,14 +199,14 @@ func (m *model) homeCreate(region homeRegion) tea.Cmd {
 	switch region {
 	case regionLibrary:
 		m.files.SetDir(m.activeSourceRoot())
-		m.screen = screenWriting
+		m.enterWriting()
 		return m.startCreate(true)
 	case regionFiles:
 		if m.homeFilesDir == "" {
 			return nil
 		}
 		m.files.SetDir(m.homeFilesDir) // create in the currently-viewed (possibly drilled) dir
-		m.screen = screenWriting
+		m.enterWriting()
 		return m.startCreate(false)
 	}
 	return nil
@@ -1211,7 +1211,7 @@ func (m *model) openHomeSelection() tea.Cmd {
 			m.files.SetDir(pins[m.homeIndex].path)
 			m.focus = focusSidebar
 			m.editor.Blur()
-			m.screen = screenWriting
+			m.enterWriting()
 			m.layout()
 		}
 		return nil
@@ -1223,7 +1223,7 @@ func (m *model) openHomeSelection() tea.Cmd {
 			m.loadFile(p)
 			m.focus = focusEditor
 			m.editor.Focus()
-			m.screen = screenWriting
+			m.enterWriting()
 			m.layout()
 		}
 		return nil
@@ -1242,7 +1242,7 @@ func (m *model) openHomeSelection() tea.Cmd {
 		m.loadFile(f.path)
 		m.focus = focusEditor
 		m.editor.Focus()
-		m.screen = screenWriting
+		m.enterWriting()
 		m.layout()
 		return nil
 	case regionLibrary:
@@ -1251,7 +1251,7 @@ func (m *model) openHomeSelection() tea.Cmd {
 			m.files.SetDir(lib[m.librarySelected].path)
 			m.focus = focusSidebar
 			m.editor.Blur()
-			m.screen = screenWriting
+			m.enterWriting()
 			m.layout()
 		}
 		return nil
@@ -1269,7 +1269,7 @@ func (m *model) openHomeSelection() tea.Cmd {
 			m.files.SetDir(m.activeSourceRoot())
 			m.focus = focusSidebar
 			m.editor.Blur()
-			m.screen = screenWriting
+			m.enterWriting()
 			m.layout()
 		}
 		return nil
