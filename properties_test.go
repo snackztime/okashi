@@ -2,10 +2,38 @@ package main
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+func TestPropertiesViewRendersFields(t *testing.T) {
+	dir := t.TempDir()
+	m := model{width: 80, height: 24, properties: newPropertiesModel(dir)}
+	out := m.propertiesView()
+	for _, want := range []string{"properties", "Author", "Contact", "Width", "Smart quotes"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("propertiesView missing %q", want)
+		}
+	}
+	// Navigating must not panic and must still render.
+	mm, _ := m.updateProperties(tea.KeyMsg{Type: tea.KeyDown})
+	if got := mm.(model).propertiesView(); got == "" {
+		t.Fatal("view empty after nav")
+	}
+}
+
+func TestPropertiesToggleSmartquotes(t *testing.T) {
+	dir := t.TempDir()
+	m := model{width: 80, height: 24, properties: newPropertiesModel(dir)}
+	m.properties.focus = len(m.properties.fields) - 1 // smartquotes is always last
+	before := m.properties.smartquotes
+	mm, _ := m.updateProperties(tea.KeyMsg{Type: tea.KeySpace})
+	if mm.(model).properties.smartquotes == before {
+		t.Fatal("space on the smartquotes field should toggle it")
+	}
+}
 
 func TestPropertiesSaveOnlyChangedStores(t *testing.T) {
 	t.Setenv("OKASHI_WIDTH", "")

@@ -470,6 +470,18 @@ func (m model) updateHome(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 				}
 			}
+		case "i":
+			if m.homeRegion == regionLibrary {
+				lib := m.library()
+				if m.librarySelected >= 0 && m.librarySelected < len(lib) {
+					it := lib[m.librarySelected]
+					if it.kind == homeProject || it.kind == homeFolder {
+						m.properties = newPropertiesModel(it.path)
+						m.screen = screenProperties
+						m.status = "properties"
+					}
+				}
+			}
 		case "+", "n":
 			if m.homeRegion == regionLibrary || m.homeRegion == regionFiles {
 				return m, m.homeCreate(m.homeRegion)

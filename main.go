@@ -42,6 +42,7 @@ const defaultColumnWidth = 72
 
 const helpText = `F1 / ?   show / hide this help
 ctrl+o   home
+i        project properties (from home)
 ctrl+b   toggle sidebar
 ctrl+y   inspector tabs
 ctrl+f   search (tab: scope · ctrl+a: all)
