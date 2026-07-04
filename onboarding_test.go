@@ -1,0 +1,63 @@
+package main
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func TestDirIsEmptyish(t *testing.T) {
+	empty := t.TempDir()
+	if !dirIsEmptyish(empty) {
+		t.Fatal("fresh temp dir should be empty-ish")
+	}
+	withDoc := t.TempDir()
+	os.WriteFile(filepath.Join(withDoc, "a.md"), []byte("x"), 0o644)
+	if dirIsEmptyish(withDoc) {
+		t.Fatal("a .md present → not empty-ish")
+	}
+	withDir := t.TempDir()
+	os.MkdirAll(filepath.Join(withDir, "proj"), 0o755)
+	if dirIsEmptyish(withDir) {
+		t.Fatal("a subdir present → not empty-ish")
+	}
+	dotOnly := t.TempDir()
+	os.WriteFile(filepath.Join(dotOnly, ".hidden"), []byte("x"), 0o644)
+	if !dirIsEmptyish(dotOnly) {
+		t.Fatal("only dotfiles → empty-ish")
+	}
+}
+
+func TestMaybeSeedSample(t *testing.T) {
+	wd := t.TempDir()
+	marker := filepath.Join(t.TempDir(), "cfg", ".seeded")
+	maybeSeedSample(wd, marker)
+	// Sample seeded.
+	man := filepath.Join(wd, "the-lighthouse", "manifest.json")
+	if _, err := os.Stat(man); err != nil {
+		t.Fatalf("manifest should be seeded: %v", err)
+	}
+	for _, ch := range []string{"01-the-keeper.md", "02-the-fog.md", "03-the-light.md"} {
+		if _, err := os.Stat(filepath.Join(wd, "the-lighthouse", ch)); err != nil {
+			t.Fatalf("chapter %s should be seeded: %v", ch, err)
+		}
+	}
+	// Marker written.
+	if _, err := os.Stat(marker); err != nil {
+		t.Fatalf("marker should exist after seeding: %v", err)
+	}
+	// A second call is a no-op (doesn't error / re-seed differently).
+	maybeSeedSample(wd, marker)
+
+	// Non-empty dir + fresh marker → no seed, but marker written.
+	wd2 := t.TempDir()
+	os.WriteFile(filepath.Join(wd2, "existing.md"), []byte("x"), 0o644)
+	marker2 := filepath.Join(t.TempDir(), "cfg", ".seeded")
+	maybeSeedSample(wd2, marker2)
+	if _, err := os.Stat(filepath.Join(wd2, "the-lighthouse")); err == nil {
+		t.Fatal("must NOT seed into a non-empty dir")
+	}
+	if _, err := os.Stat(marker2); err != nil {
+		t.Fatal("marker should still be written for a non-empty dir")
+	}
+}

@@ -293,6 +293,7 @@ type model struct {
 }
 
 func initialModel() model {
+	maybeSeedSample(writingDir(), seedMarkerPath())
 	fl := newFilelist()
 	fl.root = writingDir()
 	fl.SetDir(writingDir())
