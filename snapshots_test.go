@@ -7,7 +7,36 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"okashi/internal/textarea"
 )
+
+// The data-critical path: restoring the file that is currently OPEN must reload the live buffer
+// with the restored content (and leave it clean).
+func TestRestoreReloadsOpenBuffer(t *testing.T) {
+	file, bak := seedSnapshots(t) // file holds "CURRENT"
+	if err := os.WriteFile(filepath.Join(bak, "a.md.20260704-101500"), []byte("OLD"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := model{editor: textarea.New()}
+	m.loadFile(file)
+	if m.editor.Value() != "CURRENT" || m.currentFile != file {
+		t.Fatalf("precondition: editor=%q currentFile=%q", m.editor.Value(), m.currentFile)
+	}
+	m.snapshots = newSnapshotsModel(file)
+	m.snapshots.sel = 0
+	m.restoreSelectedSnapshot()
+
+	if m.editor.Value() != "OLD" {
+		t.Fatalf("open buffer should reload restored content, got %q", m.editor.Value())
+	}
+	if m.dirty {
+		t.Fatal("reloaded buffer should not be marked dirty")
+	}
+	if got, _ := os.ReadFile(file); string(got) != "OLD" {
+		t.Fatalf("on-disk file should be restored, got %q", got)
+	}
+}
 
 func seedSnapshots(t *testing.T) (file, bak string) {
 	t.Helper()
