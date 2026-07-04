@@ -819,7 +819,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// below + on the daily rollover in syncGoal). DayBaseline is kept current by syncGoal
 			// on each keystroke, so this delta is accurate while writing is active.
 			total := computeProjStats(m.files.dir, m.files.view, m.files.wc).words
-			pg, _ = recordToday(pg, total, today())
+			pg, _ = recordDay(pg, total, today()) // rolls DayBaseline first — never a stale delta
 			m.goalsAll[m.files.dir] = pg
 			m.activeSaveCtr++
 			if m.activeSaveCtr >= 60 {

@@ -174,3 +174,21 @@ func contains(s, sub string) bool {
 		return false
 	})()
 }
+
+// A tick recording history in a project/day not yet keyed must roll the baseline first, so it
+// records 0 for today rather than backfilling the whole word count (project-switch / midnight bug).
+func TestRecordDayRollsStaleBaseline(t *testing.T) {
+	pg := projectGoals{Day: "2026-07-03", DayBaseline: 0} // stale: last seen a different day
+	pg, changed := recordDay(pg, 5000, "2026-07-04")      // total 5000, nothing written today yet
+	if pg.History["2026-07-04"] != 0 {
+		t.Fatalf("stale-baseline tick recorded %d, want 0", pg.History["2026-07-04"])
+	}
+	if !changed || pg.Day != "2026-07-04" || pg.DayBaseline != 5000 {
+		t.Fatalf("recordDay should roll the baseline: %+v (changed=%v)", pg, changed)
+	}
+	// A subsequent same-day record with real progress counts correctly.
+	pg, _ = recordDay(pg, 5250, "2026-07-04")
+	if pg.History["2026-07-04"] != 250 {
+		t.Fatalf("same-day progress = %d, want 250", pg.History["2026-07-04"])
+	}
+}

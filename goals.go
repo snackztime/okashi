@@ -123,6 +123,17 @@ func recordToday(pg projectGoals, total int, today string) (projectGoals, bool) 
 	return pg, true
 }
 
+// recordDay is the tick-safe history recorder: it rolls the word baseline for today (if the date
+// changed or the baseline is stale) BEFORE recording, then records today's net words. DayBaseline is
+// otherwise maintained only by syncGoal on keystrokes, so a tick firing in a project/day not yet
+// keyed would record a garbage delta (e.g. the whole manuscript after a project switch, or
+// yesterday's delta just after midnight). Rolling here first makes such a first-record a correct 0.
+func recordDay(pg projectGoals, total int, today string) (projectGoals, bool) {
+	pg, rolled := rolloverIfNeeded(pg, total, today)
+	pg, recorded := recordToday(pg, total, today)
+	return pg, rolled || recorded
+}
+
 // paceLine describes the pace needed to hit ProjectGoal by Deadline given the current project word
 // count. ok=false means there's nothing to show (no deadline or no project goal set).
 func paceLine(pg projectGoals, projectWords int, today string) (string, bool) {
