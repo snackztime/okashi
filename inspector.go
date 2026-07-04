@@ -159,6 +159,9 @@ type projStats struct {
 type goalStats struct {
 	today, dailyGoal, project, projectGoal, sessionSecs, sessionGoalMin, todayActiveSecs int
 	idle                                                                                 bool
+	pace                                                                                 string // deadline burndown line ("" = none)
+	streakDays                                                                           int    // consecutive writing days
+	spark                                                                                []int  // recent daily word counts for the sparkline
 }
 
 type analysisState struct{ spell, grammar, adverb, adjective, passive bool }
@@ -423,6 +426,9 @@ func (in inspectorModel) View(width int, doc docStats, proj projStats, outline s
 			b.WriteString("\n\n" + sectionHeader("Project", width) + "\n")
 			b.WriteString("  " + progressBar(goals.project, goals.projectGoal, max(4, width-10)) + "\n")
 			b.WriteString("  " + fmt.Sprintf("%s / %s", commafy(goals.project), commafy(goals.projectGoal)))
+			if goals.pace != "" {
+				b.WriteString("\n  " + lipgloss.NewStyle().Foreground(accent).Render(goals.pace))
+			}
 		}
 		b.WriteString("\n\n" + sectionHeader("Time", width) + "\n")
 		sess := "  Session   " + fmtDuration(time.Duration(goals.sessionSecs)*time.Second)

@@ -149,6 +149,19 @@ func paceLine(pg projectGoals, projectWords int, today string) (string, bool) {
 	return "≈" + commafy(perDay) + "/day to hit " + commafy(pg.ProjectGoal) + " by " + pg.Deadline + " (" + strconv.Itoa(daysLeft) + "d)", true
 }
 
+// recentHistory returns the last n days' word counts (oldest first) ending at today, for a sparkline.
+func recentHistory(history map[string]int, today string, n int) []int {
+	d, err := time.Parse("2006-01-02", today)
+	if err != nil || n <= 0 {
+		return nil
+	}
+	out := make([]int, n)
+	for i := 0; i < n; i++ {
+		out[i] = history[d.AddDate(0, 0, -(n-1-i)).Format("2006-01-02")]
+	}
+	return out
+}
+
 // streak counts consecutive days up to today with words written (>0).
 func streak(history map[string]int, today string) int {
 	if len(history) == 0 {

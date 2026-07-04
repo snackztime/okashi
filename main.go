@@ -64,7 +64,7 @@ ctrl+x   selection mode (plain-drag select)
 tab/⇧tab indent / outdent
 ctrl+s   save
 ctrl+z   undo
-ctrl+g   set goals
+ctrl+g   set goals (daily · project · minutes · deadline)
 ctrl+u   start/stop writing sprint
 ctrl+r   spelling suggestions
 ⌥/⇧+drag select text (native) · ⌘C copy
@@ -301,7 +301,7 @@ type model struct {
 	exportPrompt bool
 
 	goalsAll        map[string]projectGoals
-	goalPromptField int // 0 off, 1 daily words, 2 project words, 3 daily minutes
+	goalPromptField int // 0 off, 1 daily words, 2 project words, 3 daily minutes, 4 deadline
 
 	analysis analysisState
 
@@ -1037,8 +1037,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.nameInput.SetValue(strconv.Itoa(pg.SessionGoalMin))
 					return m, nil
 				}
-				if n >= 0 {
-					pg.SessionGoalMin = n
+				if m.goalPromptField == 3 {
+					if n >= 0 {
+						pg.SessionGoalMin = n
+					}
+					m.goalsAll[m.files.dir] = pg
+					m.goalPromptField = 4
+					m.nameInput.SetValue(pg.Deadline)
+					return m, nil
+				}
+				// Field 4: deadline date (blank clears; validated before saving).
+				raw := strings.TrimSpace(m.nameInput.Value())
+				if raw == "" {
+					pg.Deadline = ""
+				} else if _, err := time.Parse("2006-01-02", raw); err == nil {
+					pg.Deadline = raw
+				} else {
+					m.status = "deadline must be YYYY-MM-DD (or blank) — try again"
+					return m, nil
 				}
 				m.goalsAll[m.files.dir] = pg
 				saveGoals(goalsPath(), m.goalsAll)
@@ -1654,9 +1670,11 @@ func (m model) View() string {
 		doc := computeDocStats(m.editor.Value())
 		proj := computeProjStats(m.files.dir, m.files.view, m.files.wc)
 		pg := m.goalsAll[m.files.dir].applyEnvDefaults()
+		paceStr, _ := paceLine(pg, proj.words, today())
 		gs := goalStats{today: todayWords(pg, proj.words), dailyGoal: pg.DailyGoal, project: proj.words, projectGoal: pg.ProjectGoal,
 			sessionSecs: m.activeSecs, sessionGoalMin: pg.SessionGoalMin,
-			todayActiveSecs: pg.ActiveSecsToday, idle: !isWritingActive(m.now, m.lastEditAt, activeIdle)}
+			todayActiveSecs: pg.ActiveSecsToday, idle: !isWritingActive(m.now, m.lastEditAt, activeIdle),
+			pace: paceStr, streakDays: streak(pg.History, today()), spark: recentHistory(pg.History, today(), 14)}
 		m.inspector.grammarBackend = ""
 		if m.grammarChecker != nil {
 			m.inspector.grammarBackend = m.grammarChecker.Name()
@@ -2579,6 +2597,9 @@ func (m model) statusBar() string {
 	}
 	if m.goalPromptField == 3 {
 		return "daily minutes ▸ " + m.nameInput.View()
+	}
+	if m.goalPromptField == 4 {
+		return "deadline YYYY-MM-DD (blank clears) ▸ " + m.nameInput.View()
 	}
 	if m.exportPrompt {
 		return "export: m manuscript · t tufte · esc cancel"

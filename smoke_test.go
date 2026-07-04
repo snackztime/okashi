@@ -1116,10 +1116,16 @@ func TestCtrlGSetsGoals(t *testing.T) {
 	m.nameInput.SetValue("45")
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(model)
-	if m.goalPromptField != 0 {
-		t.Fatalf("after session, prompt should close, field=%d", m.goalPromptField)
+	if m.goalPromptField != 4 {
+		t.Fatalf("after session, should prompt deadline, field=%d", m.goalPromptField)
 	}
-	if m.goalsAll[dir].DailyGoal != 400 || m.goalsAll[dir].ProjectGoal != 90000 || m.goalsAll[dir].SessionGoalMin != 45 {
+	m.nameInput.SetValue("2026-12-01")
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = nm.(model)
+	if m.goalPromptField != 0 {
+		t.Fatalf("after deadline, prompt should close, field=%d", m.goalPromptField)
+	}
+	if g := m.goalsAll[dir]; g.DailyGoal != 400 || g.ProjectGoal != 90000 || g.SessionGoalMin != 45 || g.Deadline != "2026-12-01" {
 		t.Fatalf("goals not saved: %+v", m.goalsAll[dir])
 	}
 }
