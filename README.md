@@ -1,7 +1,7 @@
 # okashi
 
 A terminal writing app for long-form manuscripts and prose. Plain `.md` files, a
-manuscript-aware sidebar, live word counts, RTF + PDF export, and a full-screen
+manuscript-aware sidebar, live word counts, RTF, PDF & DOCX export, and a full-screen
 distraction-free editor — all from the command line.
 
 <!-- Generate with `vhs demo.tape` (see demo.tape). -->
@@ -95,7 +95,7 @@ status bar. Press `ctrl+s` to save explicitly at any time.
 
 | Key | Action |
 |-----|--------|
-| `ctrl+e` | Export (RTF + PDF) |
+| `ctrl+e` | Export (RTF · PDF · DOCX) |
 | `ctrl+p` | Markdown preview |
 | `t` | Toggle Tufte view (inside preview) |
 
@@ -136,10 +136,11 @@ Press `ctrl+e` to export. Choose a style:
 
 | Key | Style | Description |
 |-----|-------|-------------|
-| `m` | Manuscript | Courier, double-spaced — the standard agent/editor submission format |
+| `m` | Manuscript | Double-spaced manuscript format for agents/editors (submit the `.docx`) |
 | `t` | Tufte | Elegant serif, for a readable or printable copy |
 
-Both styles produce a `.rtf` and a `.pdf`, written to `<project>/export/`.
+Both styles produce a `.rtf`, a `.pdf`, and a `.docx`, written to `<project>/export/`.
+(`.docx` is what most agents and editors ask for.)
 When invoked from the outline, the full manuscript is exported (all chapters
 concatenated). When invoked from the editor, only the current document is
 exported.
