@@ -1,59 +1,34 @@
 name: release
 
-# Tag a release and push it:  git tag v0.1.0 && git push origin v0.1.0
+# Cut a release by pushing a version tag:  git tag v0.1.0 && git push origin v0.1.0
+# GoReleaser builds macOS + Linux binaries, uploads them + checksums to the GitHub
+# Release, and updates the Homebrew tap. See RELEASING.md for the one-time setup.
 on:
   push:
     tags:
       - "v*"
 
 permissions:
-  contents: write # needed to create the GitHub Release
+  contents: write # create the GitHub Release + upload assets
 
 jobs:
-  release:
+  goreleaser:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so GoReleaser can build the changelog
 
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
 
-      - name: Build & test (release gate)
-        run: |
-          go vet ./...
-          go test ./...
-          go build -ldflags "-s -w -X main.version=${GITHUB_REF_NAME#v}" -o okashi .
-
-      - name: Compute source tarball sha256
-        id: sha
-        run: |
-          url="https://github.com/${GITHUB_REPOSITORY}/archive/refs/tags/${GITHUB_REF_NAME}.tar.gz"
-          # GitHub generates the source tarball on first request; retry until ready.
-          for _ in $(seq 1 10); do
-            curl -sfL "$url" -o src.tar.gz && break
-            sleep 3
-          done
-          sha="$(sha256sum src.tar.gz | cut -d' ' -f1)"
-          echo "url=$url"  >> "$GITHUB_OUTPUT"
-          echo "sha=$sha"  >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub release
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          cat > notes.md <<'EOF'
-          ## okashi ${{ github.ref_name }}
-
-          ### Homebrew
-
-          Update `Formula/okashi.rb` with:
-
-          ```ruby
-          url "${{ steps.sha.outputs.url }}"
-          sha256 "${{ steps.sha.outputs.sha }}"
-          ```
-          EOF
-          gh release create "${GITHUB_REF_NAME}" \
-            --title "okashi ${GITHUB_REF_NAME}" \
-            --notes-file notes.md
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Optional — enables the Homebrew tap update. Unset it (and remove the brews
+          # block in .goreleaser.yaml) to ship binaries only.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}

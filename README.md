@@ -11,19 +11,31 @@ distraction-free editor — all from the command line.
 
 ## Install
 
+### Homebrew (macOS & Linux)
+
+```sh
+brew install snackztime/okashi/okashi
+```
+
+### Prebuilt binary
+
+Download the archive for your OS/architecture from the
+[Releases](https://github.com/snackztime/okashi/releases) page, extract it, and put
+`okashi` on your `PATH`:
+
+```sh
+tar -xzf okashi_*_darwin_arm64.tar.gz
+sudo mv okashi /usr/local/bin/
+```
+
 ### From source (Go 1.25)
 
 ```sh
 git clone https://github.com/snackztime/okashi
 cd okashi
-go build ./...          # build the binary
-go run .                # run without installing
-go install .            # or install to $GOBIN
+go build -o okashi .     # build the binary
+go run .                # or run without installing
 ```
-
-### Homebrew
-
-_(Planned — not yet available.)_
 
 ---
 
