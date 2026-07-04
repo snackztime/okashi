@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -1959,7 +1960,14 @@ func (m *model) loadFile(path string) {
 	}
 	m.sessionBaseline = wordCount(string(data))
 	m.previewing = false
-	m.status = "opened " + filepath.Base(path)
+	if utf8.Valid(data) {
+		m.status = "opened " + filepath.Base(path)
+	} else {
+		// A non-UTF-8 file (e.g. Latin-1) decodes with replacement runes; saving would re-encode
+		// it as UTF-8 and lose the original bytes. Warn, and leave the buffer clean so nothing is
+		// rewritten until the writer makes an intentional edit.
+		m.status = "⚠ " + filepath.Base(path) + " isn't valid UTF-8 — editing then saving will re-encode it"
+	}
 	addRecent(recentPath(), path, m.editor.Line())
 	m.dirty = false
 	m.applyDecorator()

@@ -133,6 +133,13 @@ The **structure mode** (`s` from the binder) lets you reorder, insert, and
 remove chapters in a manifest manuscript. Changes are staged and applied behind
 a single confirmation.
 
+**No lock-in.** Your work is just Markdown files in ordinary folders, with a
+small human-readable `manifest.json` for order and titles — no database, no
+proprietary bundle. Everything is `grep`-able, diff-able, and git-friendly, and
+reads perfectly well in any other editor. okashi writes files atomically
+(temp-file + rename) so a crash or a synced-folder conflict can't corrupt them.
+Stop using okashi tomorrow and your manuscript is exactly where you left it.
+
 ---
 
 ## Export

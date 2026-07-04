@@ -300,6 +300,18 @@ func (m model) structureView() string {
 // commitStructure writes the staged order/membership: it creates any pending new-blank files, then
 // persists the whole buffer via the atomic writeManifest (re-reading the on-disk title first).
 func (m *model) commitStructure() error {
+	// Write the manifest BEFORE creating the new blank files. If a file creation then fails, the
+	// manifest lists a not-yet-created file (a listed-but-missing chapter — benign, shown as a
+	// missing chapter). The reverse order would leave an orphan blank file (present but unlisted →
+	// a silent Resource) if the manifest write failed.
+	title := m.structureTitle() // re-reads the on-disk manifest title (read-modify-write)
+	if err := writeManifest(m.structureDir, manifest{
+		SchemaVersion: manifestSchemaVersion,
+		Title:         title,
+		Items:         m.structureItems,
+	}); err != nil {
+		return err
+	}
 	for f := range m.structurePendingNew {
 		// only create files that survived to the final buffer
 		inBuf := false
@@ -316,12 +328,7 @@ func (m *model) commitStructure() error {
 			return err
 		}
 	}
-	title := m.structureTitle() // re-reads the on-disk manifest title (read-modify-write)
-	return writeManifest(m.structureDir, manifest{
-		SchemaVersion: manifestSchemaVersion,
-		Title:         title,
-		Items:         m.structureItems,
-	})
+	return nil
 }
 
 // fmtNum formats n as a zero-padded 2-digit string.
