@@ -11,14 +11,16 @@ import (
 // projectGoals is one project's goal state, stored in the global goals.json
 // keyed by project dir path.
 type projectGoals struct {
-	DailyGoal       int    `json:"dailyGoal"`
-	ProjectGoal     int    `json:"projectGoal"`
-	SessionGoalMin  int    `json:"sessionGoalMin"`
-	SprintMin       int    `json:"sprintMin"`
-	DayBaseline     int    `json:"dayBaseline"`
-	Day             string `json:"day"`
-	ActiveSecsToday int    `json:"activeSecsToday"`
-	TimeDay         string `json:"timeDay"`
+	DailyGoal       int            `json:"dailyGoal"`
+	ProjectGoal     int            `json:"projectGoal"`
+	SessionGoalMin  int            `json:"sessionGoalMin"`
+	SprintMin       int            `json:"sprintMin"`
+	DayBaseline     int            `json:"dayBaseline"`
+	Day             string         `json:"day"`
+	ActiveSecsToday int            `json:"activeSecsToday"`
+	TimeDay         string         `json:"timeDay"`
+	Deadline        string         `json:"deadline,omitempty"` // "2006-01-02" target date for ProjectGoal
+	History         map[string]int `json:"history,omitempty"`  // date "2006-01-02" → net words that day
 }
 
 func goalsPath() string {
@@ -104,4 +106,68 @@ func todayWords(pg projectGoals, total int) int {
 		return d
 	}
 	return 0
+}
+
+// recordToday stores today's net word count in the history. changed=true when the stored value
+// moved, so the caller can decide whether to persist. Past days are never touched (only today's
+// entry updates), so they freeze at their final value once the date rolls over.
+func recordToday(pg projectGoals, total int, today string) (projectGoals, bool) {
+	words := todayWords(pg, total)
+	if pg.History == nil {
+		pg.History = map[string]int{}
+	}
+	if pg.History[today] == words {
+		return pg, false
+	}
+	pg.History[today] = words
+	return pg, true
+}
+
+// paceLine describes the pace needed to hit ProjectGoal by Deadline given the current project word
+// count. ok=false means there's nothing to show (no deadline or no project goal set).
+func paceLine(pg projectGoals, projectWords int, today string) (string, bool) {
+	if pg.Deadline == "" || pg.ProjectGoal <= 0 {
+		return "", false
+	}
+	due, err := time.Parse("2006-01-02", pg.Deadline)
+	if err != nil {
+		return "", false
+	}
+	if projectWords >= pg.ProjectGoal {
+		return "✓ target met", true
+	}
+	now, _ := time.Parse("2006-01-02", today)
+	daysLeft := int(due.Sub(now).Hours() / 24)
+	remaining := pg.ProjectGoal - projectWords
+	if daysLeft < 0 {
+		return "deadline passed · " + commafy(remaining) + " to go", true
+	}
+	if daysLeft == 0 {
+		return "due today · " + commafy(remaining) + " to go", true
+	}
+	perDay := (remaining + daysLeft - 1) / daysLeft // ceil
+	return "≈" + commafy(perDay) + "/day to hit " + commafy(pg.ProjectGoal) + " by " + pg.Deadline + " (" + strconv.Itoa(daysLeft) + "d)", true
+}
+
+// streak counts consecutive days up to today with words written (>0).
+func streak(history map[string]int, today string) int {
+	if len(history) == 0 {
+		return 0
+	}
+	d, err := time.Parse("2006-01-02", today)
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for {
+		key := d.Format("2006-01-02")
+		if history[key] > 0 {
+			n++
+		} else if key != today {
+			break // a prior day with no words ends the streak
+		}
+		// today with 0 words neither counts nor breaks — you still have the day
+		d = d.AddDate(0, 0, -1)
+	}
+	return n
 }

@@ -812,6 +812,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			pg := m.goalsAll[m.files.dir]
 			pg, _ = rolloverActive(pg, today())
 			pg.ActiveSecsToday++
+			// Record today's net words for the pace history (persisted by the periodic save
+			// below + on the daily rollover in syncGoal). DayBaseline is kept current by syncGoal
+			// on each keystroke, so this delta is accurate while writing is active.
+			total := computeProjStats(m.files.dir, m.files.view, m.files.wc).words
+			pg, _ = recordToday(pg, total, today())
 			m.goalsAll[m.files.dir] = pg
 			m.activeSaveCtr++
 			if m.activeSaveCtr >= 60 {
