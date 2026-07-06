@@ -74,8 +74,7 @@ green, changed words highlighted) so you can see exactly what a draft changed.
 | `ctrl+b` | Toggle sidebar |
 | `ctrl+y` | Inspector tabs |
 | `ctrl+l` | Outline (planning notes) |
-| `ctrl+k` | Corkboard view (chapter list ⇄ synopsis cards) |
-| `c` | Full-screen corkboard (sidebar) |
+| `ctrl+k` | Corkboard (full-screen manuscript navigator); `c` from the sidebar |
 | `ctrl+o` | Home (launch screen) |
 | `esc` | Switch focus / back |
 | `ctrl+c` | Quit |
@@ -135,16 +134,21 @@ The atom is one `.md` file. Larger structures are plain folders:
 
 ### The corkboard (your manuscript navigator)
 
-The left pane **is** the binder. In a manuscript, press `ctrl+k` to flip it
-between the chapter list and the **corkboard** — each chapter as a card with its
-word count and a short **synopsis** (or its first line, dimmed, until you write
-one). From the sidebar:
+The left pane is a clean chapter list. In a manuscript, press `ctrl+k` (or `c`
+from the sidebar) to open the **corkboard** — a full-screen spread of your
+chapters, each a card with its word count and a **synopsis** (or its first line,
+dimmed, until you write one). A header line shows the chapter count, total word
+count, and — if you've set a project goal — your progress toward it; the card
+you're currently editing is marked. On the corkboard:
 
 - `⏎` open a chapter · `e` edit its synopsis · `J`/`K` reorder (staged; `esc`
   then `y` to apply, or `esc` to discard)
-- `c` open the **full-screen corkboard** — the roomy spread with full synopses,
-  where you also `a` add / promote, `x` remove (demote to a resource), `r` retitle
-- `m` read-through pager · `ctrl+e` (on the corkboard) export the whole manuscript
+- `a` add / promote · `x` remove (demote to a resource) · `r` retitle
+- `ctrl+e` export the whole manuscript · `esc` back
+
+The read-through pager is `m` from the sidebar. The **outline** (`ctrl+l`) is a
+separate free-form planning doc — jot beats and structure there before they
+become chapters.
 
 `ctrl+n` in a manuscript asks **chapter or resource** — a chapter is appended to
 the manifest; a resource is an unlisted supporting doc, filed loosely or into a

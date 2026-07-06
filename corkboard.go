@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -15,10 +16,12 @@ import (
 // enterCorkboard opens the corkboard for the current manuscript: it loads the same staged buffer
 // structure mode uses (so reorder + commit are shared) plus the synopsis sidecar.
 func (m *model) enterCorkboard() {
+	m.save() // flush the current buffer first: opening it from the board hits loadFile's
+	// currentFile==path branch, which reloads from disk and would clobber unsaved edits (mirrors ctrl+l)
 	dir := m.files.dir
 	sm, present, err := readManifest(dir)
 	if !present || err != nil {
-		m.status = "not reorderable — no manifest"
+		m.status = "corkboard needs a manifest — legacy numbered manuscripts show as a plain list"
 		return
 	}
 	m.structureDir = dir
@@ -30,8 +33,32 @@ func (m *model) enterCorkboard() {
 	m.structureAdding = false   // defensive: never inherit a structure-mode sub-mode
 	m.structureRenaming = false // (the two modes share the structure* fields)
 	m.synopses = loadSynopses(dir)
+	// Preload the first-line fallbacks ONCE (disk I/O) so corkboardView never reads files on the
+	// render path — View() fires per keystroke and must stay I/O-free (and iCloud-safe).
+	m.corkFirstLines = map[string]string{}
+	for _, it := range sm.Items {
+		if m.synopses[it.File] == "" {
+			m.corkFirstLines[it.File] = firstProseLine(filepath.Join(dir, it.File))
+		}
+	}
 	m.synEditing = false
 	m.screen = screenCorkboard
+}
+
+// corkboardCardMeta decides a card's open-marker and body source: an authored synopsis (not dim),
+// a dimmed first-line fallback, or "" to signal the (no synopsis) placeholder.
+func corkboardCardMeta(isCurrent bool, syn, firstLine string) (openMark, rawBody string, dim bool) {
+	if isCurrent {
+		openMark = lipgloss.NewStyle().Foreground(accent).Render("● ")
+	}
+	switch {
+	case syn != "":
+		return openMark, syn, false
+	case firstLine != "":
+		return openMark, firstLine, true
+	default:
+		return openMark, "", false
+	}
 }
 
 // corkChapterSet is the ON-DISK chapter file set — the safe prune target for an immediate synopsis
@@ -85,6 +112,14 @@ func (m *model) commitSynopsis() {
 	}
 	if text == "" {
 		delete(m.synopses, file)
+		// Clearing a synopsis reveals the first-line fallback — populate it now (once, off the
+		// render path) so the card updates in-session, not only on corkboard re-entry.
+		if m.corkFirstLines == nil {
+			m.corkFirstLines = map[string]string{}
+		}
+		if _, ok := m.corkFirstLines[file]; !ok {
+			m.corkFirstLines[file] = firstProseLine(filepath.Join(m.structureDir, file))
+		}
 	} else {
 		m.synopses[file] = text
 	}
@@ -323,11 +358,34 @@ func wrapClamp(s string, width, maxLines int) string {
 	return strings.Join(lines, "\n")
 }
 
+// corkboardStatusLine summarizes the manuscript above the cards: chapter count, total words,
+// and — when a project goal is set — progress toward it with an optional deadline.
+func corkboardStatusLine(items []manifestItem, dir string, wc *wordCountCache, pg projectGoals) string {
+	total := 0
+	if wc != nil {
+		for _, it := range items {
+			total += wc.count(filepath.Join(dir, it.File))
+		}
+	}
+	unit := "chapters"
+	if len(items) == 1 {
+		unit = "chapter"
+	}
+	line := strconv.Itoa(len(items)) + " " + unit + " · " + commafy(total) + " words"
+	if pg.ProjectGoal > 0 {
+		line += " · " + commafy(total) + " / " + commafy(pg.ProjectGoal)
+		if pg.Deadline != "" {
+			line += " by " + pg.Deadline
+		}
+	}
+	return line
+}
+
 func (m model) corkboardView() string {
 	const bodyRows = 3
 	cardRows := bodyRows + 2 // + top/bottom border
 	perCard := cardRows + 1  // + one blank line between cards
-	vis := (m.height - 4) / perCard
+	vis := (m.height - 5) / perCard // -5 leaves room for the status header + footer rows
 	if vis < 1 {
 		vis = 1
 	}
@@ -341,18 +399,22 @@ func (m model) corkboardView() string {
 		if m.files.wc != nil {
 			wc = commafy(m.files.wc.count(filepath.Join(m.structureDir, it.File))) + "w"
 		}
-		syn := m.synopses[it.File]
+		isCurrent := m.currentFile != "" && filepath.Join(m.structureDir, it.File) == m.currentFile
+		openMark, rawBody, dim := corkboardCardMeta(isCurrent, m.synopses[it.File], m.corkFirstLines[it.File])
 		var body string
-		if syn == "" {
+		if rawBody == "" {
 			body = lipgloss.NewStyle().Foreground(subtle).Render("(no synopsis — e to add)")
 		} else {
-			body = wrapClamp(syn, cardW-4, bodyRows)
+			body = wrapClamp(rawBody, cardW-4, bodyRows)
+			if dim {
+				body = lipgloss.NewStyle().Foreground(subtle).Render(body)
+			}
 		}
 		marker := "  "
 		if i == m.structureSel {
 			marker = selectedStyle.Render("▸ ")
 		}
-		hdr := marker + fmtNum(i+1) + " · " + it.Title
+		hdr := marker + fmtNum(i+1) + " · " + openMark + it.Title
 		cards = append(cards, framedPanel(hdr, body, cardW, cardRows, wc))
 	}
 	if len(cards) == 0 {
@@ -361,7 +423,10 @@ func (m model) corkboardView() string {
 
 	var b strings.Builder
 	board := strings.Join(cards, "\n")
-	b.WriteString(lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, board))
+	hdr := lipgloss.NewStyle().Foreground(subtle).Render(
+		corkboardStatusLine(m.structureItems, m.structureDir, m.files.wc, m.goalsAll[m.structureDir].applyEnvDefaults()))
+	b.WriteString(lipgloss.PlaceHorizontal(m.width, lipgloss.Center, hdr) + "\n")
+	b.WriteString(lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center, board))
 
 	if m.synEditing {
 		edit := framedPanel("synopsis · "+m.structureItems[m.structureSel].Title, m.synArea.View(), cardW, 5, "esc save")

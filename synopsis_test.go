@@ -2,8 +2,32 @@ package main
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 )
+
+func TestFirstProseLine(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name, body string) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	if got := firstProseLine(write("a.md", "# The Keeper\n\nFor thirty-one winters Aldous…\nmore")); got != "For thirty-one winters Aldous…" {
+		t.Fatalf("got %q", got)
+	}
+	if got := firstProseLine(write("b.md", "# Only A Heading\n\n   \n")); got != "" {
+		t.Fatalf("heading/blank only should be empty, got %q", got)
+	}
+	if got := firstProseLine(write("c.md", "")); got != "" {
+		t.Fatalf("empty file should be empty, got %q", got)
+	}
+	if got := firstProseLine(filepath.Join(dir, "missing.md")); got != "" {
+		t.Fatalf("missing file should be empty, got %q", got)
+	}
+}
 
 func TestSynopsisRoundTripAndPrune(t *testing.T) {
 	dir := t.TempDir()
