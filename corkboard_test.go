@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"okashi/internal/textarea"
 )
 
 func seedCorkManuscript(t *testing.T) (dir string) {
@@ -103,8 +105,57 @@ func TestCorkboardReorderCommitsViaStructurePath(t *testing.T) {
 	if len(mani.Items) != 3 || mani.Items[0].File != "02-b.md" || mani.Items[1].File != "01-a.md" {
 		t.Fatalf("reorder not committed to the manifest: %+v", mani.Items)
 	}
-	if m.screen != screenOutline {
-		t.Fatal("committing should return to the binder")
+	if m.screen != screenWriting {
+		t.Fatalf("committing should return to the writing screen, got %v", m.screen)
+	}
+}
+
+func TestCorkboardRemoveDemotesChapter(t *testing.T) {
+	dir := seedCorkManuscript(t)
+	m := model{editor: textarea.New()}
+	m.files.dir = dir
+	m.enterCorkboard()
+	m.structureSel = 1 // 02-b.md
+	// x → demote to Resource (staged), then esc → confirm → y commit.
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	m = mm.(model)
+	if !m.structureDirty {
+		t.Fatal("x should stage a change")
+	}
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(model)
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = mm.(model)
+	mani, _, _ := readManifest(dir)
+	if len(mani.Items) != 2 {
+		t.Fatalf("chapter should be demoted (2 items left), got %+v", mani.Items)
+	}
+	for _, it := range mani.Items {
+		if it.File == "02-b.md" {
+			t.Fatal("02-b.md should no longer be a listed chapter")
+		}
+	}
+	// The file itself is untouched (non-destructive demote).
+	if _, err := os.Stat(filepath.Join(dir, "02-b.md")); err != nil {
+		t.Fatal("demote must not delete the file")
+	}
+}
+
+func TestCorkboardEnterOpensChapter(t *testing.T) {
+	dir := seedCorkManuscript(t)
+	m := model{editor: textarea.New()}
+	m.files.dir = dir
+	m.files.root = dir
+	m.files.SetDir(dir)
+	m.enterCorkboard()
+	m.structureSel = 2 // 03-c.md
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEnter})
+	m = mm.(model)
+	if m.screen != screenWriting {
+		t.Fatalf("enter should open the chapter + return to writing, got %v", m.screen)
+	}
+	if m.currentFile != filepath.Join(dir, "03-c.md") {
+		t.Fatalf("enter should open the selected chapter, got %q", m.currentFile)
 	}
 }
 

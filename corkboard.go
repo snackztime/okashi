@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
@@ -110,7 +111,55 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Reorder-commit confirm — reuses structure mode's commit path, returns to the binder.
+	// Retitle sub-mode.
+	if m.structureRenaming {
+		switch key.String() {
+		case "ctrl+c":
+			return m, tea.Quit
+		case "esc":
+			m.structureRenaming = false
+			m.nameInput.Blur()
+		case "enter":
+			m.structureRenaming = false
+			m.nameInput.Blur()
+			if t := strings.TrimSpace(m.nameInput.Value()); t != "" && m.structureSel < len(m.structureItems) {
+				m.structureItems[m.structureSel].Title = t
+				m.structureDirty = true
+			}
+		default:
+			var cmd tea.Cmd
+			m.nameInput, cmd = m.nameInput.Update(key)
+			return m, cmd
+		}
+		return m, nil
+	}
+
+	// Add sub-mode (new blank chapter / promote a Resource).
+	if m.structureAdding {
+		choices := m.structureAddChoices()
+		switch key.String() {
+		case "ctrl+c":
+			return m, tea.Quit
+		case "esc":
+			m.structureAdding = false
+		case "up", "k":
+			if m.structureAddSel > 0 {
+				m.structureAddSel--
+			}
+		case "down", "j":
+			if m.structureAddSel < len(choices)-1 {
+				m.structureAddSel++
+			}
+		case "enter":
+			if m.structureAddSel < len(choices) {
+				m.applyAdd(choices[m.structureAddSel])
+			}
+			m.structureAdding = false
+		}
+		return m, nil
+	}
+
+	// Reorder/structure commit confirm.
 	if m.structureConfirm {
 		switch key.String() {
 		case "ctrl+c":
@@ -122,12 +171,12 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			m.structureConfirm = false
-			m.exitStructure()
-			m.status = "order saved"
+			m.exitCorkboard()
+			m.status = "changes saved"
 		case "esc", "n":
 			m.structureConfirm = false
-			m.exitStructure()
-			m.status = "order changes discarded"
+			m.exitCorkboard()
+			m.status = "changes discarded"
 		}
 		return m, nil
 	}
@@ -157,16 +206,62 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.structureSel--
 			m.structureDirty = true
 		}
-	case "e", "enter":
+	case "e":
 		m.startSynopsisEdit()
+	case "a":
+		m.structureAdding = true
+		m.structureAddSel = 0
+	case "x":
+		if m.structureSel < len(m.structureItems) {
+			f := m.structureItems[m.structureSel].File
+			delete(m.structurePendingNew, f)
+			m.structureItems = append(m.structureItems[:m.structureSel], m.structureItems[m.structureSel+1:]...)
+			if m.structureSel >= len(m.structureItems) && m.structureSel > 0 {
+				m.structureSel--
+			}
+			m.structureDirty = true
+		}
+	case "r":
+		if m.structureSel < len(m.structureItems) {
+			m.structureRenaming = true
+			m.nameInput.SetValue(m.structureItems[m.structureSel].Title)
+			m.nameInput.CursorEnd()
+			m.nameInput.Focus()
+			return m, textinput.Blink
+		}
+	case "enter":
+		// Open the selected chapter; staged changes must be resolved first.
+		if m.structureDirty {
+			m.structureConfirm = true
+			m.status = "apply changes first — y apply · esc discard"
+		} else if m.structureSel < len(m.structureItems) {
+			file := filepath.Join(m.structureDir, m.structureItems[m.structureSel].File)
+			m.exitCorkboard()
+			m.loadFile(file)
+			m.focus = focusEditor
+			m.editor.Focus()
+		}
 	case "esc":
 		if m.structureDirty {
 			m.structureConfirm = true
 		} else {
-			m.exitStructure()
+			m.exitCorkboard()
 		}
 	}
 	return m, nil
+}
+
+// exitCorkboard leaves the corkboard for the writing screen, clearing the staged buffer and
+// reloading the pane so it reflects any committed structural changes.
+func (m *model) exitCorkboard() {
+	m.structureDirty = false
+	m.structureConfirm = false
+	m.structureAdding = false
+	m.structureRenaming = false
+	m.structureItems = nil
+	m.files.SetDir(m.files.dir)
+	m.screen = screenWriting
+	m.focus = focusSidebar
 }
 
 // wrapClamp word-wraps s to width columns, clamped to maxLines (overflow → an ellipsis).
@@ -248,12 +343,33 @@ func (m model) corkboardView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, edit))
 		return b.String()
 	}
+	if m.structureRenaming {
+		field := "retitle ▸ " + m.nameInput.View()
+		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, field))
+		return b.String()
+	}
+	if m.structureAdding {
+		var picks []string
+		for i, c := range m.structureAddChoices() {
+			label := c.label
+			if i == m.structureAddSel {
+				label = selectedStyle.Render(label)
+			}
+			picks = append(picks, label)
+		}
+		if len(picks) == 0 {
+			picks = append(picks, lipgloss.NewStyle().Foreground(subtle).Render("(no resources to promote)"))
+		}
+		pick := framedPanel("add", strings.Join(picks, "\n"), max(30, min(m.width-8, 44)), len(picks)+2, "")
+		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, pick))
+		return b.String()
+	}
 	if m.structureConfirm {
-		bar := lipgloss.NewStyle().Foreground(accent).Render("apply the new order? y apply · esc discard")
+		bar := lipgloss.NewStyle().Foreground(accent).Render("apply changes? y apply · esc discard")
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ select · J/K reorder · e synopsis · esc back")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ · J/K reorder · e synopsis · a add · x remove · r retitle · ⏎ open · esc")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }
