@@ -249,14 +249,14 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.structureSel < len(m.structureItems)-1 {
 			m.structureSel++
 		}
-	case "J", "shift+down":
+	case "J", "shift+down", "alt+down": // alt+↓ mirrors the outline's move-beat chord
 		if m.structureSel < len(m.structureItems)-1 {
 			i := m.structureSel
 			m.structureItems[i], m.structureItems[i+1] = m.structureItems[i+1], m.structureItems[i]
 			m.structureSel++
 			m.structureDirty = true
 		}
-	case "K", "shift+up":
+	case "K", "shift+up", "alt+up":
 		if m.structureSel > 0 {
 			i := m.structureSel
 			m.structureItems[i], m.structureItems[i-1] = m.structureItems[i-1], m.structureItems[i]

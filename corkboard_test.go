@@ -11,6 +11,29 @@ import (
 	"okashi/internal/textarea"
 )
 
+func TestCorkboardAltMoveMirrorsOutline(t *testing.T) {
+	dir := seedCorkManuscript(t) // 01-a, 02-b, 03-c
+	m := model{}
+	m.files.dir = dir
+	m.enterCorkboard()
+
+	// alt+↓ moves the selected chapter down (mirrors the outline's move-beat chord) and follows it.
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyDown, Alt: true})
+	m = mm.(model)
+	if m.structureSel != 1 || !m.structureDirty {
+		t.Fatalf("alt+down should move + follow (sel=%d dirty=%v)", m.structureSel, m.structureDirty)
+	}
+	if m.structureItems[0].File != "02-b.md" || m.structureItems[1].File != "01-a.md" {
+		t.Fatalf("alt+down should swap items 0 and 1, got %v", m.structureItems)
+	}
+	// alt+↑ moves it back.
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyUp, Alt: true})
+	m = mm.(model)
+	if m.structureSel != 0 || m.structureItems[0].File != "01-a.md" {
+		t.Fatalf("alt+up should restore the order (sel=%d items=%v)", m.structureSel, m.structureItems)
+	}
+}
+
 func TestCorkboardCardMeta(t *testing.T) {
 	// The currently-open chapter carries the open marker; others don't.
 	if mk, _, _ := corkboardCardMeta(true, "", ""); !strings.Contains(mk, "●") {
