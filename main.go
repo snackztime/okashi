@@ -247,6 +247,8 @@ type model struct {
 	focus               focus
 	creatingFile        bool
 	creatingFolder      bool
+	createPicker        bool // manuscript ctrl+n: choosing chapter vs resource
+	createKind          int  // 0 normal, 1 chapter, 2 resource (set by the picker)
 	addingSource        bool // home screen: typing a folder path into nameInput to add a source
 	confirmRemoveSource bool // home screen: y-confirm before detaching the active library source
 	previewing          bool
@@ -987,6 +989,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Manuscript ctrl+n: pick chapter or resource before naming.
+	if m.createPicker {
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "c":
+				m.createPicker, m.createKind = false, 1
+				m.startInPaneCreate()
+				return m, textinput.Blink
+			case "r":
+				m.createPicker, m.createKind = false, 2
+				m.startInPaneCreate()
+				return m, textinput.Blink
+			case "esc":
+				m.createPicker = false
+				m.status = "create cancelled"
+			}
+		}
+		return m, nil
+	}
+
 	// While naming a new file, the prompt captures all input.
 	if m.creatingFile {
 		if key, ok := msg.(tea.KeyMsg); ok {
@@ -1392,6 +1416,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.recomputeSearch()
 			return m, textinput.Blink
 		case "ctrl+n":
+			if hasManifest(m.files.dir) {
+				// In a manuscript, ask: chapter or resource.
+				m.createPicker = true
+				m.status = "new: c chapter · r resource · esc cancel"
+				return m, nil
+			}
+			m.createKind = 0
 			m.startInPaneCreate()
 			return m, textinput.Blink
 		case "f2":
@@ -2133,15 +2164,97 @@ func (m *model) loadFile(path string) {
 // pane dir. A trailing "/" (or an explicit New-project) makes a folder; an
 // explicit New-project then enters it, while the sidebar "name/" convention
 // creates-and-stays. Files default to .md and open a blank buffer.
+// createChapter makes a new blank chapter at the manuscript root and appends it to the manifest
+// (read-modify-write, atomic), then opens it.
+func (m *model) createChapter(name string) {
+	if strings.Contains(name, "/") {
+		m.status = "a chapter name can't contain a path separator"
+		return
+	}
+	if filepath.Ext(name) == "" {
+		name += ".md"
+	}
+	dst := filepath.Join(m.files.dir, name)
+	if _, err := os.Stat(dst); err == nil {
+		m.status = "a file named " + name + " already exists"
+		return
+	}
+	if err := atomicWrite(dst, []byte(""), 0o644); err != nil {
+		m.status = "couldn't create chapter: " + err.Error()
+		return
+	}
+	if mani, present, err := readManifest(m.files.dir); err == nil && present {
+		mani.Items = append(mani.Items, manifestItem{File: name, Title: sectionTitle(name)})
+		if werr := writeManifest(m.files.dir, mani); werr != nil {
+			m.status = "chapter created but manifest update failed: " + werr.Error()
+		}
+	}
+	m.files.SetDir(m.files.dir)
+	m.loadFile(dst)
+	m.focus = focusEditor
+	m.editor.Focus()
+	m.status = "new chapter " + name
+}
+
+// createResource makes an unlisted resource doc — loose at the manuscript root, or into a subfolder
+// via a single "Folder/name" level (the folder is created if new). Never added to the manifest.
+func (m *model) createResource(name string) {
+	sub := ""
+	if i := strings.IndexByte(name, '/'); i >= 0 {
+		sub, name = name[:i], name[i+1:]
+	}
+	if strings.Contains(name, "/") || name == "" {
+		m.status = "invalid resource name"
+		return
+	}
+	if filepath.Ext(name) == "" {
+		name += ".md"
+	}
+	dir := m.files.dir
+	if sub != "" {
+		dir = filepath.Join(dir, sub)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			m.status = "couldn't create folder: " + err.Error()
+			return
+		}
+	}
+	dst := filepath.Join(dir, name)
+	if _, err := os.Stat(dst); err == nil {
+		m.status = "a file named " + name + " already exists"
+		return
+	}
+	if err := atomicWrite(dst, []byte(""), 0o644); err != nil {
+		m.status = "couldn't create resource: " + err.Error()
+		return
+	}
+	m.files.SetDir(m.files.dir)
+	m.files.selectName(name)
+	m.focus = focusSidebar
+	m.editor.Blur()
+	m.status = "new resource " + name
+}
+
 func (m *model) confirmCreate() {
 	name := strings.TrimSpace(m.nameInput.Value())
 	explicitFolder := m.creatingFolder
+	kind := m.createKind
+	m.createKind = 0
 	m.creatingFile = false
 	m.creatingInPane = false
 	m.creatingFolder = false
 	m.nameInput.Blur()
 	if name == "" {
 		m.status = "create cancelled (no name)"
+		return
+	}
+
+	// Manuscript chapter/resource creation (from the ctrl+n picker).
+	if kind == 1 {
+		m.createChapter(name)
+		return
+	}
+	if kind == 2 {
+		m.createResource(name)
 		return
 	}
 
@@ -2716,6 +2829,9 @@ func (m model) statusBar() string {
 	}
 	if m.exportPrompt {
 		return "export: m manuscript · t tufte · esc cancel"
+	}
+	if m.createPicker {
+		return "new: c chapter · r resource · esc cancel"
 	}
 	mark := "✓"
 	if m.dirty {
