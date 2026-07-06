@@ -77,6 +77,79 @@ func TestOutlinePromoteBeat(t *testing.T) {
 	}
 }
 
+func TestOutlineNavigationDoesNotDirty(t *testing.T) {
+	m, _ := outlineOnManuscript(t)
+	m.editor.SetValue("- Alpha\n- Beta")
+	m.editor.MoveToLine(0)
+	m.dirty = false
+
+	// A pure navigation key must not dirty the buffer (else it churns outline.md + inflates pace stats).
+	nm, _ := m.updateOutline(tea.KeyMsg{Type: tea.KeyDown})
+	m = nm.(model)
+	if m.dirty {
+		t.Fatal("arrow navigation should not dirty the outline buffer")
+	}
+	// A real edit does.
+	nm, _ = m.updateOutline(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}})
+	m = nm.(model)
+	if !m.dirty {
+		t.Fatal("typing should dirty the outline buffer")
+	}
+}
+
+func TestOutlineEscPersistsToDisk(t *testing.T) {
+	m, dir := outlineOnManuscript(t)
+	m.editor.SetValue("- Draft beat\n  - a note")
+	m.dirty = true
+
+	nm, _ := m.updateOutline(tea.KeyMsg{Type: tea.KeyEsc})
+	m = nm.(model)
+	data, err := os.ReadFile(filepath.Join(dir, "outline.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(data) != "- Draft beat\n  - a note" {
+		t.Fatalf("esc should persist the outline to disk, got %q", string(data))
+	}
+	if m.screen != screenWriting {
+		t.Fatalf("esc should return to the writing screen, got %v", m.screen)
+	}
+}
+
+func TestOutlineEntryFlushesOutgoingChapter(t *testing.T) {
+	dir := seedCorkManuscript(t)
+	t.Setenv("OKASHI_DIR", dir)
+	m := initialModel()
+	m.screen = screenWriting
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 40})
+	m = nm.(model)
+	m.files.SetDir(dir)
+	m.loadFile(filepath.Join(dir, "01-a.md"))
+	m.editor.SetValue("edited chapter body")
+	m.dirty = true
+
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlL}) // enter the outline
+	m = nm.(model)
+	if got, _ := os.ReadFile(filepath.Join(dir, "01-a.md")); string(got) != "edited chapter body" {
+		t.Fatalf("entering the outline should flush the outgoing chapter, got %q", string(got))
+	}
+}
+
+func TestOutlinePromoteEmptyTitleGuard(t *testing.T) {
+	m, dir := outlineOnManuscript(t)
+	m.editor.SetValue("- ") // an empty beat
+	m.editor.MoveToLine(0)
+
+	nm, _ := m.updateOutline(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	m = nm.(model)
+	if mani, _, _ := readManifest(dir); len(mani.Items) != 3 {
+		t.Fatalf("empty-title promote must not add a chapter, got %d items", len(mani.Items))
+	}
+	if m.status == "" {
+		t.Fatal("empty-title promote should set a status")
+	}
+}
+
 func TestOutlinePromoteNeedsManuscript(t *testing.T) {
 	dir := t.TempDir() // plain folder, no manifest
 	os.WriteFile(filepath.Join(dir, "notes.md"), []byte("x"), 0o644)

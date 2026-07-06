@@ -40,6 +40,28 @@ func TestBeatBlocksAndTitles(t *testing.T) {
 	}
 }
 
+func TestBeatTitleEdges(t *testing.T) {
+	if got := beatTitle("- "); got != "" {
+		t.Fatalf("empty beat should have empty title, got %q", got)
+	}
+	if beatTitle("- [x] Done") != "Done" || !beatIsPromoted("- [x] Done") {
+		t.Fatal("checked beat: title=Done + promoted")
+	}
+	if got := beatTitle("+ Plus marker"); got != "Plus marker" {
+		t.Fatalf("+ marker title = %q", got)
+	}
+	// beatNotes drops blank lines between notes.
+	notes := beatNotes([]string{"- Beat", "  - one", "", "  - two"}, outlineBlock{0, 4})
+	if len(notes) != 2 || notes[0] != "one" || notes[1] != "two" {
+		t.Fatalf("notes should drop blanks, got %v", notes)
+	}
+	// A single-line block moves cleanly.
+	out, nc, ok := moveBeat([]string{"- A", "- B"}, 0, 1)
+	if !ok || out[0] != "- B" || out[1] != "- A" || nc != 1 {
+		t.Fatalf("single-line move: out=%v nc=%d ok=%v", out, nc, ok)
+	}
+}
+
 func TestMoveBeat(t *testing.T) {
 	lines := []string{"- A", "  - a1", "- B", "  - b1", "  - b2"}
 	// Move block B (cursor on its note, line 3) UP past A.

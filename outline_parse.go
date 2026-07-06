@@ -50,8 +50,9 @@ func stripMarker(s string) string {
 }
 
 // beatTitle strips a beat line's marker + an optional [ ]/[x] task box + surrounding spaces.
+// Note: strip the marker BEFORE trimming — TrimSpace("- ") == "-", which would hide an empty beat.
 func beatTitle(line string) string {
-	s := stripMarker(strings.TrimSpace(line))
+	s := stripMarker(line) // beat lines are at indent 0; stripMarker trims the remainder
 	switch {
 	case strings.HasPrefix(s, "[ ] "), strings.HasPrefix(s, "[x] "), strings.HasPrefix(s, "[X] "):
 		return strings.TrimSpace(s[4:])
@@ -63,7 +64,7 @@ func beatTitle(line string) string {
 
 // beatIsPromoted reports whether a beat line carries a checked task box.
 func beatIsPromoted(line string) bool {
-	s := stripMarker(strings.TrimSpace(line))
+	s := stripMarker(line)
 	return strings.HasPrefix(s, "[x]") || strings.HasPrefix(s, "[X]")
 }
 

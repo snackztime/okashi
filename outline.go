@@ -82,10 +82,15 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 	}
+	// Only mark dirty on an actual edit (mirrors the writing screen) — otherwise pure navigation keys
+	// churn outline.md on every autosave tick and inflate the active-writing/pace counters.
+	before := m.editor.Value()
 	var cmd tea.Cmd
 	m.editor, cmd = m.editor.Update(msg)
-	m.dirty = true
-	m.lastEditAt = time.Now()
+	if m.editor.Value() != before {
+		m.dirty = true
+		m.lastEditAt = time.Now()
+	}
 	return m, cmd
 }
 
@@ -127,6 +132,9 @@ func (m *model) promoteOutlineBeat() {
 		m.status = "promote needs a manuscript (no manifest here)"
 		return
 	}
+	// Two-file op (manifest + outline mark). If the manifest write lands but the [x] mark save below
+	// doesn't, a re-promote appends a second same-title chapter — low-probability and non-destructive
+	// (uniqueChapterFile never overwrites); the manifest, not the mark, is the source of truth.
 	taken := map[string]bool{}
 	for _, it := range mani.Items {
 		taken[it.File] = true
