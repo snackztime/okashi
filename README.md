@@ -261,7 +261,10 @@ okashi opens in a writing folder resolved in this order:
 2. iCloud Drive — `~/Library/Mobile Documents/com~apple~CloudDocs/okashi`, when iCloud Drive is enabled.
 3. `~/Documents/okashi` — cross-platform fallback (iCloud off, or Linux).
 
-The folder is created on first run.
+The folder is created on first run and seeded with a sample manuscript under `Demo/` (a
+short piece, *The Lighthouse*) so you have something to explore — delete it whenever you
+like. Until you create your own work, the launch screen shows a quick primer on okashi's
+model (manuscript · category · notes).
 
 ---
 
