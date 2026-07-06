@@ -302,7 +302,8 @@ func TestCtrlKOnNonManuscriptStaysPut(t *testing.T) {
 
 	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
-	if m.screen == screenOutline {
-		t.Fatal("ctrl+k on a non-manuscript folder must not enter the outline")
+	// ctrl+k toggles the pane corkboard (manuscript-only) — on a plain folder it's a no-op.
+	if m.files.corkMode || m.screen != screenWriting {
+		t.Fatalf("ctrl+k on a non-manuscript must not enable corkboard (corkMode=%v screen=%v)", m.files.corkMode, m.screen)
 	}
 }

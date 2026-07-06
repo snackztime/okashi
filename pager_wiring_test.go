@@ -52,11 +52,9 @@ func manuscriptModel(t *testing.T) (model, string) {
 	return m, proj
 }
 
-func TestOutlineMEntersPager(t *testing.T) {
+func TestSidebarMEntersPager(t *testing.T) {
 	m, _ := manuscriptModel(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK}) // binder
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}) // pager
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}) // m (sidebar) → pager
 	m = nm.(model)
 	if m.screen != screenManuscript {
 		t.Fatalf("m in the outline should enter the pager, got screen %v", m.screen)

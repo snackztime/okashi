@@ -12,7 +12,7 @@ import (
 	"okashi/internal/textarea"
 )
 
-// enterCorkboard opens the corkboard for the binder's manuscript: it loads the same staged buffer
+// enterCorkboard opens the corkboard for the current manuscript: it loads the same staged buffer
 // structure mode uses (so reorder + commit are shared) plus the synopsis sidecar.
 func (m *model) enterCorkboard() {
 	dir := m.files.dir

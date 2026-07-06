@@ -632,3 +632,5 @@ func TestHomeRemoveSourceConfirmArmsAndCancels(t *testing.T) {
 		t.Fatalf("n should keep the source, sources=%d", len(cm.sources))
 	}
 }
+
+func ansiStrip(s string) string { return ansi.Strip(s) }

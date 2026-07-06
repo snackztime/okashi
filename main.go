@@ -168,10 +168,8 @@ type screen int
 const (
 	screenHome screen = iota
 	screenWriting
-	screenOutline
 	screenManuscript
 	screenSearch
-	screenStructure
 	screenMover
 	screenProperties
 	screenSnapshots
@@ -271,7 +269,6 @@ type model struct {
 	outlineReturnFile string // chapter to return to after editing outline.md (ctrl+l)
 	status            string
 	icons             iconSet
-	outline           outlineModel
 
 	pager pagerModel
 
@@ -661,8 +658,8 @@ func (m model) capturingText() bool {
 	switch m.screen {
 	case screenSearch:
 		return true
-	case screenStructure:
-		return m.structureRenaming
+	case screenCorkboard:
+		return m.structureRenaming || m.synEditing
 	case screenWriting:
 		return m.focus == focusEditor && !m.previewing
 	}
@@ -902,20 +899,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateHome(msg)
 	}
 
-	if m.screen == screenOutline {
-		return m.updateOutline(msg)
-	}
-
 	if m.screen == screenManuscript {
 		return m.updateManuscript(msg)
 	}
 
 	if m.screen == screenSearch {
 		return m.updateSearch(msg)
-	}
-
-	if m.screen == screenStructure {
-		return m.updateStructure(msg)
 	}
 
 	if m.screen == screenMover {
@@ -1474,7 +1463,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+l":
-			// ctrl+l always toggles the planning outline.md (ctrl+k is the binder).
+			// ctrl+l always toggles the planning outline.md (ctrl+k toggles the pane corkboard).
 			outlinePath := filepath.Join(m.files.dir, "outline.md")
 			if m.currentFile == outlinePath {
 				m.save()
@@ -1712,20 +1701,12 @@ func (m model) View() string {
 		return m.homeView()
 	}
 
-	if m.screen == screenOutline {
-		return m.outlineView()
-	}
-
 	if m.screen == screenManuscript {
 		return m.pagerView()
 	}
 
 	if m.screen == screenSearch {
 		return m.searchView()
-	}
-
-	if m.screen == screenStructure {
-		return m.structureView()
 	}
 
 	if m.screen == screenMover {
@@ -1892,132 +1873,6 @@ func (m *model) layout() {
 	m.preview.Height = editorH - 1 // reserve one row for the PREVIEW header
 }
 
-// updateOutline handles input on the outline screen: select, open, back, reorder.
-func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
-	if sz, ok := msg.(tea.WindowSizeMsg); ok {
-		m.width = sz.Width
-		m.height = sz.Height
-		m.outline.width = sz.Width
-		m.outline.height = sz.Height - 1 // reserve the status bar row
-		m.layout()
-		return m, nil
-	}
-	if m.renaming {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			switch key.String() {
-			// esc cancels with no rename, so there is nothing to refresh.
-			case "esc":
-				m.renaming = false
-				m.renamingInPane = false
-				m.nameInput.Blur()
-				m.status = "rename cancelled"
-				return m, nil
-			case "enter":
-				m.confirmRename()
-				return m, nil
-			}
-		}
-		var cmd tea.Cmd
-		m.nameInput, cmd = m.nameInput.Update(msg)
-		return m, cmd
-	}
-
-	if m.exportPrompt {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			switch key.String() {
-			case "ctrl+c":
-				return m, tea.Quit
-			case "m":
-				m.exportPrompt = false
-				m.runExport(StyleManuscript)
-				return m, nil
-			case "t":
-				m.exportPrompt = false
-				m.runExport(StyleTufte)
-				return m, nil
-			case "esc":
-				m.exportPrompt = false
-				m.status = "export cancelled"
-				return m, nil
-			}
-		}
-		return m, nil
-	}
-
-	if mouse, ok := msg.(tea.MouseMsg); ok {
-		if mouse.Button != tea.MouseButtonLeft || mouse.Action != tea.MouseActionPress {
-			return m, nil
-		}
-		row := sidebarRow(mouse.Y, outlineHeaderHeight, len(m.outline.rows()))
-		if row < 0 {
-			return m, nil
-		}
-		m.outline.selected = row
-		now := time.Now()
-		if row == m.lastClickRow && now.Sub(m.lastClickTime) < 400*time.Millisecond {
-			if r, ok := m.outline.selectedRow(); ok {
-				m.loadFile(filepath.Join(m.outline.dir, r.entry.name))
-				m.screen = screenWriting
-				m.focus = focusEditor
-				m.editor.Focus()
-			}
-			m.lastClickTime = time.Time{}
-		} else {
-			m.lastClickRow = row
-			m.lastClickTime = now
-		}
-		return m, nil
-	}
-
-	key, ok := msg.(tea.KeyMsg)
-	if !ok {
-		return m, nil
-	}
-
-	switch key.String() {
-	case "ctrl+c":
-		return m, tea.Quit
-	case "up", "k":
-		m.outline.moveSelection(-1)
-	case "down", "j":
-		m.outline.moveSelection(1)
-	case "enter":
-		if row, ok := m.outline.selectedRow(); ok {
-			m.loadFile(filepath.Join(m.outline.dir, row.entry.name))
-		}
-		m.screen = screenWriting
-		m.focus = focusEditor
-		m.editor.Focus()
-		return m, nil
-	case "r":
-		m.startRenameOutline()
-	case "m":
-		m.enterManuscript()
-	case "s":
-		m.enterStructure()
-		return m, nil
-	case "c":
-		m.enterCorkboard()
-		return m, nil
-	case "ctrl+e":
-		m.exportPrompt = true
-		m.status = "export: m manuscript · t tufte · esc cancel"
-	case "esc":
-		m.screen = screenWriting
-		m.focus = focusEditor
-		m.editor.Focus()
-		return m, nil
-	}
-	return m, nil
-}
-
-// outlineView renders the outline screen with the status bar.
-func (m model) outlineView() string {
-	body := m.outline.View()
-	status := statusStyle.Width(m.width).Render(m.statusBar())
-	return lipgloss.JoinVertical(lipgloss.Left, body, status)
-}
-
 // updateManuscript handles input on the pager: scroll, jump-to-edit, and exits.
 func (m model) updateManuscript(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if sz, ok := msg.(tea.WindowSizeMsg); ok {
@@ -2123,17 +1978,6 @@ func pagerWidth(colWidth, termWidth int) int {
 		w = 1
 	}
 	return w
-}
-
-// enterOutline opens the manuscript outline for the current pane dir. Caller
-// must have verified isManuscript(m.files.entries).
-func (m *model) enterOutline() {
-	m.outline.width = m.width
-	m.outline.height = m.height - 1 // status bar
-	m.outline.load(m.files.dir, m.files.wc)
-	m.screen = screenOutline
-	m.previewing = false
-	m.status = "binder · ↑↓ select · enter open · s structure · c corkboard · r rename · m read · ctrl+e export · esc back"
 }
 
 func (m *model) loadFile(path string) {
@@ -2490,38 +2334,6 @@ func copyFreeName(dir, stem, ext string) string {
 	}
 }
 
-// startRenameOutline begins renaming the selected outline row (section title or
-// loose file). Mirrors startRename: manifest chapters are refused; legacy chapters
-// get a prefix-preserving retitle; loose files get a plain rename.
-func (m *model) startRenameOutline() {
-	row, ok := m.outline.selectedRow()
-	if !ok {
-		return
-	}
-	// Resolve at the top so the refuse-mode guard covers both section and loose rows.
-	// A refuse-mode folder has source==sourceManifest with a non-empty warning;
-	// its files appear as loose (no chapters), so the isSection branch never fires —
-	// the guard must precede it.
-	v := resolveManuscript(m.outline.dir, readEntries(m.outline.dir))
-	if v.source == sourceManifest && v.warning != "" {
-		m.status = "manifest unreadable — structure is read-only (external manifest)"
-		return
-	}
-	if row.isSection {
-		if v.source == sourceManifest {
-			// manifest manuscript: retitle the manifest entry; filename is birth-stable (§5.7).
-			m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, manifestChapter: true},
-				m.outline.chapterTitle(row.entry.name))
-			return
-		}
-		// legacy (manifest-less) folder: retain pre-manifest prefix-preserving retitle (O1).
-		m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, isDir: false, section: true},
-			sectionTitle(row.entry.name))
-		return
-	}
-	m.beginRename(renameTarget{dir: m.outline.dir, name: row.entry.name, isDir: false, section: false}, row.entry.name)
-}
-
 // confirmRename applies the pending rename: builds the new name by target kind,
 // refuses a collision, renames on disk, follows the open file, and refreshes.
 func (m *model) confirmRename() {
@@ -2598,14 +2410,9 @@ func (m *model) confirmRename() {
 	m.status = "renamed to " + newName
 }
 
-// refreshAfterRename re-reads the sidebar (and the outline, if active) and
-// restores focus to the pane the rename came from.
+// refreshAfterRename re-reads the sidebar and restores focus to the file pane.
 func (m *model) refreshAfterRename() {
 	m.files.SetDir(m.files.dir)
-	if m.screen == screenOutline {
-		m.outline.load(m.outline.dir, m.files.wc)
-		return
-	}
 	m.focus = focusSidebar
 	m.editor.Blur()
 }

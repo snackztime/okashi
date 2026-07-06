@@ -224,3 +224,46 @@ func TestCorkboardSynopsisEditPreservesStagedRemovedChapter(t *testing.T) {
 		t.Fatalf("the edited synopsis should be saved, got %v", syn)
 	}
 }
+
+// The corkboard 'a' (add new blank chapter) → commit must create the file and list it (preserves
+// the applyAdd + commitStructure file-creation coverage from the retired structure_test.go).
+func TestCorkboardAddNewChapterCreatesFile(t *testing.T) {
+	dir := seedCorkManuscript(t) // 01-a, 02-b, 03-c
+	m := model{editor: textarea.New()}
+	m.files.dir = dir
+	m.enterCorkboard()
+	m.structureSel = 0
+
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}}) // add picker
+	m = mm.(model)
+	if !m.structureAdding {
+		t.Fatal("a should open the add picker")
+	}
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEnter}) // choice 0 = new blank chapter
+	m = mm.(model)
+	if len(m.structureItems) != 4 {
+		t.Fatalf("add should stage a 4th chapter, got %d", len(m.structureItems))
+	}
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEsc}) // dirty → confirm
+	m = mm.(model)
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = mm.(model)
+
+	mani, _, _ := readManifest(dir)
+	if len(mani.Items) != 4 {
+		t.Fatalf("commit should list the 4th chapter, got %d", len(mani.Items))
+	}
+	orig := map[string]bool{"01-a.md": true, "02-b.md": true, "03-c.md": true}
+	var newFile string
+	for _, it := range mani.Items {
+		if !orig[it.File] {
+			newFile = it.File
+		}
+	}
+	if newFile == "" {
+		t.Fatal("a new chapter should be added")
+	}
+	if _, err := os.Stat(filepath.Join(dir, newFile)); err != nil {
+		t.Fatalf("commit should create the new blank file %s: %v", newFile, err)
+	}
+}
