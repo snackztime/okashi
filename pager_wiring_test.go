@@ -87,26 +87,6 @@ func TestPagerEnterJumpsToEditAtLine(t *testing.T) {
 	}
 }
 
-func TestPagerOGoesToOutlineEscToEditor(t *testing.T) {
-	m, _ := manuscriptModel(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'o'}})
-	m = nm.(model)
-	if m.screen != screenOutline {
-		t.Fatalf("o should return to the outline, got %v", m.screen)
-	}
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}) // back to pager
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	m = nm.(model)
-	if m.screen != screenWriting {
-		t.Fatalf("esc should return to the editor, got %v", m.screen)
-	}
-}
-
 func TestPagerClampsWidthToTerminal(t *testing.T) {
 	m, _ := manuscriptModel(t)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 20}) // narrow terminal

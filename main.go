@@ -980,13 +980,30 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
-	// A staged pane reorder intercepts esc to raise the apply/discard confirm.
+	// A staged pane reorder is modal: only reorder/navigate keys continue it, esc raises the
+	// apply/discard confirm, and everything else is swallowed with a nudge — so no action can
+	// silently discard the staged order or leave the dirty flag set.
 	if m.paneReorderDirty {
-		if key, ok := msg.(tea.KeyMsg); ok && key.String() == "esc" {
-			m.paneReorderConfirm = true
-			m.status = "apply new order? y apply · esc discard"
-			return m, nil
+		if key, ok := msg.(tea.KeyMsg); ok {
+			switch key.String() {
+			case "ctrl+c":
+				return m, tea.Quit
+			case "J", "shift+down":
+				m.paneReorder(1)
+			case "K", "shift+up":
+				m.paneReorder(-1)
+			case "up", "k":
+				m.files.moveBy(-1)
+			case "down", "j":
+				m.files.moveBy(1)
+			case "esc":
+				m.paneReorderConfirm = true
+				m.status = "apply new order? y apply · esc discard"
+			default:
+				m.status = "-- REORDER -- · J/K move · esc to apply or discard"
+			}
 		}
+		return m, nil
 	}
 
 	// Manuscript ctrl+n: pick chapter or resource before naming.
@@ -1021,6 +1038,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.creatingFile = false
 				m.creatingInPane = false
 				m.creatingFolder = false
+				m.createKind = 0 // don't let a cancelled chapter|resource pick bleed into the next create
 				m.nameInput.Blur()
 				m.status = "create cancelled"
 				return m, nil
@@ -1362,8 +1380,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		}
 
-		// Click selection / open is file-pane only.
-		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+		// Click selection / open is file-pane only. In corkboard mode the visible-row→entry
+		// mapping doesn't hold (cards span multiple rows), so click-select is disabled there
+		// (keyboard nav still works).
+		if !inSidebar || m.files.corkMode || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 			return m, nil
 		}
 		// Framed sidebar: top border occupies row 0; the file list starts at row 1.
@@ -2065,8 +2085,6 @@ func (m model) updateManuscript(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.focus = focusEditor
 			m.editor.Focus()
 		}
-	case "o":
-		m.enterOutline()
 	case "esc":
 		m.screen = screenWriting
 		m.focus = focusEditor

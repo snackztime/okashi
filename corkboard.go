@@ -34,12 +34,16 @@ func (m *model) enterCorkboard() {
 	m.screen = screenCorkboard
 }
 
-// corkChapterSet is the current chapter file set. The corkboard is reorder-only, so the staged
-// buffer never changes the SET — it equals the on-disk manifest set, making it a safe prune target.
+// corkChapterSet is the ON-DISK chapter file set — the safe prune target for an immediate synopsis
+// write. It must NOT come from the staged m.structureItems: a staged x/a change (uncommitted, and
+// possibly discarded) would otherwise prune a still-live chapter's synopsis off disk. Synopsis
+// writes are committed independently of the structure commit, so they prune against committed reality.
 func (m model) corkChapterSet() map[string]bool {
 	s := map[string]bool{}
-	for _, it := range m.structureItems {
-		s[it.File] = true
+	if mani, present, err := readManifest(m.structureDir); err == nil && present {
+		for _, it := range mani.Items {
+			s[it.File] = true
+		}
 	}
 	return s
 }

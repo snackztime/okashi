@@ -120,3 +120,25 @@ func TestPaneReorderNoOpOnResource(t *testing.T) {
 }
 
 func mustItems(dir string) []manifestItem { m, _, _ := readManifest(dir); return m.Items }
+
+// A staged pane reorder is modal: other keys must not silently discard it.
+func TestPaneReorderIsModal(t *testing.T) {
+	m, dir := paneManuscript(t)
+	m.files.selectByName("01-a.md")
+	m.paneReorder(1) // stage
+	if !m.paneReorderDirty {
+		t.Fatal("precondition: reorder should be staged")
+	}
+	// 'c' would open the corkboard; while staged it must be swallowed, not abandon the reorder.
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = mm.(model)
+	if m.screen == screenCorkboard {
+		t.Fatal("a staged reorder must not be abandoned by another key")
+	}
+	if !m.paneReorderDirty {
+		t.Fatal("the staged reorder should still be pending")
+	}
+	if mani, _, _ := readManifest(dir); mani.Items[0].File != "01-a.md" {
+		t.Fatal("nothing should be written while staged")
+	}
+}

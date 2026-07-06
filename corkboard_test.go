@@ -196,3 +196,31 @@ func TestCorkboardViewWindows(t *testing.T) {
 		t.Fatal("corkboard view should render")
 	}
 }
+
+// A staged (uncommitted) x-demote must not cause a synopsis edit to prune the still-live chapter's
+// synopsis off disk (the Critical the review caught).
+func TestCorkboardSynopsisEditPreservesStagedRemovedChapter(t *testing.T) {
+	dir := seedCorkManuscript(t) // 01-a, 02-b, 03-c
+	saveSynopses(dir, map[string]string{"01-a.md": "A syn", "02-b.md": "B syn", "03-c.md": "C syn"},
+		map[string]bool{"01-a.md": true, "02-b.md": true, "03-c.md": true})
+	m := model{editor: textarea.New()}
+	m.files.dir = dir
+	m.enterCorkboard()
+	m.structureSel = 1
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'x'}}) // stage demote of 02-b (not committed)
+	m = mm.(model)
+	m.structureSel = 0
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'e'}}) // edit 01-a synopsis
+	m = mm.(model)
+	m.synArea.SetValue("A edited")
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(model)
+
+	syn := loadSynopses(dir)
+	if syn["02-b.md"] != "B syn" {
+		t.Fatalf("a staged-removed-but-still-on-disk chapter's synopsis must survive, got %v", syn)
+	}
+	if syn["01-a.md"] != "A edited" {
+		t.Fatalf("the edited synopsis should be saved, got %v", syn)
+	}
+}

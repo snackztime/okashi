@@ -71,6 +71,21 @@ func (f filelist) corkView() string {
 	return strings.Join(lines[off:end], "\n")
 }
 
+// cachedFirstProse returns a chapter's first prose line, memoized per SetDir so corkView never
+// re-reads every chapter file on each frame (View() must stay O(visible)).
+func (f filelist) cachedFirstProse(file string) string {
+	if f.proseCache != nil {
+		if v, ok := f.proseCache[file]; ok {
+			return v
+		}
+	}
+	v := firstProseLine(filepath.Join(f.dir, file))
+	if f.proseCache != nil {
+		f.proseCache[file] = v
+	}
+	return v
+}
+
 // moveChapter swaps the selected chapter with its neighbor (d = -1 up / +1 down) in the staged
 // view and rebuilds the entry list, keeping the selection on the moved chapter. Returns false when
 // the selection isn't a movable chapter or the move is out of range (a no-op).
@@ -144,7 +159,7 @@ func (f filelist) chapterCard(ch chapterRef, w int) []string {
 	syn := f.synopses[ch.file]
 	dim := false
 	if syn == "" {
-		syn = firstProseLine(filepath.Join(f.dir, ch.file))
+		syn = f.cachedFirstProse(ch.file) // memoized — avoids a full-file read per frame
 		dim = true
 	}
 	if syn == "" {
