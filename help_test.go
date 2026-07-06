@@ -44,9 +44,11 @@ func TestHelpOpensGloballyAndRenders(t *testing.T) {
 	if !nm2.(model).showHelp {
 		t.Fatal("? should open help on the home screen")
 	}
-	// The overlay renders over any screen (here: home), showing the keys.
+	// The overlay renders over any screen (here: home), showing the categorized keys.
 	out := ansi.Strip(model{screen: screenHome, width: 80, height: 24, showHelp: true}.View())
-	if !strings.Contains(out, "binder (chapter list)") {
-		t.Fatalf("help overlay should render its keys over the home screen, got:\n%s", out)
+	for _, want := range []string{"NAVIGATE", "MANUSCRIPT", "ctrl+k binder", "c corkboard"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("help overlay should render %q over the home screen, got:\n%s", want, out)
+		}
 	}
 }

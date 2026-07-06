@@ -41,38 +41,31 @@ Files open in $OKASHI_DIR, else iCloud Drive's okashi folder, else
 // measure" is ~66). Override with OKASHI_WIDTH.
 const defaultColumnWidth = 72
 
-const helpText = `F1 / ?   show / hide this help
-ctrl+o   home
-i        project properties (from home)
-ctrl+b   toggle sidebar
-ctrl+y   inspector tabs
-ctrl+f   search (tab: scope · ctrl+a: all)
-ctrl+l   outline.md (planning notes)
-ctrl+k   binder (chapter list)
-s        structure mode (from binder)
-c        corkboard — synopses + reorder (from binder)
-ctrl+n   new file (F2 / right-click rename)
-r        rename file
-d        duplicate file
-M        move file/folder
-b        snapshots / restore (sidebar; d/D to diff)
-g        writing history heatmap (sidebar)
-n        revision notes (sidebar)
-del      delete file
-ctrl+e   export
-ctrl+p   preview (t: toggle style)
-ctrl+t   typewriter
-ctrl+d   focus dim
-ctrl+x   selection mode (plain-drag select)
-tab/⇧tab indent / outdent
-ctrl+s   save
-ctrl+z   undo
-ctrl+g   set goals (daily · project · minutes · deadline)
-ctrl+u   start/stop writing sprint
-ctrl+r   spelling suggestions
-⌥/⇧+drag select text (native) · ⌘C copy
-esc      switch focus / back
-ctrl+c   quit`
+const helpText = `NAVIGATE
+  ctrl+o home   ctrl+b sidebar   ctrl+y inspector
+  ctrl+k binder   ctrl+l outline   esc back/focus
+
+FILES  (sidebar focus)
+  ctrl+n new   r rename (F2)   d duplicate
+  M move   del delete
+
+MANUSCRIPT  (from the binder — ctrl+k)
+  s structure   c corkboard   ·   J/K reorder
+  b snapshots/diff   n notes   (sidebar)
+
+WRITE
+  ctrl+s save   ctrl+z undo   ⇥/⇧⇥ indent
+  ctrl+t typewriter   ctrl+d focus-dim   ctrl+x select
+  ctrl+r spelling   ⌥/⇧+drag select · ⌘C copy
+
+REVIEW & OUTPUT
+  ctrl+f search   ctrl+p preview   ctrl+e export
+
+GOALS & TIME
+  ctrl+g goals   ctrl+u sprint   g history (sidebar)
+
+APP
+  i properties (home)   F1/? help   ctrl+c quit`
 
 // resolveColumnWidthEnv reads OKASHI_WIDTH (a column count in [20,200]); the bool reports whether a
 // valid value was present (so a higher tier can decide whether to override it).
@@ -1602,7 +1595,7 @@ func (m model) View() string {
 		if hH < 1 {
 			hH = 1
 		}
-		card := framedPanel("Keys", helpText, 50, min(hH, lipgloss.Height(helpText)+2), "")
+		card := framedPanel("Keys", helpText, 58, min(hH, lipgloss.Height(helpText)+2), "")
 		body := lipgloss.Place(m.width, hH, lipgloss.Center, lipgloss.Center, card)
 		return lipgloss.JoinVertical(lipgloss.Left, body, statusStyle.Width(m.width).Render("F1 · ? · esc  close"))
 	}
