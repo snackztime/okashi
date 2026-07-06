@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const synopsisName = ".okashi-synopsis.json"
@@ -18,6 +19,24 @@ type synopsisFile struct {
 }
 
 func synopsisPath(dir string) string { return filepath.Join(dir, synopsisName) }
+
+// firstProseLine returns a file's first non-blank, non-heading line (skipping a leading `#` markdown
+// heading and blank lines) — used as a dimmed fallback preview on the corkboard when a chapter has
+// no authored synopsis. "" if the file is empty/unreadable or has no prose line.
+func firstProseLine(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		t := strings.TrimSpace(line)
+		if t == "" || strings.HasPrefix(t, "#") {
+			continue
+		}
+		return t
+	}
+	return ""
+}
 
 // loadSynopses reads the sidecar; missing/corrupt/unsupported-schema all yield an empty map — never
 // an error (mirrors recent.json's tolerant load).

@@ -39,6 +39,9 @@ type filelist struct {
 	allowed  map[string]bool
 	icons    iconSet
 	wc       *wordCountCache
+
+	corkMode bool              // corkboard density: false = title list, true = synopsis cards
+	synopses map[string]string // chapter filename → synopsis, loaded per SetDir (manuscripts)
 }
 
 // allowedDocExts is the single source of truth for which files count as editable
@@ -108,6 +111,7 @@ func (f *filelist) SetDir(dir string) {
 	// Resolve the manuscript view once per SetDir; it becomes the single source
 	// of chapter order/titles/membership for View(), sectionRow(), and callers.
 	f.view = resolveManuscript(dir, files)
+	f.synopses = loadSynopses(dir) // for corkboard mode (empty for non-manuscripts)
 
 	// Build the ordered entry list: dirs first, then chapters in view order, then loose.
 	f.entries = append(f.entries, dirs...)
@@ -125,6 +129,10 @@ const createRowSentinel = -2
 // editRow == createRowSentinel: prepend editField as a new row before the list.
 // editRow == -1 (or any other negative): normal render.
 func (f filelist) View(editRow int, editField string) string {
+	// Corkboard mode: synopsis cards for a manuscript (only in the normal, non-editing render).
+	if f.corkMode && f.view.ordered() && editRow == -1 {
+		return f.corkView()
+	}
 	if len(f.entries) == 0 && editRow != createRowSentinel {
 		return lipgloss.NewStyle().Foreground(subtle).Render("(empty)")
 	}
