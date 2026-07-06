@@ -40,7 +40,7 @@ func TestExportSingleDocFromEditor(t *testing.T) {
 	}
 }
 
-func TestExportWholeManuscriptFromOutline(t *testing.T) {
+func TestExportWholeManuscriptFromCorkboard(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv("OKASHI_DIR", root)
 	proj := filepath.Join(root, "my-novel")
@@ -52,8 +52,8 @@ func TestExportWholeManuscriptFromOutline(t *testing.T) {
 	m = nm.(model)
 	m.screen = screenWriting
 	m.files.SetDir(proj)
-	m.enterOutline() // binder still exists (retired in Task 5); enter it directly
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE}) // export chooser on the outline
+	m.files.corkMode = true // corkboard mode (a legacy numbered manuscript) → whole-manuscript export
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) // tufte
 	m = nm.(model)

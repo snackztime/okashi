@@ -101,6 +101,24 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Export prompt (ctrl+e from the corkboard → whole-manuscript export).
+	if m.exportPrompt {
+		switch key.String() {
+		case "ctrl+c":
+			return m, tea.Quit
+		case "m":
+			m.exportPrompt = false
+			m.runExport(StyleManuscript)
+		case "t":
+			m.exportPrompt = false
+			m.runExport(StyleTufte)
+		case "esc":
+			m.exportPrompt = false
+			m.status = "export cancelled"
+		}
+		return m, nil
+	}
+
 	if m.synEditing {
 		if key.String() == "esc" { // esc commits (⏎ inserts the 1–3 line breaks)
 			m.commitSynopsis()
@@ -208,6 +226,9 @@ func (m model) updateCorkboard(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case "e":
 		m.startSynopsisEdit()
+	case "ctrl+e":
+		m.exportPrompt = true
+		m.status = "export: m manuscript · t tufte · esc cancel"
 	case "a":
 		m.structureAdding = true
 		m.structureAddSel = 0

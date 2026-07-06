@@ -6,8 +6,15 @@ import (
 	"path/filepath"
 )
 
-// runExport builds the export doc for the current scope (whole manuscript on the outline
-// screen, else the current document) and writes <slug>.rtf + <slug>.pdf under <dir>/export/.
+// exportWholeManuscript reports whether ctrl+e should export the whole manuscript (from the
+// full-screen corkboard, or the pane in corkboard mode — including legacy numbered manuscripts)
+// rather than just the current document.
+func (m model) exportWholeManuscript() bool {
+	return m.screen == screenCorkboard || (m.files.corkMode && m.files.view.ordered())
+}
+
+// runExport builds the export doc for the current scope (whole manuscript from the corkboard,
+// else the current document) and writes <slug>.rtf + <slug>.pdf under <dir>/export/.
 func (m *model) runExport(st ExportStyle) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -17,7 +24,7 @@ func (m *model) runExport(st ExportStyle) {
 	dir := m.files.dir
 	var doc ManuscriptDoc
 	var title string
-	if m.screen == screenOutline {
+	if m.exportWholeManuscript() {
 		entries := readEntries(dir)
 		v := resolveManuscript(dir, entries)
 		doc = manuscriptDocFromChapters(dir, v.chapters)
@@ -49,7 +56,7 @@ func (m *model) runExport(st ExportStyle) {
 		Author:    eff.Author,
 		Title:     title,
 		Contact:   eff.Contact,
-		TitlePage: m.screen == screenOutline,
+		TitlePage: m.exportWholeManuscript(),
 	}
 	outDir := filepath.Join(dir, "export")
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
