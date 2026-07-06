@@ -1370,7 +1370,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if hasManifest(m.files.dir) {
 				// In a manuscript, ask: chapter or resource.
 				m.createPicker = true
-				m.status = "new: c chapter · r resource · esc cancel"
+				m.status = "new: c chapter (ordered) · r resource (loose doc) · esc cancel"
 				return m, nil
 			}
 			m.createKind = 0
@@ -1978,7 +1978,7 @@ func (m *model) createResource(name string) {
 		sub, name = name[:i], name[i+1:]
 	}
 	if strings.Contains(name, "/") || name == "" {
-		m.status = "invalid resource name"
+		m.status = "a resource name can't be empty or contain '/' (use Folder/name to file it in a subfolder)"
 		return
 	}
 	if filepath.Ext(name) == "" {
@@ -2041,7 +2041,7 @@ func (m *model) confirmCreate() {
 	}
 
 	if name == manifestName {
-		m.status = "manifest.json is read-only (managed externally)"
+		m.status = "manifest.json can't be renamed or removed — it's how okashi tracks chapter order"
 		return
 	}
 
@@ -2160,7 +2160,7 @@ func (m *model) startDelete() {
 		return
 	}
 	if e.name == manifestName {
-		m.status = "manifest.json is read-only (managed externally)"
+		m.status = "manifest.json can't be renamed or removed — it's how okashi tracks chapter order"
 		return
 	}
 	v := m.files.view
@@ -2286,7 +2286,7 @@ func (m *model) confirmRename() {
 		}
 	}
 	if newName == manifestName {
-		m.status = "manifest.json is read-only (managed externally)"
+		m.status = "manifest.json can't be renamed or removed — it's how okashi tracks chapter order"
 		m.refreshAfterRename()
 		return
 	}

@@ -634,3 +634,25 @@ func TestHomeRemoveSourceConfirmArmsAndCancels(t *testing.T) {
 }
 
 func ansiStrip(s string) string { return ansi.Strip(s) }
+
+func TestHomeColumnsResponsive(t *testing.T) {
+	// Wide terminal: both columns, roomier than the old fixed 20/36, fitting within width.
+	m := model{}
+	m.width = 140
+	regions, _, widths := m.homeColumns()
+	if len(regions) != 2 {
+		t.Fatalf("wide terminal should show both columns, got %d", len(regions))
+	}
+	if widths[0] <= 20 || widths[1] <= 36 {
+		t.Fatalf("columns should grow beyond the old fixed sizes on a wide terminal, got %v", widths)
+	}
+	if sum := widths[0] + homeColGap + widths[1]; sum > m.width {
+		t.Fatalf("browse block %d must fit within width %d", sum, m.width)
+	}
+	// Narrow terminal: drop to a single FILES column that still fits.
+	m.width = 44
+	regions, _, widths = m.homeColumns()
+	if len(regions) != 1 || widths[0] > m.width {
+		t.Fatalf("narrow terminal should show one fitting column, got regions=%d widths=%v", len(regions), widths)
+	}
+}

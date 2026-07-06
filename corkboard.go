@@ -21,7 +21,7 @@ func (m *model) enterCorkboard() {
 	dir := m.files.dir
 	sm, present, err := readManifest(dir)
 	if !present || err != nil {
-		m.status = "corkboard needs a manifest — legacy numbered manuscripts show as a plain list"
+		m.status = "the corkboard only works inside a manuscript (a project with ordered chapters)"
 		return
 	}
 	m.structureDir = dir

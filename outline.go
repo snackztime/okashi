@@ -129,7 +129,7 @@ func (m *model) promoteOutlineBeat() {
 	dir := m.files.dir
 	mani, present, err := readManifest(dir)
 	if err != nil || !present {
-		m.status = "promote needs a manuscript (no manifest here)"
+		m.status = "promote only works inside a manuscript — this is a plain folder"
 		return
 	}
 	// Two-file op (manifest + outline mark). If the manifest write lands but the [x] mark save below
