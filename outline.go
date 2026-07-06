@@ -102,8 +102,68 @@ func (m *model) moveOutlineBeat(dir int) {
 	m.save()
 }
 
-// promoteOutlineBeat is implemented in Task 5.
-func (m *model) promoteOutlineBeat() { m.status = "promote coming in the next task" }
+// promoteOutlineBeat turns the beat under the cursor into a new chapter of the current manuscript:
+// it creates the (birth-stable) file, appends the manifest with the beat text as the title, seeds the
+// synopsis from the beat's notes, and marks the beat done. One-way; no back-sync.
+func (m *model) promoteOutlineBeat() {
+	lines := strings.Split(m.editor.Value(), "\n")
+	b, ok := blockAt(lines, m.editor.Line())
+	if !ok {
+		m.status = "promote: put the cursor on a beat"
+		return
+	}
+	if beatIsPromoted(lines[b.start]) {
+		m.status = "already promoted"
+		return
+	}
+	title := beatTitle(lines[b.start])
+	if title == "" {
+		m.status = "promote: the beat has no title"
+		return
+	}
+	dir := m.files.dir
+	mani, present, err := readManifest(dir)
+	if err != nil || !present {
+		m.status = "promote needs a manuscript (no manifest here)"
+		return
+	}
+	taken := map[string]bool{}
+	for _, it := range mani.Items {
+		taken[it.File] = true
+	}
+	file := uniqueChapterFile(dir, taken)
+	if werr := atomicWrite(filepath.Join(dir, file), []byte(""), 0o644); werr != nil {
+		m.status = "promote failed: " + werr.Error()
+		return
+	}
+	mani.Items = append(mani.Items, manifestItem{File: file, Title: title})
+	if werr := writeManifest(dir, mani); werr != nil {
+		m.status = "promote failed: " + werr.Error()
+		return
+	}
+	if notes := beatNotes(lines, b); len(notes) > 0 {
+		syn := loadSynopses(dir)
+		if syn == nil {
+			syn = map[string]string{}
+		}
+		syn[file] = strings.Join(notes, "\n")
+		chapters := map[string]bool{}
+		for _, it := range mani.Items {
+			chapters[it.File] = true
+		}
+		_ = saveSynopses(dir, syn, chapters)
+	}
+	lines[b.start] = markBeatPromoted(lines[b.start])
+	m.editor.SetValue(strings.Join(lines, "\n"))
+	m.dirty = true
+	m.save()
+	m.status = "promoted “" + title + "”"
+}
+
+// markBeatPromoted rewrites a top-level beat line to a checked task item, preserving its marker.
+func markBeatPromoted(line string) string {
+	return string(line[0]) + " [x] " + beatTitle(line)
+}
 
 func (m model) outlineView() string {
 	title := projectTitle(filepath.Base(m.files.dir))
