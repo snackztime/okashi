@@ -5,9 +5,10 @@
 #
 # The tape builds okashi, copies the sample manuscript to a throwaway /tmp dir
 # (so typing in the demo never dirties the committed corpus), then drives a short
-# tour: open a project, open a chapter, type a line, and toggle the Tufte preview
-# to show margin sidenotes. Tweak the Sleep values or the two navigation Enters
-# below if your terminal's timing/layout differs.
+# tour: open a project, flip the pane into the CORKBOARD (synopsis cards) and its
+# full-screen spread, open a chapter and write a line, show the F1 help, and finish
+# on the Tufte book preview. Tweak the Sleep values or navigation keys below if your
+# terminal's timing/layout differs.
 
 Output docs/demo.gif
 
@@ -23,16 +24,18 @@ Set Theme "Catppuccin Mocha"
 # The scratch HOME gives okashi empty recents/pins so the hub focuses the demo
 # project (not your real files) — and keeps your writing out of the recording.
 Hide
-Type `export PATH="/opt/homebrew/bin:$PATH"; go build -o /tmp/okashi-demo-bin . && rm -rf /tmp/okashi-demo-corpus /tmp/okashi-demo-home && cp -r demo /tmp/okashi-demo-corpus && mkdir -p /tmp/okashi-demo-home && clear`
+Type `export PATH="/opt/homebrew/bin:$PATH"; go build -o /tmp/okashi-demo-bin . && rm -rf /tmp/okashi-demo-corpus /tmp/okashi-demo-home && cp -r demo /tmp/okashi-demo-corpus && mkdir -p /tmp/okashi-demo-home`
 Enter
-Sleep 6s
+Sleep 7s
+# Stage the env here (not in the visible launch line) so the recording opens on a short command.
+# OKASHI_ICONS=plain avoids Nerd-Font tofu in the recording font.
+Type `export HOME=/tmp/okashi-demo-home OKASHI_ICONS=plain OKASHI_THEME=dark OKASHI_DIR=/tmp/okashi-demo-corpus; clear`
+Enter
+Sleep 1s
 Show
 
 # --- launch okashi on the sample manuscript ---
-# OKASHI_ICONS=plain avoids Nerd-Font tofu in the recording font.
-# HOME points at the scratch config dir; the prose measure stays 72; the wide
-# window lets the Tufte preview show sidenotes.
-Type "HOME=/tmp/okashi-demo-home OKASHI_ICONS=plain OKASHI_THEME=dark OKASHI_DIR=/tmp/okashi-demo-corpus /tmp/okashi-demo-bin"
+Type "/tmp/okashi-demo-bin"
 Enter
 Sleep 2.5s
 
@@ -40,41 +43,51 @@ Sleep 2.5s
 Enter
 Sleep 1.5s
 
-# The manuscript sidebar lists the chapters; row 0 is the ".." up-entry, so step
-# down onto "The Keeper" before opening it into the editor.
+# Step onto the first chapter (row 0 is the ".." up-entry).
 Down
 Sleep 0.8s
-Enter
-Sleep 2.5s
 
-# Collapse the file panel for a full-width writing surface.
-Ctrl+B
-Sleep 2s
+# --- the CORKBOARD: the manuscript navigator ---
+# ctrl+k flips the left pane from the chapter list to synopsis cards.
+Ctrl+K
+Sleep 3s
 
-# Open the inspector and cycle its tabs: Words -> Outline -> Goals -> Analysis;
-# a fifth Ctrl+Y closes it again.
-Ctrl+Y
-Sleep 2s
-Ctrl+Y
-Sleep 2s
-Ctrl+Y
-Sleep 2s
-Ctrl+Y
-Sleep 2s
-Ctrl+Y
+# `c` opens the full-screen corkboard — the roomy spread (J/K reorder, e synopsis).
+Type "c"
+Sleep 3.5s
+
+# esc back to the pane; ctrl+k returns it to the compact chapter list.
+Escape
+Sleep 1s
+Ctrl+K
 Sleep 1s
 
-# Markdown preview, then the Tufte book view (warm, markerless headings). Scroll down
-# to reveal the footnotes rendered as numbered endnotes at the foot of the chapter.
-Ctrl+P
-Sleep 2.5s
-Type "t"
-Sleep 3s
-Down
-Down
-Down
-Down
+# --- the help overlay (categorized shortcuts) ---
+# `?` opens it from the sidebar (F1 works too in the app; VHS 0.11 has no F1 key).
+Type "?"
 Sleep 3.5s
+Escape
+Sleep 1s
+
+# --- write ---
+# Open "The Keeper" and add a line.
+Down
+Sleep 0.5s
+Enter
+Sleep 1.5s
+Type "The sea kept its own accounts."
+Sleep 2s
+
+# --- the Tufte book preview ---
+# ctrl+p preview, then `t` for the warm Tufte view; scroll to the endnotes.
+Ctrl+P
+Sleep 2s
+Type "t"
+Sleep 2.5s
+Down
+Down
+Down
+Sleep 3s
 
 # Back to editing, then quit.
 Ctrl+P
