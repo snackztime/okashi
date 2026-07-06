@@ -21,6 +21,10 @@ func TestCurrentSentenceSpan(t *testing.T) {
 		{"spans single newline", "A long\nsentence done.", 2, 0, 21},
 		{"empty", "", 0, 0, 0},
 		{"no terminator", "just some words", 5, 0, 15},
+		// A sentence ending in a closing quote after the terminator (dialogue): the span must
+		// include the quote, and the NEXT sentence must not bleed back across it.
+		{"closing-quote: span includes quote", `He said "go." She left.`, 9, 0, 13},
+		{"closing-quote: next sentence starts after", `He said "go." She left.`, 16, 14, 23},
 	}
 	for _, c := range cases {
 		gs, ge := currentSentenceSpan(c.text, c.cursor)

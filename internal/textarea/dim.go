@@ -26,6 +26,15 @@ func currentSentenceSpan(text string, cursorOffset int) (int, int) {
 
 	isTerm := func(c rune) bool { return c == '.' || c == '!' || c == '?' }
 	isWS := func(c rune) bool { return c == ' ' || c == '\t' || c == '\n' }
+	// A sentence's terminator may be followed by closing quotes/brackets before the whitespace
+	// (dialogue ends `…go."`), so those must count as part of the sentence end.
+	isClose := func(c rune) bool {
+		switch c {
+		case '"', '\'', ')', ']', '}', '»', '”', '’':
+			return true
+		}
+		return false
+	}
 	paraBreak := func(i int) bool {
 		return r[i] == '\n' && ((i > 0 && r[i-1] == '\n') || (i+1 < n && r[i+1] == '\n'))
 	}
@@ -36,7 +45,16 @@ func currentSentenceSpan(text string, cursorOffset int) (int, int) {
 			start = i + 1
 			break
 		}
-		if isTerm(r[i-1]) && isWS(r[i]) {
+		if !isWS(r[i]) {
+			continue
+		}
+		// r[i] is whitespace: a sentence ends here if the run just before it is a terminator,
+		// optionally followed by closing quotes/brackets.
+		k := i - 1
+		for k >= 0 && isClose(r[k]) {
+			k--
+		}
+		if k >= 0 && isTerm(r[k]) {
 			j := i
 			for j < n && isWS(r[j]) {
 				j++
@@ -54,6 +72,9 @@ func currentSentenceSpan(text string, cursorOffset int) (int, int) {
 		}
 		if isTerm(r[i]) {
 			end = i + 1
+			for end < n && isClose(r[end]) { // include trailing closing quotes/brackets
+				end++
+			}
 			break
 		}
 	}
