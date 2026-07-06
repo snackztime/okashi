@@ -8,7 +8,9 @@ import (
 	"strings"
 )
 
-//go:embed demo/the-lighthouse
+// all: so the .okashi-synopsis.json sidecar (a dotfile) is embedded — plain go:embed skips dotfiles.
+//
+//go:embed all:demo/the-lighthouse
 var sampleFS embed.FS
 
 // seedMarkerPath is the once-only first-run marker (UserConfigDir/okashi/.seeded).

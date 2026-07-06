@@ -61,3 +61,22 @@ func TestMaybeSeedSample(t *testing.T) {
 		t.Fatal("marker should still be written for a non-empty dir")
 	}
 }
+
+// The seeded sample manuscript must carry its corkboard synopses (the dotfile sidecar is embedded
+// via `all:` and copied by the seeder), so a first-run user sees a populated corkboard.
+func TestSeededSampleHasSynopses(t *testing.T) {
+	writingDir := t.TempDir()
+	marker := filepath.Join(t.TempDir(), ".seeded")
+	maybeSeedSample(writingDir, marker)
+
+	proj := filepath.Join(writingDir, "the-lighthouse")
+	syn := loadSynopses(proj)
+	if len(syn) != 3 {
+		t.Fatalf("seeded sample should have 3 synopses, got %d (%v)", len(syn), syn)
+	}
+	for _, f := range []string{"01-the-keeper.md", "02-the-fog.md", "03-the-light.md"} {
+		if syn[f] == "" {
+			t.Fatalf("missing synopsis for %s", f)
+		}
+	}
+}
