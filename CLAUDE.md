@@ -92,8 +92,13 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   **diff** a file's `.okashi-bak/` timestamped backups; `n` on demand, `d`/`D` diff, restore backs
   up the current version first); **pace** (`ctrl+g` deadline → Goals-tab burndown; per-project word
   history → `g` heatmap); **corkboard** (`c` from the binder: per-chapter synopses in a card view +
-  reorder — IS structure mode with cards; synopses in an okashi-owned `.okashi-synopsis.json`
-  sidecar, NOT the manifest); **revision notes** (`n` from the sidebar: per-file chapter notes —
+  reorder — the corkboard is the **manuscript navigator**: `ctrl+k` toggles the left pane
+  between the chapter list and corkboard cards (title + word count + synopsis, first-line
+  fallback); sidebar `⏎` open · `e` synopsis · `J/K` staged reorder (confirm on exit) · `c`
+  full-screen spread (`a` add/promote · `x` demote · `r` retitle · `⏎` open · `ctrl+e` whole-
+  manuscript export) · `m` pager; `ctrl+n` in a manuscript → chapter|resource picker (resource
+  loose or into a subfolder). Synopses in an okashi-owned `.okashi-synopsis.json` sidecar, NOT
+  the manifest; the pop-down binder + standalone structure modal are retired); **revision notes** (`n` from the sidebar: per-file chapter notes —
   add/edit/delete; okashi-owned `.okashi-notes/<base>.json` sidecar, follows rename/delete;
   **v1 = chapter-scoped**, line/sentence anchoring + editor-gutter floating is planned v2).
 - **Properties** (`i` on a hub project): okashi's one *editable* metadata surface. Personal

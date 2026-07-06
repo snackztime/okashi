@@ -73,8 +73,9 @@ green, changed words highlighted) so you can see exactly what a draft changed.
 |-----|--------|
 | `ctrl+b` | Toggle sidebar |
 | `ctrl+y` | Inspector tabs |
-| `ctrl+l` | Outline |
-| `ctrl+k` | Binder |
+| `ctrl+l` | Outline (planning notes) |
+| `ctrl+k` | Corkboard view (chapter list ⇄ synopsis cards) |
+| `c` | Full-screen corkboard (sidebar) |
 | `ctrl+o` | Home (launch screen) |
 | `esc` | Switch focus / back |
 | `ctrl+c` | Quit |
@@ -132,15 +133,23 @@ The atom is one `.md` file. Larger structures are plain folders:
   only: order by numeric prefix, titles de-slugged from filenames. This is a
   read-only transitional view; no structural writes are offered.
 
-The **structure mode** (`s` from the binder) lets you reorder, insert, and
-remove chapters in a manifest manuscript. Changes are staged and applied behind
-a single confirmation.
+### The corkboard (your manuscript navigator)
 
-The **corkboard** (`c` from the binder) shows each chapter as a card with a short
-**synopsis** you write inline (`e`) — so you can see the whole manuscript at a
-glance and reorder it by idea (`J`/`K`). Synopses live in a small
-`.okashi-synopsis.json` beside your files; reordering shares structure mode's
-single confirmed commit.
+The left pane **is** the binder. In a manuscript, press `ctrl+k` to flip it
+between the chapter list and the **corkboard** — each chapter as a card with its
+word count and a short **synopsis** (or its first line, dimmed, until you write
+one). From the sidebar:
+
+- `⏎` open a chapter · `e` edit its synopsis · `J`/`K` reorder (staged; `esc`
+  then `y` to apply, or `esc` to discard)
+- `c` open the **full-screen corkboard** — the roomy spread with full synopses,
+  where you also `a` add / promote, `x` remove (demote to a resource), `r` retitle
+- `m` read-through pager · `ctrl+e` (on the corkboard) export the whole manuscript
+
+`ctrl+n` in a manuscript asks **chapter or resource** — a chapter is appended to
+the manifest; a resource is an unlisted supporting doc, filed loosely or into a
+folder (`Characters/Aldous`). Synopses live in a small `.okashi-synopsis.json`
+beside your files; order lives in `manifest.json`.
 
 **No lock-in.** Your work is just Markdown files in ordinary folders, with a
 small human-readable `manifest.json` for order and titles — no database, no

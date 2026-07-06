@@ -43,15 +43,15 @@ const defaultColumnWidth = 72
 
 const helpText = `NAVIGATE
   ctrl+o home   ctrl+b sidebar   ctrl+y inspector
-  ctrl+k binder   ctrl+l outline   esc back/focus
+  ctrl+k corkboard   ctrl+l outline   esc back/focus
 
 FILES  (sidebar focus)
-  ctrl+n new   r rename (F2)   d duplicate
-  M move   del delete
+  ctrl+n new · chapter|resource   r rename (F2)
+  d duplicate   M move   del delete
 
-MANUSCRIPT  (from the binder — ctrl+k)
-  s structure   c corkboard   ·   J/K reorder
-  b snapshots/diff   n notes   (sidebar)
+MANUSCRIPT  (sidebar / corkboard)
+  ctrl+k corkboard view   c full-screen   J/K reorder
+  e synopsis   m pager   b snapshots/diff   n notes
 
 WRITE
   ctrl+s save   ctrl+z undo   ⇥/⇧⇥ indent
