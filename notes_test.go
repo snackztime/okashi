@@ -124,3 +124,15 @@ func TestNotesScreenAddEditDelete(t *testing.T) {
 		t.Fatal("deleting the last note should remove the sidecar")
 	}
 }
+
+// A loose file and a same-stem folder resolve to ONE sidecar path — so a directory rename that ran
+// moveNotes would steal the file's notes. This pins the collision that makes the rename handler's
+// `if !t.isDir { moveNotes(...) }` gate load-bearing; if this ever stops colliding, revisit the gate.
+func TestNotesSidecarStemCollisionJustifiesDirGate(t *testing.T) {
+	dir := t.TempDir()
+	fileSidecar := notesPath(filepath.Join(dir, "interlude.md"))
+	dirSidecar := notesPath(filepath.Join(dir, "interlude"))
+	if fileSidecar != dirSidecar {
+		t.Fatalf("expected file and same-stem dir to share a sidecar path (%q vs %q)", fileSidecar, dirSidecar)
+	}
+}

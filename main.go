@@ -2395,7 +2395,12 @@ func (m *model) confirmRename() {
 		m.refreshAfterRename()
 		return
 	}
-	moveNotes(oldPath, newPath) // the notes sidecar follows a disk rename
+	if !t.isDir {
+		// The notes sidecar follows a FILE rename. Not for a dir: a dir's children's notes travel
+		// inside it via os.Rename, and firing moveNotes on a dir could steal a same-stem loose
+		// file's notes (folder `interlude/` vs file `interlude.md`).
+		moveNotes(oldPath, newPath)
+	}
 	if m.currentFile == oldPath {
 		m.currentFile = newPath
 	}
