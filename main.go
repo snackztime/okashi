@@ -50,8 +50,11 @@ FILES  (sidebar focus)
   d duplicate   M move   del delete
 
 MANUSCRIPT  (corkboard: ctrl+k or c)
-  J/K reorder   e synopsis   a add   x remove   r retitle
+  alt+↑/↓ · J/K reorder   e synopsis   a add   x remove   r retitle
   m pager   b snapshots/diff   n notes
+
+OUTLINE  (ctrl+l)
+  alt+↑/↓ move beat   alt+↵ promote → chapter   esc done
 
 WRITE
   ctrl+s save   ctrl+z undo   ⇥/⇧⇥ indent
@@ -177,6 +180,7 @@ const (
 	screenHeatmap
 	screenCorkboard
 	screenNotes
+	screenOutline
 )
 
 const (
@@ -931,6 +935,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateNotes(msg)
 	}
 
+	if m.screen == screenOutline {
+		return m.updateOutline(msg)
+	}
+
 	// Manuscript ctrl+n: pick chapter or resource before naming.
 	if m.createPicker {
 		if key, ok := msg.(tea.KeyMsg); ok {
@@ -1397,25 +1405,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+l":
-			// ctrl+l always toggles the planning outline.md (ctrl+k toggles the pane corkboard).
-			outlinePath := filepath.Join(m.files.dir, "outline.md")
-			if m.currentFile == outlinePath {
-				m.save()
-				if m.outlineReturnFile != "" {
-					m.loadFile(m.outlineReturnFile)
-				}
-			} else {
-				m.save()
-				m.outlineReturnFile = m.currentFile
-				if _, err := os.Stat(outlinePath); err != nil {
-					if werr := atomicWrite(outlinePath, []byte("- \n"), 0o644); werr != nil {
-						m.status = "couldn't create outline: " + werr.Error()
-						return m, nil
-					}
-					m.files.SetDir(m.files.dir) // surface outline.md in the sidebar
-				}
-				m.loadFile(outlinePath)
-			}
+			// ctrl+l opens the full-screen outline mode (ctrl+k opens the corkboard).
+			m.enterOutline()
 			return m, nil
 		case "ctrl+k":
 			// The corkboard is full-screen: ctrl+k (and `c` from the sidebar) open it.
@@ -1661,6 +1652,10 @@ func (m model) View() string {
 
 	if m.screen == screenNotes {
 		return m.notesView()
+	}
+
+	if m.screen == screenOutline {
+		return m.outlineView()
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone

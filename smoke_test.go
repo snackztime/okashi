@@ -1043,7 +1043,7 @@ func TestPreviewHeaderShown(t *testing.T) {
 	}
 }
 
-func TestOutlineDocToggle(t *testing.T) {
+func TestOutlineModeEntryExit(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("chapter body"), 0o644)
 	t.Setenv("OKASHI_DIR", dir)
@@ -1053,20 +1053,23 @@ func TestOutlineDocToggle(t *testing.T) {
 	m = nm.(model)
 	m.loadFile(filepath.Join(dir, "01-a.md"))
 
-	// ctrl+l opens outline.md (created on disk).
+	// ctrl+l opens the full-screen outline mode on outline.md (created on disk).
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
 	m = nm.(model)
+	if m.screen != screenOutline {
+		t.Fatalf("ctrl+l should enter the outline screen, got %v", m.screen)
+	}
 	if filepath.Base(m.currentFile) != "outline.md" {
-		t.Fatalf("ctrl+l should open outline.md, got %q", m.currentFile)
+		t.Fatalf("outline mode should load outline.md, got %q", m.currentFile)
 	}
 	if _, err := os.Stat(filepath.Join(dir, "outline.md")); err != nil {
 		t.Fatal("outline.md should be created on disk")
 	}
-	// ctrl+l again returns to the chapter.
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlL})
+	// esc returns to the chapter and the writing screen.
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = nm.(model)
-	if filepath.Base(m.currentFile) != "01-a.md" {
-		t.Fatalf("second ctrl+l should return to the chapter, got %q", m.currentFile)
+	if m.screen != screenWriting || filepath.Base(m.currentFile) != "01-a.md" {
+		t.Fatalf("esc should return to the chapter/writing (screen=%v file=%q)", m.screen, m.currentFile)
 	}
 }
 

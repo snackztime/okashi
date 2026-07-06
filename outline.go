@@ -4,7 +4,183 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
+
+// enterOutline opens the full-screen outline mode on the current folder's outline.md (created seeded
+// if missing), remembering the file to return to on esc.
+func (m *model) enterOutline() {
+	m.save() // flush the current chapter before loadFile reloads over it
+	outlinePath := filepath.Join(m.files.dir, "outline.md")
+	if _, err := os.Stat(outlinePath); err != nil {
+		if werr := atomicWrite(outlinePath, []byte("- \n"), 0o644); werr != nil {
+			m.status = "couldn't create outline: " + werr.Error()
+			return
+		}
+		m.files.SetDir(m.files.dir) // surface outline.md in the sidebar
+	}
+	m.outlineReturnFile = m.currentFile
+	m.loadFile(outlinePath)
+	m.editor.Dim = false // no sentence-dim in the outline
+	m.screen = screenOutline
+	m.focus = focusEditor
+	m.editor.Focus()
+}
+
+// exitOutline saves outline.md, reflects any promoted chapters, and returns to the prior file.
+func (m *model) exitOutline() {
+	m.save()
+	m.files.SetDir(m.files.dir) // reflect promoted chapters in the pane/manifest
+	if m.outlineReturnFile != "" {
+		m.loadFile(m.outlineReturnFile)
+	}
+	m.syncDim() // restore the writing-screen dim setting
+	m.screen = screenWriting
+	m.focus = focusEditor
+	m.editor.Focus()
+}
+
+func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if sz, ok := msg.(tea.WindowSizeMsg); ok {
+		m.width, m.height = sz.Width, sz.Height
+		m.layout()
+		return m, nil
+	}
+	key, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
+	}
+	switch key.String() {
+	case "ctrl+c":
+		return m, tea.Quit
+	case "esc":
+		m.exitOutline()
+		return m, nil
+	case "alt+up":
+		m.moveOutlineBeat(-1)
+		return m, nil
+	case "alt+down":
+		m.moveOutlineBeat(1)
+		return m, nil
+	case "alt+enter", "ctrl+enter":
+		m.promoteOutlineBeat()
+		return m, nil
+	case "enter":
+		if m.editor.AtLineEnd() {
+			if prefix, clear, ok := listContinuation(m.editor.CurrentLine()); ok {
+				if clear {
+					m.editor.ClearLine()
+				} else {
+					m.editor.InsertString("\n" + prefix)
+				}
+				m.dirty = true
+				m.lastEditAt = time.Now()
+				return m, nil
+			}
+		}
+	}
+	// Only mark dirty on an actual edit (mirrors the writing screen) — otherwise pure navigation keys
+	// churn outline.md on every autosave tick and inflate the active-writing/pace counters.
+	before := m.editor.Value()
+	var cmd tea.Cmd
+	m.editor, cmd = m.editor.Update(msg)
+	if m.editor.Value() != before {
+		m.dirty = true
+		m.lastEditAt = time.Now()
+	}
+	return m, cmd
+}
+
+// moveOutlineBeat reorders the beat block under the cursor (dir -1 up / +1 down) and saves.
+func (m *model) moveOutlineBeat(dir int) {
+	out, nc, ok := moveBeat(strings.Split(m.editor.Value(), "\n"), m.editor.Line(), dir)
+	if !ok {
+		m.status = "move: put the cursor on a beat"
+		return
+	}
+	m.editor.SetValue(strings.Join(out, "\n"))
+	m.editor.MoveToLine(nc)
+	m.dirty = true
+	m.save()
+}
+
+// promoteOutlineBeat turns the beat under the cursor into a new chapter of the current manuscript:
+// it creates the (birth-stable) file, appends the manifest with the beat text as the title, seeds the
+// synopsis from the beat's notes, and marks the beat done. One-way; no back-sync.
+func (m *model) promoteOutlineBeat() {
+	lines := strings.Split(m.editor.Value(), "\n")
+	b, ok := blockAt(lines, m.editor.Line())
+	if !ok {
+		m.status = "promote: put the cursor on a beat"
+		return
+	}
+	if beatIsPromoted(lines[b.start]) {
+		m.status = "already promoted"
+		return
+	}
+	title := beatTitle(lines[b.start])
+	if title == "" {
+		m.status = "promote: the beat has no title"
+		return
+	}
+	dir := m.files.dir
+	mani, present, err := readManifest(dir)
+	if err != nil || !present {
+		m.status = "promote needs a manuscript (no manifest here)"
+		return
+	}
+	// Two-file op (manifest + outline mark). If the manifest write lands but the [x] mark save below
+	// doesn't, a re-promote appends a second same-title chapter — low-probability and non-destructive
+	// (uniqueChapterFile never overwrites); the manifest, not the mark, is the source of truth.
+	taken := map[string]bool{}
+	for _, it := range mani.Items {
+		taken[it.File] = true
+	}
+	file := uniqueChapterFile(dir, taken)
+	if werr := atomicWrite(filepath.Join(dir, file), []byte(""), 0o644); werr != nil {
+		m.status = "promote failed: " + werr.Error()
+		return
+	}
+	mani.Items = append(mani.Items, manifestItem{File: file, Title: title})
+	if werr := writeManifest(dir, mani); werr != nil {
+		m.status = "promote failed: " + werr.Error()
+		return
+	}
+	if notes := beatNotes(lines, b); len(notes) > 0 {
+		syn := loadSynopses(dir)
+		if syn == nil {
+			syn = map[string]string{}
+		}
+		syn[file] = strings.Join(notes, "\n")
+		chapters := map[string]bool{}
+		for _, it := range mani.Items {
+			chapters[it.File] = true
+		}
+		_ = saveSynopses(dir, syn, chapters)
+	}
+	lines[b.start] = markBeatPromoted(lines[b.start])
+	m.editor.SetValue(strings.Join(lines, "\n"))
+	m.dirty = true
+	m.save()
+	m.status = "promoted “" + title + "”"
+}
+
+// markBeatPromoted rewrites a top-level beat line to a checked task item, preserving its marker.
+func markBeatPromoted(line string) string {
+	return string(line[0]) + " [x] " + beatTitle(line)
+}
+
+func (m model) outlineView() string {
+	title := projectTitle(filepath.Base(m.files.dir))
+	header := sectionHeader("OUTLINE · "+title, m.width)
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("alt+↑/↓ move beat · alt+↵ promote · esc done")
+	body := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Top, m.editor.View())
+	return lipgloss.JoinVertical(lipgloss.Left, header, body,
+		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
+}
 
 // splitPrefix splits name into its leading run of digits and the remainder
 // (everything after the digits, verbatim). "02-the-letter.md" -> ("02",
