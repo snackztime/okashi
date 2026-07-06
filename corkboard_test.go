@@ -51,6 +51,13 @@ func TestCorkboardStatusLine(t *testing.T) {
 	if !strings.Contains(one, "1 chapter ") {
 		t.Fatalf("want singular 'chapter', got %q", one)
 	}
+	// With a real word-count cache the total sums the chapters (3 + 2 = 5 words).
+	dir := t.TempDir()
+	os.WriteFile(filepath.Join(dir, "a.md"), []byte("one two three"), 0o644)
+	os.WriteFile(filepath.Join(dir, "b.md"), []byte("four five"), 0o644)
+	if got := corkboardStatusLine(items, dir, newWordCountCache(), projectGoals{}); !strings.Contains(got, "5 words") {
+		t.Fatalf("want summed total '5 words', got %q", got)
+	}
 }
 
 func seedCorkManuscript(t *testing.T) (dir string) {

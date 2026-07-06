@@ -16,7 +16,8 @@ import (
 // enterCorkboard opens the corkboard for the current manuscript: it loads the same staged buffer
 // structure mode uses (so reorder + commit are shared) plus the synopsis sidecar.
 func (m *model) enterCorkboard() {
-	m.save() // flush the current buffer before the board can reload a chapter over it
+	m.save() // flush the current buffer first: opening it from the board hits loadFile's
+	// currentFile==path branch, which reloads from disk and would clobber unsaved edits (mirrors ctrl+l)
 	dir := m.files.dir
 	sm, present, err := readManifest(dir)
 	if !present || err != nil {
@@ -111,6 +112,14 @@ func (m *model) commitSynopsis() {
 	}
 	if text == "" {
 		delete(m.synopses, file)
+		// Clearing a synopsis reveals the first-line fallback — populate it now (once, off the
+		// render path) so the card updates in-session, not only on corkboard re-entry.
+		if m.corkFirstLines == nil {
+			m.corkFirstLines = map[string]string{}
+		}
+		if _, ok := m.corkFirstLines[file]; !ok {
+			m.corkFirstLines[file] = firstProseLine(filepath.Join(m.structureDir, file))
+		}
 	} else {
 		m.synopses[file] = text
 	}
