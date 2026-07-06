@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -324,11 +325,34 @@ func wrapClamp(s string, width, maxLines int) string {
 	return strings.Join(lines, "\n")
 }
 
+// corkboardStatusLine summarizes the manuscript above the cards: chapter count, total words,
+// and — when a project goal is set — progress toward it with an optional deadline.
+func corkboardStatusLine(items []manifestItem, dir string, wc *wordCountCache, pg projectGoals) string {
+	total := 0
+	if wc != nil {
+		for _, it := range items {
+			total += wc.count(filepath.Join(dir, it.File))
+		}
+	}
+	unit := "chapters"
+	if len(items) == 1 {
+		unit = "chapter"
+	}
+	line := strconv.Itoa(len(items)) + " " + unit + " · " + commafy(total) + " words"
+	if pg.ProjectGoal > 0 {
+		line += " · " + commafy(total) + " / " + commafy(pg.ProjectGoal)
+		if pg.Deadline != "" {
+			line += " by " + pg.Deadline
+		}
+	}
+	return line
+}
+
 func (m model) corkboardView() string {
 	const bodyRows = 3
 	cardRows := bodyRows + 2 // + top/bottom border
 	perCard := cardRows + 1  // + one blank line between cards
-	vis := (m.height - 4) / perCard
+	vis := (m.height - 5) / perCard // -5 leaves room for the status header + footer rows
 	if vis < 1 {
 		vis = 1
 	}
@@ -362,7 +386,10 @@ func (m model) corkboardView() string {
 
 	var b strings.Builder
 	board := strings.Join(cards, "\n")
-	b.WriteString(lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, board))
+	hdr := lipgloss.NewStyle().Foreground(subtle).Render(
+		corkboardStatusLine(m.structureItems, m.structureDir, m.files.wc, m.goalsAll[m.structureDir].applyEnvDefaults()))
+	b.WriteString(lipgloss.PlaceHorizontal(m.width, lipgloss.Center, hdr) + "\n")
+	b.WriteString(lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center, board))
 
 	if m.synEditing {
 		edit := framedPanel("synopsis · "+m.structureItems[m.structureSel].Title, m.synArea.View(), cardW, 5, "esc save")
