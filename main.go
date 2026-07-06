@@ -57,6 +57,7 @@ d        duplicate file
 M        move file/folder
 b        snapshots / restore (sidebar; d/D to diff)
 g        writing history heatmap (sidebar)
+n        revision notes (sidebar)
 del      delete file
 ctrl+e   export
 ctrl+p   preview (t: toggle style)
@@ -184,6 +185,7 @@ const (
 	screenDiff
 	screenHeatmap
 	screenCorkboard
+	screenNotes
 )
 
 const (
@@ -344,6 +346,8 @@ type model struct {
 	synopses   map[string]string // filename → synopsis, loaded on corkboard entry
 	synEditing bool
 	synArea    textarea.Model
+
+	notes notesModel
 }
 
 func initialModel() model {
@@ -936,6 +940,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenCorkboard {
 		return m.updateCorkboard(msg)
+	}
+
+	if m.screen == screenNotes {
+		return m.updateNotes(msg)
 	}
 
 	// While naming a new file, the prompt captures all input.
@@ -1541,6 +1549,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.enterSnapshots()
 				case "g":
 					m.enterHeatmap()
+				case "n":
+					m.enterNotes()
 				}
 			}
 		}
@@ -1639,6 +1649,10 @@ func (m model) View() string {
 
 	if m.screen == screenCorkboard {
 		return m.corkboardView()
+	}
+
+	if m.screen == screenNotes {
+		return m.notesView()
 	}
 
 	bodyH := m.height - 1 // status only; no banner in the writing zone
@@ -2231,6 +2245,9 @@ func (m *model) confirmDelete() {
 		m.status = "couldn't delete: " + err.Error()
 		return
 	}
+	if info != nil && !info.IsDir() {
+		deleteNotes(path) // drop the deleted file's notes sidecar
+	}
 	m.files.SetDir(m.files.dir) // re-reads entries and resets selection to 0
 	if n := len(m.files.entries); n > 0 {
 		if idx >= n {
@@ -2378,6 +2395,7 @@ func (m *model) confirmRename() {
 		m.refreshAfterRename()
 		return
 	}
+	moveNotes(oldPath, newPath) // the notes sidecar follows a disk rename
 	if m.currentFile == oldPath {
 		m.currentFile = newPath
 	}

@@ -93,7 +93,9 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   up the current version first); **pace** (`ctrl+g` deadline → Goals-tab burndown; per-project word
   history → `g` heatmap); **corkboard** (`c` from the binder: per-chapter synopses in a card view +
   reorder — IS structure mode with cards; synopses in an okashi-owned `.okashi-synopsis.json`
-  sidecar, NOT the manifest).
+  sidecar, NOT the manifest); **revision notes** (`n` from the sidebar: per-file chapter notes —
+  add/edit/delete; okashi-owned `.okashi-notes/<base>.json` sidecar, follows rename/delete;
+  **v1 = chapter-scoped**, line/sentence anchoring + editor-gutter floating is planned v2).
 - **Properties** (`i` on a hub project): okashi's one *editable* metadata surface. Personal
   identity (author, contact) → global `config.json` in the OS user-config dir (`os.UserConfigDir()`,
   alongside `recent.json`; macOS `~/Library/Application Support/okashi`); per-project width +

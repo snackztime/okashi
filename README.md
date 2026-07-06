@@ -174,6 +174,15 @@ exports skip the title page.
 
 ---
 
+## Revision notes
+
+Press `n` (with a file selected in the sidebar) to open **revision notes** for that
+chapter — jot "cut the flashback", "check this date", "too slow here". Add with `a`, edit
+with `e`, delete with `d`. Notes live in a small `.okashi-notes/` sidecar beside your files
+and never touch the manuscript text, so they stay out of your prose and out of exports.
+
+---
+
 ## Goals & pace
 
 Set writing goals with `ctrl+g`: a daily word target, a project word target, daily

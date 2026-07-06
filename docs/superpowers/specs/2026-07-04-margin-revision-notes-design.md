@@ -1,8 +1,15 @@
 # Margin / Revision Notes — design spec
 
 **Date:** 2026-07-04
-**Status:** DRAFT — decisions pending (a user brainstorm finalizes the Open decisions before a
-plan is written).
+**Status:** v1 SHIPPED (2026-07-06); v2 DEFERRED. **v1 = chapter-scoped notes** built: okashi-owned
+`.okashi-notes/<base>.json` sidecar (tolerant load, atomic, follows rename/delete), a modal **Notes
+screen** (add `a` / edit `e` / delete `d` / list) reached by **`n` from the sidebar** — NOT the draft's
+`alt+n` (Alt isn't Meta on default macOS terminals per okashi's shortcut review; it sends accented
+chars, so `alt+n` is unreliable). v1 chapter notes have no line anchor, so they live only in the Notes
+screen (no editor gutter). **v2 (DEFERRED)** = line/sentence anchoring (quote+context+lineHint fuzzy
+re-location, the `note.Quote/Prefix/Suffix/LineHint` fields already reserved in the schema) + the
+`layoutSidenotes` refactor + editor-gutter floating + preview floating. See `notes.go`. The Open
+decisions below apply to v2.
 
 ## Goal
 
