@@ -2578,7 +2578,13 @@ func (m model) statusBar() string {
 	if m.selectMode {
 		stats = lipgloss.NewStyle().Foreground(accent).Bold(true).Render("-- SELECT --") + "  " + stats
 	}
-	return m.composeStatus(m.status, stats)
+	// Browsing the sidebar (not writing)? Surface its otherwise-invisible actions in place of an empty
+	// status — these single-key features are only in F1 otherwise.
+	status := m.status
+	if status == "" && m.focus == focusSidebar {
+		status = "c corkboard · m read · b backups · F1 keys"
+	}
+	return m.composeStatus(status, stats)
 }
 
 // composeStatus lays the stats at the editor text's left edge and the status

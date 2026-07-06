@@ -459,7 +459,7 @@ func (m model) corkboardView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ · J/K reorder · e synopsis · a add · x remove · r retitle · ⏎ open · esc")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ · J/K or alt+↑↓ reorder · e synopsis · a add · x remove · r retitle · ⏎ open · esc")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }

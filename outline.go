@@ -176,7 +176,11 @@ func markBeatPromoted(line string) string {
 func (m model) outlineView() string {
 	title := projectTitle(filepath.Base(m.files.dir))
 	header := sectionHeader("OUTLINE · "+title, m.width)
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("alt+↑/↓ move beat · alt+↵ promote · esc done")
+	footText := "alt+↑/↓ move beat · alt+↵ promote · esc done"
+	if terminalLacksMeta() {
+		footText += "   ⚠ needs iTerm2/Ghostty"
+	}
+	foot := lipgloss.NewStyle().Foreground(subtle).Render(footText)
 	body := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Top, m.editor.View())
 	return lipgloss.JoinVertical(lipgloss.Left, header, body,
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
