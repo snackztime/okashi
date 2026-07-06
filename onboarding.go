@@ -35,7 +35,9 @@ func maybeSeedSample(writingDir, marker string) {
 		_ = writeMarker(marker) // existing corpus — never seed, but don't re-check every launch
 		return
 	}
-	dst := filepath.Join(writingDir, "the-lighthouse")
+	// Seed under Demo/ so the sample reads as an example (explore/delete) and stays out of the
+	// writer's top-level space — their own projects sit alongside Demo/, not mingled with it.
+	dst := filepath.Join(writingDir, "Demo", "the-lighthouse")
 	_ = fs.WalkDir(sampleFS, "demo/the-lighthouse", func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() {
 			return nil

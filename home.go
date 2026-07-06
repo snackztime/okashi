@@ -1188,10 +1188,35 @@ func (m model) homeView() string {
 		)
 	}
 	hint := statusStyle.Width(m.width).Align(lipgloss.Center).Render("F1 · ?  keybindings")
-	return lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.Place(m.width, m.height-1, lipgloss.Center, lipgloss.Center, block),
-		hint,
+	center := m.height - 1
+	if m.freshWorkspace() {
+		center -= 3 // reserve rows for the primer
+	}
+	view := lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.Place(m.width, center, lipgloss.Center, lipgloss.Center, block),
 	)
+	if m.freshWorkspace() {
+		primer := lipgloss.NewStyle().Foreground(subtle).Align(lipgloss.Center).Width(m.width).Render(
+			"manuscript  ordered chapters   ·   category  a folder of docs   ·   notes  a single doc\n" +
+				"+  new project or folder   ·   ctrl+n  new doc   ·   open  Demo/  for an example")
+		view = lipgloss.JoinVertical(lipgloss.Left, view, primer)
+	}
+	return lipgloss.JoinVertical(lipgloss.Left, view, hint)
+}
+
+// freshWorkspace reports whether the library holds no user-created projects/folders — only the
+// seeded Demo/ (or nothing). Drives the first-run primer that teaches okashi's model.
+func (m model) freshWorkspace() bool {
+	for _, it := range m.library() {
+		if it.kind != homeProject && it.kind != homeFolder {
+			continue
+		}
+		if filepath.Base(it.path) == "Demo" {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // homeItemAt maps an absolute screen (x,y) to a launch (region, index).
