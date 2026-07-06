@@ -26,6 +26,8 @@ func (m *model) enterCorkboard() {
 	m.structurePendingNew = map[string]bool{}
 	m.structureDirty = false
 	m.structureConfirm = false
+	m.structureAdding = false   // defensive: never inherit a structure-mode sub-mode
+	m.structureRenaming = false // (the two modes share the structure* fields)
 	m.synopses = loadSynopses(dir)
 	m.synEditing = false
 	m.screen = screenCorkboard

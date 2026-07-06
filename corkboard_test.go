@@ -108,6 +108,33 @@ func TestCorkboardReorderCommitsViaStructurePath(t *testing.T) {
 	}
 }
 
+// Discarding a reorder must leave no stale dirty flag or mutated staged buffer behind.
+func TestCorkboardDiscardResetsStagedState(t *testing.T) {
+	dir := seedCorkManuscript(t)
+	m := model{}
+	m.outline.dir = dir
+	m.enterCorkboard()
+	// Reorder, then esc → confirm → esc (discard).
+	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
+	m = mm.(model)
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEsc})
+	m = mm.(model)
+	mm, _ = m.updateCorkboard(tea.KeyMsg{Type: tea.KeyEsc}) // discard
+	m = mm.(model)
+
+	if m.structureDirty {
+		t.Fatal("discard must clear structureDirty")
+	}
+	if m.structureItems != nil {
+		t.Fatal("discard must clear the staged buffer")
+	}
+	// The on-disk manifest is untouched by a discard.
+	mani, _, _ := readManifest(dir)
+	if mani.Items[0].File != "01-a.md" {
+		t.Fatalf("discard must not change the manifest, got %+v", mani.Items)
+	}
+}
+
 func TestCorkboardViewWindows(t *testing.T) {
 	dir := seedCorkManuscript(t)
 	m := model{width: 90, height: 12}

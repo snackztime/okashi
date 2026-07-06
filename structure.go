@@ -95,6 +95,7 @@ func (m *model) enterStructure() {
 	m.structureAdding = false
 	m.structureRenaming = false
 	m.structureConfirm = false
+	m.synEditing = false // defensive: never inherit the corkboard's synopsis-edit sub-mode
 	m.screen = screenStructure
 }
 
@@ -109,6 +110,13 @@ func (m model) structureTitle() string {
 
 // exitStructure returns to the binder (screenOutline), reloading it.
 func (m *model) exitStructure() {
+	// Clear the staged buffer + dirty flag on the way out (both structure mode and the corkboard
+	// exit through here). Not strictly required today — every enter* fully re-seeds these before
+	// they're read again — but it removes a latent trap: a lingering dirty flag or a mutated,
+	// uncommitted order left in memory after a discard.
+	m.structureDirty = false
+	m.structureConfirm = false
+	m.structureItems = nil
 	m.outline.load(m.structureDir, m.files.wc)
 	m.screen = screenOutline
 }
