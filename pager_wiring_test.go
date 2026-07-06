@@ -66,9 +66,7 @@ func TestSidebarMEntersPager(t *testing.T) {
 
 func TestPagerEnterJumpsToEditAtLine(t *testing.T) {
 	m, proj := manuscriptModel(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}) // sidebar m → pager
 	m = nm.(model)
 	// Move the cursor to the "gamma" line (header, alpha, gamma -> index 2).
 	m.pager.cursor = 2
@@ -89,9 +87,7 @@ func TestPagerClampsWidthToTerminal(t *testing.T) {
 	m, _ := manuscriptModel(t)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 20}) // narrow terminal
 	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}) // sidebar m → pager
 	m = nm.(model)
 	if m.pager.width > 30 {
 		t.Fatalf("pager width must clamp to the terminal (<=30), got %d", m.pager.width)
@@ -100,9 +96,7 @@ func TestPagerClampsWidthToTerminal(t *testing.T) {
 
 func TestPagerResizeReclampsWidth(t *testing.T) {
 	m, _ := manuscriptModel(t) // 100-col terminal
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}) // sidebar m → pager
 	m = nm.(model)
 	before := m.pager.width
 	nm, _ = m.Update(tea.WindowSizeMsg{Width: 20, Height: 15}) // shrink
@@ -117,9 +111,7 @@ func TestPagerResizeReclampsWidth(t *testing.T) {
 
 func TestPagerClickThenDoubleClickJumps(t *testing.T) {
 	m, proj := manuscriptModel(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}})
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'m'}}) // sidebar m → pager
 	m = nm.(model)
 	// Click the body line at offset 0 + (clickY - pagerHeaderHeight) = line 2 (gamma).
 	clickY := pagerHeaderHeight + 2

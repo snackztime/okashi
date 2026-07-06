@@ -15,10 +15,11 @@ import (
 // enterCorkboard opens the corkboard for the current manuscript: it loads the same staged buffer
 // structure mode uses (so reorder + commit are shared) plus the synopsis sidecar.
 func (m *model) enterCorkboard() {
+	m.save() // flush the current buffer before the board can reload a chapter over it
 	dir := m.files.dir
 	sm, present, err := readManifest(dir)
 	if !present || err != nil {
-		m.status = "not reorderable — no manifest"
+		m.status = "corkboard needs a manifest — legacy numbered manuscripts show as a plain list"
 		return
 	}
 	m.structureDir = dir

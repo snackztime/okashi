@@ -1484,9 +1484,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		case "ctrl+k":
-			// The pane IS the binder now: ctrl+k toggles the left pane between the chapter list
-			// and the corkboard (synopsis cards).
-			m.togglePaneCork()
+			// The corkboard is full-screen: ctrl+k (and `c` from the sidebar) open it.
+			m.enterCorkboard()
 			return m, nil
 		case "ctrl+e":
 			m.exportPrompt = true
