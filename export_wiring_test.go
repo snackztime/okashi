@@ -52,8 +52,7 @@ func TestExportWholeManuscriptFromOutline(t *testing.T) {
 	m = nm.(model)
 	m.screen = screenWriting
 	m.files.SetDir(proj)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK}) // binder
-	m = nm.(model)
+	m.enterOutline() // binder still exists (retired in Task 5); enter it directly
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE}) // export chooser on the outline
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) // tufte

@@ -14,7 +14,7 @@ import (
 // enterCorkboard opens the corkboard for the binder's manuscript: it loads the same staged buffer
 // structure mode uses (so reorder + commit are shared) plus the synopsis sidecar.
 func (m *model) enterCorkboard() {
-	dir := m.outline.dir
+	dir := m.files.dir
 	sm, present, err := readManifest(dir)
 	if !present || err != nil {
 		m.status = "not reorderable — no manifest"

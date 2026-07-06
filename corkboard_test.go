@@ -31,7 +31,7 @@ func seedCorkManuscript(t *testing.T) (dir string) {
 func TestCorkboardEntryRequiresManifest(t *testing.T) {
 	// No manifest → refused, stays on the binder.
 	m := model{}
-	m.outline.dir = t.TempDir()
+	m.files.dir = t.TempDir()
 	m.enterCorkboard()
 	if m.screen == screenCorkboard {
 		t.Fatal("a non-manifest dir must not enter the corkboard")
@@ -39,7 +39,7 @@ func TestCorkboardEntryRequiresManifest(t *testing.T) {
 
 	dir := seedCorkManuscript(t)
 	m2 := model{}
-	m2.outline.dir = dir
+	m2.files.dir = dir
 	m2.enterCorkboard()
 	if m2.screen != screenCorkboard {
 		t.Fatalf("a manifest manuscript should enter the corkboard, screen=%v", m2.screen)
@@ -52,7 +52,7 @@ func TestCorkboardEntryRequiresManifest(t *testing.T) {
 func TestCorkboardSynopsisEditWritesSidecar(t *testing.T) {
 	dir := seedCorkManuscript(t)
 	m := model{}
-	m.outline.dir = dir
+	m.files.dir = dir
 	m.enterCorkboard()
 	m.structureSel = 1 // chapter 02-b.md
 
@@ -80,7 +80,7 @@ func TestCorkboardSynopsisEditWritesSidecar(t *testing.T) {
 func TestCorkboardReorderCommitsViaStructurePath(t *testing.T) {
 	dir := seedCorkManuscript(t)
 	m := model{}
-	m.outline.dir = dir
+	m.files.dir = dir
 	m.enterCorkboard()
 	m.structureSel = 0
 
@@ -112,7 +112,7 @@ func TestCorkboardReorderCommitsViaStructurePath(t *testing.T) {
 func TestCorkboardDiscardResetsStagedState(t *testing.T) {
 	dir := seedCorkManuscript(t)
 	m := model{}
-	m.outline.dir = dir
+	m.files.dir = dir
 	m.enterCorkboard()
 	// Reorder, then esc → confirm → esc (discard).
 	mm, _ := m.updateCorkboard(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'J'}})
@@ -138,7 +138,7 @@ func TestCorkboardDiscardResetsStagedState(t *testing.T) {
 func TestCorkboardViewWindows(t *testing.T) {
 	dir := seedCorkManuscript(t)
 	m := model{width: 90, height: 12}
-	m.outline.dir = dir
+	m.files.dir = dir
 	m.enterCorkboard()
 	out := m.corkboardView()
 	if out == "" {

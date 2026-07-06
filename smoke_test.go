@@ -1070,18 +1070,23 @@ func TestOutlineDocToggle(t *testing.T) {
 	}
 }
 
-func TestBinderOnCtrlK(t *testing.T) {
+// ctrl+k now toggles the left-pane corkboard (the pane IS the binder); it no longer opens a
+// pop-down binder screen.
+func TestCtrlKTogglesCorkboard(t *testing.T) {
 	dir := t.TempDir()
 	os.WriteFile(filepath.Join(dir, "01-a.md"), []byte("body"), 0o644)
+	writeManifest(dir, manifest{SchemaVersion: manifestSchemaVersion, Title: "W",
+		Items: []manifestItem{{File: "01-a.md", Title: "One"}}})
 	t.Setenv("OKASHI_DIR", dir)
 	m := initialModel()
 	m.screen = screenWriting
+	m.files.SetDir(dir)
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
 	m = nm.(model)
-	if m.screen != screenOutline {
-		t.Fatalf("ctrl+k should open the binder, got screen %v", m.screen)
+	if m.screen != screenWriting || !m.files.corkMode {
+		t.Fatalf("ctrl+k should toggle corkboard mode on the pane (screen=%v corkMode=%v)", m.screen, m.files.corkMode)
 	}
 }
 

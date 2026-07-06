@@ -71,6 +71,61 @@ func (f filelist) corkView() string {
 	return strings.Join(lines[off:end], "\n")
 }
 
+// moveChapter swaps the selected chapter with its neighbor (d = -1 up / +1 down) in the staged
+// view and rebuilds the entry list, keeping the selection on the moved chapter. Returns false when
+// the selection isn't a movable chapter or the move is out of range (a no-op).
+func (f *filelist) moveChapter(d int) bool {
+	if f.selected < 0 || f.selected >= len(f.entries) {
+		return false
+	}
+	name := f.entries[f.selected].name
+	ci := -1
+	for i, ch := range f.view.chapters {
+		if ch.file == name {
+			ci = i
+			break
+		}
+	}
+	if ci < 0 {
+		return false // selection is a Resource / dir / "..", not a chapter
+	}
+	nj := ci + d
+	if nj < 0 || nj >= len(f.view.chapters) {
+		return false
+	}
+	f.view.chapters[ci], f.view.chapters[nj] = f.view.chapters[nj], f.view.chapters[ci]
+	f.rebuildEntries()
+	f.selectByName(name)
+	return true
+}
+
+// rebuildEntries re-derives the entry list from the (possibly reordered) view: dirs, then chapters
+// in view order, then loose.
+func (f *filelist) rebuildEntries() {
+	next := make([]fileEntry, 0, len(f.entries))
+	for _, e := range f.entries {
+		if e.isDir {
+			next = append(next, e)
+		}
+	}
+	for _, ch := range f.view.chapters {
+		next = append(next, fileEntry{name: ch.file})
+	}
+	next = append(next, f.view.loose...)
+	f.entries = next
+}
+
+// selectByName moves the selection to the entry with the given name (and scrolls it into view).
+func (f *filelist) selectByName(name string) {
+	for i, e := range f.entries {
+		if e.name == name {
+			f.selected = i
+			f.scrollIntoView()
+			return
+		}
+	}
+}
+
 // chapterCard renders one chapter as a header row (title + right-aligned word count) plus a 2-line
 // synopsis (authored, or the dimmed first-line fallback).
 func (f filelist) chapterCard(ch chapterRef, w int) []string {

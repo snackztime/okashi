@@ -56,39 +56,14 @@ func setupManuscript(t *testing.T) (model, string) {
 	return m, proj
 }
 
-func TestCtrlKEntersBinderInManuscript(t *testing.T) {
-	m, _ := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	if m.screen != screenOutline {
-		t.Fatalf("ctrl+k in a manuscript should enter screenOutline, got %v", m.screen)
-	}
-	if len(m.outline.working) != 2 {
-		t.Fatalf("outline should load 2 sections, got %d", len(m.outline.working))
-	}
-}
-
-func TestCtrlKRejectedOutsideManuscript(t *testing.T) {
-	root := t.TempDir()
-	t.Setenv("OKASHI_DIR", root)
-	os.WriteFile(filepath.Join(root, "loose.md"), []byte("x"), 0o644)
-	m := initialModel()
-	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
-	m = nm.(model)
-	m.screen = screenWriting
-	m.files.SetDir(root)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	if m.screen == screenOutline {
-		t.Fatal("ctrl+k outside a manuscript should not enter the outline")
-	}
-}
+// NOTE: the pop-down binder (screenOutline) is being retired (Task 5); ctrl+k now toggles the
+// pane corkboard (see TestCtrlKTogglesCorkboard). These tests still exercise the binder screen —
+// which remains live until Task 5 removes it — by entering it directly via enterOutline().
 
 func TestOutlineEnterOpensSection(t *testing.T) {
 	m, proj := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown}) // select 02-b
+	m.enterOutline()
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyDown}) // select 02-b
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = nm.(model)
@@ -102,9 +77,8 @@ func TestOutlineEnterOpensSection(t *testing.T) {
 
 func TestOutlineEscReturnsToEditor(t *testing.T) {
 	m, _ := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m.enterOutline()
+	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = nm.(model)
 	if m.screen != screenWriting {
 		t.Fatalf("esc from the outline should return to the editor, got %v", m.screen)
@@ -113,9 +87,8 @@ func TestOutlineEscReturnsToEditor(t *testing.T) {
 
 func TestOutlineHandlesResize(t *testing.T) {
 	m, _ := setupManuscript(t)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
-	nm, _ = m.Update(tea.WindowSizeMsg{Width: 70, Height: 20})
+	m.enterOutline()
+	nm, _ := m.Update(tea.WindowSizeMsg{Width: 70, Height: 20})
 	m = nm.(model)
 	if m.outline.width != 70 || m.outline.height != 19 {
 		t.Fatalf("resize on the outline should update outline dims to 70x19, got %dx%d", m.outline.width, m.outline.height)
@@ -124,8 +97,8 @@ func TestOutlineHandlesResize(t *testing.T) {
 
 func TestOutlineClickSelectsThenDoubleClickOpens(t *testing.T) {
 	m, proj := setupManuscript(t) // 01-a (row 0), 02-b (row 1)
-	nm, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlK})
-	m = nm.(model)
+	m.enterOutline()
+	var nm tea.Model
 	// Click row 1 (02-b): mouse Y = header height + 1.
 	clickY := outlineHeaderHeight + 1
 	nm, _ = m.Update(tea.MouseMsg{X: 2, Y: clickY, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
