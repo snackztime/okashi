@@ -85,7 +85,7 @@ Find `blockAt(cursorLine)`. Swap the whole block's line range with the adjacent 
 on the moved beat's title line; rewrite the editor value. No-op with a status nudge when in the
 preamble or when there is no neighbor in that direction.
 
-### Promote beat — `ctrl+↵` (alias `alt+↵`)
+### Promote beat — `alt+↵` (with `ctrl+↵` accepted where the terminal distinguishes it)
 Acts on `blockAt(cursorLine)`. Guards (each → clear status, no write):
 - not on a beat (preamble),
 - already promoted (`beatIsPromoted`),
@@ -109,7 +109,7 @@ arrow (it would just read "→ untitled.md"). The manifest/corkboard show the re
 
 ## Chrome (`outlineView`)
 Full-screen, sidebar hidden. Header `OUTLINE · <folder title>`. Editor body at the measure width, as in
-the writing view. Footer: `alt+↑/↓ move beat · ctrl+↵ promote · esc done`. Promoted `[x]` lines render
+the writing view. Footer: `alt+↑/↓ move beat · alt+↵ promote · esc done`. Promoted `[x]` lines render
 as raw Markdown in v1 (no special styling).
 
 ## Error handling
