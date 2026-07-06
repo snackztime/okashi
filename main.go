@@ -49,9 +49,9 @@ FILES  (sidebar focus)
   ctrl+n new · chapter|resource   r rename (F2)
   d duplicate   M move   del delete
 
-MANUSCRIPT  (sidebar / corkboard)
-  ctrl+k corkboard view   c full-screen   J/K reorder
-  e synopsis   m pager   b snapshots/diff   n notes
+MANUSCRIPT  (corkboard: ctrl+k or c)
+  J/K reorder   e synopsis   a add   x remove   r retitle
+  m pager   b snapshots/diff   n notes
 
 WRITE
   ctrl+s save   ctrl+z undo   ⇥/⇧⇥ indent
