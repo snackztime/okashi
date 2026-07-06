@@ -67,6 +67,43 @@ func beatIsPromoted(line string) bool {
 	return strings.HasPrefix(s, "[x]") || strings.HasPrefix(s, "[X]")
 }
 
+// moveBeat swaps the beat block containing cursorLine with its neighbor (dir -1 up / +1 down),
+// keeping the cursor on the same line within the moved block. ok=false (no change) when the cursor is
+// in the preamble or there is no neighbor that way. Adjacent beat blocks are contiguous.
+func moveBeat(lines []string, cursorLine, dir int) ([]string, int, bool) {
+	blocks := beatBlocks(lines)
+	idx := -1
+	for i, b := range blocks {
+		if cursorLine >= b.start && cursorLine < b.end {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		return lines, cursorLine, false
+	}
+	j := idx + dir
+	if j < 0 || j >= len(blocks) {
+		return lines, cursorLine, false
+	}
+	lo, hi := idx, j
+	if lo > hi {
+		lo, hi = hi, lo
+	}
+	A, B := blocks[lo], blocks[hi] // A.end == B.start (contiguous)
+	out := make([]string, 0, len(lines))
+	out = append(out, lines[:A.start]...)
+	out = append(out, lines[B.start:B.end]...) // B moves before A
+	out = append(out, lines[A.start:A.end]...)
+	out = append(out, lines[B.end:]...)
+	off := cursorLine - blocks[idx].start
+	newStart := A.start // moving B up → B now starts where A did
+	if idx == lo {      // moving A down → A now sits after B
+		newStart = A.start + (B.end - B.start)
+	}
+	return out, newStart + off, true
+}
+
 // beatNotes returns a block's note lines (after the beat line), each trimmed of indent + marker,
 // blanks dropped.
 func beatNotes(lines []string, b outlineBlock) []string {

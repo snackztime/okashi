@@ -39,3 +39,27 @@ func TestBeatBlocksAndTitles(t *testing.T) {
 		t.Fatalf("notes = %v", notes)
 	}
 }
+
+func TestMoveBeat(t *testing.T) {
+	lines := []string{"- A", "  - a1", "- B", "  - b1", "  - b2"}
+	// Move block B (cursor on its note, line 3) UP past A.
+	out, nc, ok := moveBeat(lines, 3, -1)
+	if !ok {
+		t.Fatal("move up should apply")
+	}
+	want := []string{"- B", "  - b1", "  - b2", "- A", "  - a1"}
+	if !reflect.DeepEqual(out, want) {
+		t.Fatalf("out = %v", out)
+	}
+	if nc != 1 { // cursor kept its offset (was b.start+1) on the moved block, now at 0+1
+		t.Fatalf("newCursor = %d, want 1", nc)
+	}
+	// No neighbor above A → no-op.
+	if _, _, ok := moveBeat(lines, 0, -1); ok {
+		t.Fatal("A has no block above → no-op")
+	}
+	// Preamble cursor → no-op.
+	if _, _, ok := moveBeat([]string{"note", "- A"}, 0, 1); ok {
+		t.Fatal("preamble → no-op")
+	}
+}
