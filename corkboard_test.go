@@ -11,6 +11,28 @@ import (
 	"okashi/internal/textarea"
 )
 
+func TestCorkboardCardMeta(t *testing.T) {
+	// The currently-open chapter carries the open marker; others don't.
+	if mk, _, _ := corkboardCardMeta(true, "", ""); !strings.Contains(mk, "●") {
+		t.Fatalf("current chapter should carry the open marker, got %q", mk)
+	}
+	if mk, _, _ := corkboardCardMeta(false, "syn", "fl"); mk != "" {
+		t.Fatalf("non-current chapter should have no open marker, got %q", mk)
+	}
+	// Authored synopsis → not dim, body is the synopsis.
+	if _, body, dim := corkboardCardMeta(false, "the synopsis", "first line"); dim || body != "the synopsis" {
+		t.Fatalf("authored synopsis: want (synopsis, dim=false), got (%q,%v)", body, dim)
+	}
+	// No synopsis but a first line → dimmed fallback.
+	if _, body, dim := corkboardCardMeta(false, "", "the first line"); !dim || body != "the first line" {
+		t.Fatalf("fallback: want (first line, dim=true), got (%q,%v)", body, dim)
+	}
+	// Neither → empty raw body (caller renders the placeholder).
+	if _, body, _ := corkboardCardMeta(false, "", ""); body != "" {
+		t.Fatalf("no synopsis + no first line: want empty raw body, got %q", body)
+	}
+}
+
 func TestCorkboardStatusLine(t *testing.T) {
 	items := []manifestItem{{File: "a.md"}, {File: "b.md"}}
 	// wc == nil → total counts as 0; still reports the chapter count, no target fragment.

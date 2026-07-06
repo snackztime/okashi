@@ -335,9 +335,10 @@ type model struct {
 	heatmap    heatmapModel
 
 	// Corkboard (shares the structure* staged buffer + commitStructure).
-	synopses   map[string]string // filename → synopsis, loaded on corkboard entry
-	synEditing bool
-	synArea    textarea.Model
+	synopses       map[string]string // filename → synopsis, loaded on corkboard entry
+	corkFirstLines map[string]string // filename → first prose line, preloaded on entry (keeps View() I/O-free)
+	synEditing     bool
+	synArea        textarea.Model
 
 	notes notesModel
 }

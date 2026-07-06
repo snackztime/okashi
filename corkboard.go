@@ -32,8 +32,32 @@ func (m *model) enterCorkboard() {
 	m.structureAdding = false   // defensive: never inherit a structure-mode sub-mode
 	m.structureRenaming = false // (the two modes share the structure* fields)
 	m.synopses = loadSynopses(dir)
+	// Preload the first-line fallbacks ONCE (disk I/O) so corkboardView never reads files on the
+	// render path — View() fires per keystroke and must stay I/O-free (and iCloud-safe).
+	m.corkFirstLines = map[string]string{}
+	for _, it := range sm.Items {
+		if m.synopses[it.File] == "" {
+			m.corkFirstLines[it.File] = firstProseLine(filepath.Join(dir, it.File))
+		}
+	}
 	m.synEditing = false
 	m.screen = screenCorkboard
+}
+
+// corkboardCardMeta decides a card's open-marker and body source: an authored synopsis (not dim),
+// a dimmed first-line fallback, or "" to signal the (no synopsis) placeholder.
+func corkboardCardMeta(isCurrent bool, syn, firstLine string) (openMark, rawBody string, dim bool) {
+	if isCurrent {
+		openMark = lipgloss.NewStyle().Foreground(accent).Render("● ")
+	}
+	switch {
+	case syn != "":
+		return openMark, syn, false
+	case firstLine != "":
+		return openMark, firstLine, true
+	default:
+		return openMark, "", false
+	}
 }
 
 // corkChapterSet is the ON-DISK chapter file set — the safe prune target for an immediate synopsis
@@ -366,18 +390,22 @@ func (m model) corkboardView() string {
 		if m.files.wc != nil {
 			wc = commafy(m.files.wc.count(filepath.Join(m.structureDir, it.File))) + "w"
 		}
-		syn := m.synopses[it.File]
+		isCurrent := m.currentFile != "" && filepath.Join(m.structureDir, it.File) == m.currentFile
+		openMark, rawBody, dim := corkboardCardMeta(isCurrent, m.synopses[it.File], m.corkFirstLines[it.File])
 		var body string
-		if syn == "" {
+		if rawBody == "" {
 			body = lipgloss.NewStyle().Foreground(subtle).Render("(no synopsis — e to add)")
 		} else {
-			body = wrapClamp(syn, cardW-4, bodyRows)
+			body = wrapClamp(rawBody, cardW-4, bodyRows)
+			if dim {
+				body = lipgloss.NewStyle().Foreground(subtle).Render(body)
+			}
 		}
 		marker := "  "
 		if i == m.structureSel {
 			marker = selectedStyle.Render("▸ ")
 		}
-		hdr := marker + fmtNum(i+1) + " · " + it.Title
+		hdr := marker + fmtNum(i+1) + " · " + openMark + it.Title
 		cards = append(cards, framedPanel(hdr, body, cardW, cardRows, wc))
 	}
 	if len(cards) == 0 {
