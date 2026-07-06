@@ -69,14 +69,20 @@ Sleep 3.5s
 Escape
 Sleep 1s
 
-# --- write ---
-# Open "The Keeper" and add a line.
+# --- write (full-focus, dimmed) ---
+# Open "The Keeper", collapse the file panel for a full-width surface, then add two lines.
+# The first sentence dims once the cursor moves to the second — okashi's sentence-focus dimming.
 Down
 Sleep 0.5s
 Enter
+Sleep 1.2s
+Ctrl+B
 Sleep 1.5s
-Type "The sea kept its own accounts."
-Sleep 2s
+Type "The sea kept its own accounts, and the light was how a keeper settled them."
+Sleep 1.5s
+Enter
+Type "He did not hurry."
+Sleep 2.5s
 
 # --- the Tufte book preview ---
 # ctrl+p preview, then `t` for the warm Tufte view; scroll to the endnotes.
