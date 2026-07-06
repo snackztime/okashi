@@ -53,6 +53,9 @@ MANUSCRIPT  (corkboard: ctrl+k or c)
   J/K reorder   e synopsis   a add   x remove   r retitle
   m pager   b snapshots/diff   n notes
 
+OUTLINE  (ctrl+l)
+  alt+↑/↓ move beat   alt+↵ promote → chapter   esc done
+
 WRITE
   ctrl+s save   ctrl+z undo   ⇥/⇧⇥ indent
   ctrl+t typewriter   ctrl+d focus-dim   ctrl+x select

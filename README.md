@@ -73,7 +73,7 @@ green, changed words highlighted) so you can see exactly what a draft changed.
 |-----|--------|
 | `ctrl+b` | Toggle sidebar |
 | `ctrl+y` | Inspector tabs |
-| `ctrl+l` | Outline (planning notes) |
+| `ctrl+l` | Outline (full-screen brainstorming — beats & notes) |
 | `ctrl+k` | Corkboard (full-screen manuscript navigator); `c` from the sidebar |
 | `ctrl+o` | Home (launch screen) |
 | `esc` | Switch focus / back |
@@ -154,6 +154,20 @@ become chapters.
 the manifest; a resource is an unlisted supporting doc, filed loosely or into a
 folder (`Characters/Aldous`). Synopses live in a small `.okashi-synopsis.json`
 beside your files; order lives in `manifest.json`.
+
+### The outline (brainstorming before structure)
+
+Press `ctrl+l` to open the full-screen **outline** — a place to think *before* you
+have chapters. It's a plain `outline.md` of two levels: each top-level bullet is a
+**beat**, its indented bullets are **notes**. You type freely (list-continuation
+included); `alt+↑`/`alt+↓` move a whole beat (with its notes) up or down.
+
+When a beat is ready to become a chapter, `alt+↵` **promotes** it: okashi creates
+the chapter in the current manuscript, seeds its synopsis from the beat's notes,
+and checks the beat off (`- [x] …`). It's a **one-way** bridge — the outline is
+your brainstorm, not a live index, so reordering chapters later in the corkboard
+never rewrites the outline. The outline is also visible read-only in the inspector
+while you write.
 
 **No lock-in.** Your work is just Markdown files in ordinary folders, with a
 small human-readable `manifest.json` for order and titles — no database, no
