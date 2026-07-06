@@ -339,11 +339,6 @@ type model struct {
 	synEditing bool
 	synArea    textarea.Model
 
-	// Pane corkboard (left-pane navigator): staged reorder + immediate synopsis edit.
-	paneReorderDirty   bool
-	paneReorderConfirm bool
-	paneSynEditing     bool
-
 	notes notesModel
 }
 
@@ -935,66 +930,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateNotes(msg)
 	}
 
-	// Pane synopsis edit captures all input; esc commits (⏎ inserts line breaks).
-	if m.paneSynEditing {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			switch key.String() {
-			case "ctrl+c":
-				return m, tea.Quit
-			case "esc":
-				m.commitPaneSynopsis()
-				return m, nil
-			}
-			var cmd tea.Cmd
-			m.synArea, cmd = m.synArea.Update(msg)
-			return m, cmd
-		}
-		return m, nil
-	}
-	// Pane reorder commit-confirm.
-	if m.paneReorderConfirm {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			switch key.String() {
-			case "ctrl+c":
-				return m, tea.Quit
-			case "y":
-				m.commitPaneReorder()
-				m.files.SetDir(m.files.dir) // reload the committed order
-				m.paneReorderConfirm, m.paneReorderDirty = false, false
-			case "esc", "n":
-				m.files.SetDir(m.files.dir) // discard the staged reorder
-				m.paneReorderConfirm, m.paneReorderDirty = false, false
-				m.status = "reorder discarded"
-			}
-		}
-		return m, nil
-	}
-	// A staged pane reorder is modal: only reorder/navigate keys continue it, esc raises the
-	// apply/discard confirm, and everything else is swallowed with a nudge — so no action can
-	// silently discard the staged order or leave the dirty flag set.
-	if m.paneReorderDirty {
-		if key, ok := msg.(tea.KeyMsg); ok {
-			switch key.String() {
-			case "ctrl+c":
-				return m, tea.Quit
-			case "J", "shift+down":
-				m.paneReorder(1)
-			case "K", "shift+up":
-				m.paneReorder(-1)
-			case "up", "k":
-				m.files.moveBy(-1)
-			case "down", "j":
-				m.files.moveBy(1)
-			case "esc":
-				m.paneReorderConfirm = true
-				m.status = "apply new order? y apply · esc discard"
-			default:
-				m.status = "-- REORDER -- · J/K move · esc to apply or discard"
-			}
-		}
-		return m, nil
-	}
-
 	// Manuscript ctrl+n: pick chapter or resource before naming.
 	if m.createPicker {
 		if key, ok := msg.(tea.KeyMsg); ok {
@@ -1369,10 +1304,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 		}
 
-		// Click selection / open is file-pane only. In corkboard mode the visible-row→entry
-		// mapping doesn't hold (cards span multiple rows), so click-select is disabled there
-		// (keyboard nav still works).
-		if !inSidebar || m.files.corkMode || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
+		// Click selection / open is file-pane only.
+		if !inSidebar || msg.Button != tea.MouseButtonLeft || msg.Action != tea.MouseActionPress {
 			return m, nil
 		}
 		// Framed sidebar: top border occupies row 0; the file list starts at row 1.
@@ -1633,13 +1566,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.enterCorkboard() // full-screen corkboard (the spread)
 				case "m":
 					m.enterManuscript() // read-through pager
-				case "e":
-					m.startPaneSynopsis()
-					return m, textarea.Blink
-				case "J", "shift+down":
-					m.paneReorder(1)
-				case "K", "shift+up":
-					m.paneReorder(-1)
 				}
 			}
 		}
@@ -1807,15 +1733,6 @@ func (m model) View() string {
 		insInner := m.inspector.View(inspectorInnerWidth(), doc, proj, readOutlineDoc(m.files.dir), gs, m.analysis)
 		title := inspectorTabLabels()[m.inspector.tab]
 		cols = append(cols, framedPanel(title, insInner, inspectorWidth, m.height, ""))
-	}
-	if m.paneSynEditing {
-		// Synopsis edit is modal over the writing screen.
-		label := "synopsis"
-		if file, ok := m.files.selectedFile(); ok {
-			label = "synopsis · " + m.files.chapterTitle(filepath.Base(file))
-		}
-		panel := framedPanel(label, m.synArea.View(), max(40, min(m.width-8, 72)), 6, "esc save")
-		return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
 	}
 	return lipgloss.JoinHorizontal(lipgloss.Top, cols...)
 }

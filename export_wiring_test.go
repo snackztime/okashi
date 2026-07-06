@@ -47,17 +47,19 @@ func TestExportWholeManuscriptFromCorkboard(t *testing.T) {
 	os.MkdirAll(proj, 0o755)
 	os.WriteFile(filepath.Join(proj, "01-a.md"), []byte("alpha"), 0o644)
 	os.WriteFile(filepath.Join(proj, "02-b.md"), []byte("beta"), 0o644)
+	writeManifest(proj, manifest{SchemaVersion: manifestSchemaVersion, Title: "my novel",
+		Items: []manifestItem{{File: "01-a.md", Title: "One"}, {File: "02-b.md", Title: "Two"}}})
 	m := initialModel()
 	nm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m = nm.(model)
 	m.screen = screenWriting
 	m.files.SetDir(proj)
-	m.files.corkMode = true // corkboard mode (a legacy numbered manuscript) → whole-manuscript export
+	m.enterCorkboard() // full-screen corkboard → whole-manuscript export scope
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyCtrlE})
 	m = nm.(model)
 	nm, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'t'}}) // tufte
 	m = nm.(model)
-	// whole-manuscript title = projectTitle("my-novel") = "my novel" -> slug "my-novel"
+	// whole-manuscript title = manifest title "my novel" -> slug "my-novel"
 	if _, err := os.Stat(filepath.Join(proj, "export", "my-novel.pdf")); err != nil {
 		t.Fatalf("expected the whole-manuscript PDF: %v", err)
 	}

@@ -7,10 +7,9 @@ import (
 )
 
 // exportWholeManuscript reports whether ctrl+e should export the whole manuscript (from the
-// full-screen corkboard, or the pane in corkboard mode — including legacy numbered manuscripts)
-// rather than just the current document.
+// full-screen corkboard) rather than just the current document.
 func (m model) exportWholeManuscript() bool {
-	return m.screen == screenCorkboard || (m.files.corkMode && m.files.view.ordered())
+	return m.screen == screenCorkboard
 }
 
 // runExport builds the export doc for the current scope (whole manuscript from the corkboard,
