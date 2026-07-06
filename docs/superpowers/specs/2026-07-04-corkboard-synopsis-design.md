@@ -1,7 +1,11 @@
 # Corkboard / Synopsis — design spec
 
 **Date:** 2026-07-04
-**Status:** DRAFT — decisions pending (a user brainstorm finalizes the Open decisions before build).
+**Status:** RESOLVED (2026-07-06) — built & shipped. Decisions confirmed: (1) sidecar, (2)
+**okashi-only** for v1 (not a shared contract), (3) corkboard is a thin `screenCorkboard` sharing
+the `structure*` staged buffer + `commitStructure`, (4) inline textarea edit, (5) write the sidecar
+immediately per edit. Reorder-only board (`J`/`K` + `e` synopsis); no `a`/`x` (so prune-against-
+on-disk is safe). See `corkboard.go` / `synopsis.go`.
 
 ## Goal
 

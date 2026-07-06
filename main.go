@@ -50,6 +50,7 @@ ctrl+f   search (tab: scope · ctrl+a: all)
 ctrl+l   outline.md (planning notes)
 ctrl+k   binder (chapter list)
 s        structure mode (from binder)
+c        corkboard — synopses + reorder (from binder)
 ctrl+n   new file (F2 / right-click rename)
 r        rename file
 d        duplicate file
@@ -182,6 +183,7 @@ const (
 	screenSnapshots
 	screenDiff
 	screenHeatmap
+	screenCorkboard
 )
 
 const (
@@ -337,6 +339,11 @@ type model struct {
 	snapshots  snapshotsModel
 	diff       diffModel
 	heatmap    heatmapModel
+
+	// Corkboard (shares the structure* staged buffer + commitStructure).
+	synopses   map[string]string // filename → synopsis, loaded on corkboard entry
+	synEditing bool
+	synArea    textarea.Model
 }
 
 func initialModel() model {
@@ -925,6 +932,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.screen == screenHeatmap {
 		return m.updateHeatmap(msg)
+	}
+
+	if m.screen == screenCorkboard {
+		return m.updateCorkboard(msg)
 	}
 
 	// While naming a new file, the prompt captures all input.
@@ -1626,6 +1637,10 @@ func (m model) View() string {
 		return m.heatmapView()
 	}
 
+	if m.screen == screenCorkboard {
+		return m.corkboardView()
+	}
+
 	bodyH := m.height - 1 // status only; no banner in the writing zone
 	if bodyH < 1 {
 		bodyH = 1
@@ -1857,6 +1872,9 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "s":
 		m.enterStructure()
 		return m, nil
+	case "c":
+		m.enterCorkboard()
+		return m, nil
 	case "ctrl+e":
 		m.exportPrompt = true
 		m.status = "export: m manuscript · t tufte · esc cancel"
@@ -1993,7 +2011,7 @@ func (m *model) enterOutline() {
 	m.outline.load(m.files.dir, m.files.wc)
 	m.screen = screenOutline
 	m.previewing = false
-	m.status = "binder · ↑↓ select · enter open · s structure · r rename · m read · ctrl+e export · esc back"
+	m.status = "binder · ↑↓ select · enter open · s structure · c corkboard · r rename · m read · ctrl+e export · esc back"
 }
 
 func (m *model) loadFile(path string) {

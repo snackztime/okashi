@@ -136,6 +136,12 @@ The **structure mode** (`s` from the binder) lets you reorder, insert, and
 remove chapters in a manifest manuscript. Changes are staged and applied behind
 a single confirmation.
 
+The **corkboard** (`c` from the binder) shows each chapter as a card with a short
+**synopsis** you write inline (`e`) — so you can see the whole manuscript at a
+glance and reorder it by idea (`J`/`K`). Synopses live in a small
+`.okashi-synopsis.json` beside your files; reordering shares structure mode's
+single confirmed commit.
+
 **No lock-in.** Your work is just Markdown files in ordinary folders, with a
 small human-readable `manifest.json` for order and titles — no database, no
 proprietary bundle. Everything is `grep`-able, diff-able, and git-friendly, and
