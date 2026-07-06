@@ -128,8 +128,12 @@ func (m *model) promoteOutlineBeat() {
 	}
 	dir := m.files.dir
 	mani, present, err := readManifest(dir)
-	if err != nil || !present {
-		m.status = "promote needs a manuscript (no manifest here)"
+	if err != nil {
+		m.status = "can't promote — this manuscript's manifest.json is unreadable (corrupt or a newer version)"
+		return
+	}
+	if !present {
+		m.status = "promote only works inside a manuscript — this is a plain folder"
 		return
 	}
 	// Two-file op (manifest + outline mark). If the manifest write lands but the [x] mark save below
@@ -176,7 +180,11 @@ func markBeatPromoted(line string) string {
 func (m model) outlineView() string {
 	title := projectTitle(filepath.Base(m.files.dir))
 	header := sectionHeader("OUTLINE · "+title, m.width)
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("alt+↑/↓ move beat · alt+↵ promote · esc done")
+	footText := "alt+↑/↓ move beat · alt+↵ promote · esc done"
+	if terminalLacksMeta() {
+		footText += "   (alt keys need iTerm2/Ghostty)"
+	}
+	foot := lipgloss.NewStyle().Foreground(subtle).Render(footText)
 	body := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Top, m.editor.View())
 	return lipgloss.JoinVertical(lipgloss.Left, header, body,
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))

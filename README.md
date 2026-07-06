@@ -301,6 +301,22 @@ Then **⌘C** (or your terminal's copy key) to copy.
 
 ---
 
+## Terminals
+
+okashi runs anywhere, but a few flourishes need a capable terminal:
+
+- **Option/Alt shortcuts** — the outline's `alt+↑/↓` (move a beat) and `alt+↵`
+  (promote) need a terminal that sends **Option as Meta**: iTerm2, Ghostty,
+  kitty, WezTerm, Alacritty. macOS **Terminal.app** doesn't by default (Option
+  types accented characters), so those keys won't fire there — the corkboard's
+  `J/K` reorder still works, and okashi shows a hint in the outline. In iTerm2:
+  *Settings → Profiles → Keys → Left Option key: Esc+*.
+- **Nerd Font glyphs** degrade to plain Unicode automatically on Terminal.app and
+  the Linux console (override with `OKASHI_ICONS`).
+- **Truecolor** renders best in a 24-bit terminal; through tmux, enable `RGB`/`Tc`.
+
+---
+
 ## License
 
 MIT — see [LICENSE](LICENSE).

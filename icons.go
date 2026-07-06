@@ -35,6 +35,13 @@ func autoIconMode() string {
 	return "nerd"
 }
 
+// terminalLacksMeta reports whether the terminal can't send Option/Alt as Meta — macOS Terminal.app
+// (Option types accented chars by default) and the Linux VT console. okashi's alt-key shortcuts
+// (outline move/promote) won't fire there, so we surface a caveat where they're advertised.
+func terminalLacksMeta() bool {
+	return os.Getenv("TERM_PROGRAM") == "Apple_Terminal" || os.Getenv("TERM") == "linux"
+}
+
 // resolveIcons picks the glyph set once at startup. OKASHI_ICONS=plain (or ascii) forces
 // safe glyphs; =nerd forces Nerd Font glyphs; unset or =auto auto-detects the terminal.
 func resolveIcons() iconSet {

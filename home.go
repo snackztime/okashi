@@ -131,12 +131,16 @@ const (
 	regionActions
 )
 
-// Box widths (total, incl. the rounded border; framedPanel content = width-4).
+// Box widths (total, incl. the rounded border; framedPanel content = width-4). LIBRARY/FILES grow
+// responsively with the terminal between their min and max (see homeColumns), so a wide terminal
+// isn't a tiny island in empty space and long titles stop truncating.
 const (
-	homeRecentBox  = 20
-	homeLibraryBox = 20
-	homeFilesBox   = 36
-	homeColGap     = 2
+	homeRecentBox     = 20
+	homeLibraryBoxMin = 22
+	homeLibraryBoxMax = 34
+	homeFilesBoxMin   = 38
+	homeFilesBoxMax   = 68
+	homeColGap        = 2
 )
 
 // homeItem is one selectable entry on the launch screen.
@@ -881,28 +885,24 @@ func (m model) homeColumns() (regions []homeRegion, titles []string, widths []in
 	if len(m.sources) > 1 && m.activeSource >= 0 && m.activeSource < len(m.sources) {
 		libTitle = "LIBRARY · " + m.sources[m.activeSource].Name + " ▾"
 	}
-	all := []homeRegion{regionLibrary, regionFiles}
-	allTitles := []string{libTitle, "FILES"}
-	allW := []int{homeLibraryBox, homeFilesBox}
-	total := func(idx []int) int {
-		w := 0
-		for _, i := range idx {
-			w += allW[i] + homeColGap
-		}
-		return w - homeColGap
+	// Responsive widths: grow both columns with the terminal, capped, keeping a margin. The browse
+	// block is centered by the caller, so we target a share of the width rather than filling it.
+	const margin = 6
+	avail := m.width - 2*margin - homeColGap
+	filesW := min(max(avail*3/5, homeFilesBoxMin), homeFilesBoxMax) // FILES ~60% of the pair
+	libW := min(max(avail-filesW, homeLibraryBoxMin), homeLibraryBoxMax)
+	if libW+homeColGap+filesW <= m.width { // both fit
+		return []homeRegion{regionLibrary, regionFiles}, []string{libTitle, "FILES"}, []int{libW, filesW}
 	}
-	// Prefer both; drop LIBRARY to fit a narrow width.
-	for _, idx := range [][]int{{0, 1}, {1}} {
-		if total(idx) <= m.width {
-			for _, i := range idx {
-				regions = append(regions, all[i])
-				titles = append(titles, allTitles[i])
-				widths = append(widths, allW[i])
-			}
-			return
-		}
+	// Too narrow for two columns → FILES only, as wide as fits.
+	only := m.width - 2*margin
+	if only < homeFilesBoxMin {
+		only = m.width // ultra-narrow: fill the width
 	}
-	return []homeRegion{regionFiles}, []string{"FILES"}, []int{m.width}
+	if only > homeFilesBoxMax {
+		only = homeFilesBoxMax
+	}
+	return []homeRegion{regionFiles}, []string{"FILES"}, []int{only}
 }
 
 // pinnedStrip lays the pinned items horizontally across one full-width row (contentW columns),
@@ -1197,8 +1197,8 @@ func (m model) homeView() string {
 	)
 	if m.freshWorkspace() {
 		primer := lipgloss.NewStyle().Foreground(subtle).Align(lipgloss.Center).Width(m.width).Render(
-			"manuscript  ordered chapters   ·   category  a folder of docs   ·   notes  a single doc\n" +
-				"+  new project or folder   ·   ctrl+n  new doc   ·   open  Demo/  for an example")
+			"manuscript  ordered chapters (a book)   ·   category  a plain folder of notes\n" +
+				"+  new manuscript or folder   ·   ctrl+n  new doc   ·   open Demo/ to explore")
 		view = lipgloss.JoinVertical(lipgloss.Left, view, primer)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, view, hint)
