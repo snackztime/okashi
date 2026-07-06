@@ -1197,8 +1197,8 @@ func (m model) homeView() string {
 	)
 	if m.freshWorkspace() {
 		primer := lipgloss.NewStyle().Foreground(subtle).Align(lipgloss.Center).Width(m.width).Render(
-			"manuscript  a book okashi keeps in chapter order   ·   category  a plain folder of notes\n" +
-				"+  start a manuscript or folder   ·   ctrl+n  new doc   ·   open  Demo/  to see one")
+			"manuscript  ordered chapters (a book)   ·   category  a plain folder of notes\n" +
+				"+  new manuscript or folder   ·   ctrl+n  new doc   ·   open Demo/ to explore")
 		view = lipgloss.JoinVertical(lipgloss.Left, view, primer)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, view, hint)

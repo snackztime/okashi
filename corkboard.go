@@ -20,7 +20,11 @@ func (m *model) enterCorkboard() {
 	// currentFile==path branch, which reloads from disk and would clobber unsaved edits (mirrors ctrl+l)
 	dir := m.files.dir
 	sm, present, err := readManifest(dir)
-	if !present || err != nil {
+	if err != nil {
+		m.status = "can't open the corkboard — this manuscript's manifest.json is unreadable (corrupt or a newer version)"
+		return
+	}
+	if !present {
 		m.status = "the corkboard only works inside a manuscript (a project with ordered chapters)"
 		return
 	}
@@ -459,7 +463,7 @@ func (m model) corkboardView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("↑↓ · J/K or alt+↑↓ reorder · e synopsis · a add · x remove · r retitle · ⏎ open · esc")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("J/K/alt reorder · e synopsis · a add · x remove · r retitle · ⏎ open · esc")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }
