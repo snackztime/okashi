@@ -312,9 +312,10 @@ Then **⌘C** (or your terminal's copy key) to copy.
 
 ## Terminals
 
-okashi runs anywhere, and **every action has a key that works on any terminal** —
-including macOS **Terminal.app**, where the **Option** key types accented
-characters instead of acting as Meta:
+okashi runs anywhere. The **outline and corkboard** — reordering, promoting,
+navigating — all have keys that work on any terminal, including macOS
+**Terminal.app**, where the **Option** key types accented characters instead of
+acting as Meta:
 
 - **Moving things** — reorder with `shift+↑/↓` (a chapter in the corkboard, a beat
   in the outline; `J/K` also works in the corkboard). **Promote** a beat with

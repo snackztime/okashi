@@ -50,7 +50,7 @@ FILES  (sidebar focus)
   d duplicate   M move   del delete
 
 MANUSCRIPT  (corkboard: ctrl+k or c)
-  alt+↑/↓ · J/K reorder   e synopsis   a add   x remove   r retitle
+  J/K reorder (shift+↑↓)   e synopsis   a add   x remove   r retitle
   m pager   b snapshots/diff   n notes
 
 OUTLINE  (ctrl+l)
