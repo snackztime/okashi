@@ -82,8 +82,10 @@ The strategy is **split-into-files + windowed rendering**, NOT one giant buffer:
   manuscript folder but not listed in `items`; shown, excluded from the ordered view and
   from export.
 - Shipped features: the launch hub; a manuscript-aware sidebar (titles + per-chapter word
-  counts); the **outline** (`ctrl+l`: select/open, `m` → pager — **read-only navigator**;
-  no reorder, no insert); the **pager** (`m`: read-through with jump-to-edit); **export**
+  counts); the **outline** (`ctrl+l`: a full-screen **editor-first** planning surface — two-level
+  **beats + notes** in `outline.md`; `shift/alt+↑↓` move a beat, `ctrl+p`/`alt+↵` **promote** a beat
+  → chapter [seeds the synopsis from its notes, marks it `[x]`], one-way; the `outline.md` format is
+  a shared contract with the companion app — see Shared Contracts §4); the **pager** (`m`: read-through with jump-to-edit); **export**
   (`ctrl+e`: RTF + PDF, Manuscript or Tufte style); **rename** (`r`: manifest chapters
   **retitle** the `items[].title` — filename stays birth-stable; legacy numbered chapters,
   loose files, Resources, and folders rename on disk); markdown **preview** (`ctrl+p`,
@@ -177,6 +179,23 @@ with the companion app's copy.
   selection, gutter`), read by both apps. *Aspirational for okashi* until it reads a shared
   theme file; today it detects a theme itself. If adopted, keep the role set in sync (adding a
   role updates both apps and all theme files together).
+
+### 4. Outline (`outline.md`) — HARD GATE on the grammar (ADOPTED 2026-07-07)
+- **Shared format, different editors.** A per-manuscript **`<project>/outline.md`** (plain Markdown) is a
+  two-level planning surface both apps read/write: a **beat** = a top-level list item (`-`/`*`/`+` + space,
+  indent 0); a `[x]`/`[X]` box marks the beat **promoted**; **notes** = the beat block's non-beat lines
+  (de-bulleted + de-indented, blanks dropped); text before the first beat (preamble) is ignored (v1).
+- **Promote is one-way:** create a chapter (title = beat text), seed its synopsis from the beat's notes, mark
+  the beat `[x]`. No back-sync — reordering chapters never rewrites the outline.
+- **Parity + an accepted asymmetry.** okashi's `outline_parse.go` and the app's `OutlineParser` are
+  line-for-line equivalent on the grammar. okashi edits the raw Markdown (**preserves** everything — headings,
+  blank lines, `*`/`+` markers, custom note indentation); the app parses → beats → **serializes** (regenerates
+  the file to `- title` / `- [x] title` + 2-space `  - note`), so okashi-only freeform extras are **normalized
+  away on an app save**. Beats + notes + promoted state round-trip both ways; that normalization asymmetry is
+  **accepted** (it's not data loss of the outline itself).
+- **HARD GATE:** any change to the beat/note **grammar** (marker set, the promoted box, note nesting / `>2`
+  levels, preamble handling, or the promote side-effects) is a shared-format change — STOP, confirm, implement
+  in **both** (`outline_parse.go` ⇄ `OutlineParser`). Routine outline edits are normal runtime ops.
 
 *(End of mirrored block.)*
 
