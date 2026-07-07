@@ -15,3 +15,5 @@
 /okashi-apple
 /libokashifm.a
 dist/
+docs/launch-drafts.md
+docs/claude-review-decision-prompt.md
