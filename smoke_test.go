@@ -2104,3 +2104,26 @@ func TestHomeFocusFollowsVisibleColumns(t *testing.T) {
 		t.Fatal("resize left focus on a hidden region")
 	}
 }
+
+func TestResolveDirArg(t *testing.T) {
+	if _, isDir, _ := resolveDirArg([]string{"okashi"}); isDir {
+		t.Fatal("no positional arg → not a dir arg")
+	}
+	if _, isDir, _ := resolveDirArg([]string{"okashi", "--version"}); isDir {
+		t.Fatal("a flag is not a dir arg")
+	}
+	dir := t.TempDir()
+	got, isDir, err := resolveDirArg([]string{"okashi", dir})
+	abs, _ := filepath.Abs(dir)
+	if !isDir || err != nil || got != abs {
+		t.Fatalf("valid dir: got=%q isDir=%v err=%v (want %q)", got, isDir, err, abs)
+	}
+	if _, isDir, err := resolveDirArg([]string{"okashi", filepath.Join(dir, "nope")}); !isDir || err == nil {
+		t.Fatalf("missing path → dir arg with error: isDir=%v err=%v", isDir, err)
+	}
+	f := filepath.Join(dir, "a.md")
+	os.WriteFile(f, []byte("x"), 0o644)
+	if _, isDir, err := resolveDirArg([]string{"okashi", f}); !isDir || err == nil {
+		t.Fatalf("a file → dir arg with error (single-file deferred): isDir=%v err=%v", isDir, err)
+	}
+}

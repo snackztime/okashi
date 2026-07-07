@@ -31,11 +31,12 @@ const usage = `okashi — a minimal terminal writing app
 
 Usage:
   okashi              open the writing app
+  okashi <dir>        open in a specific folder (overrides $OKASHI_DIR)
   okashi --version    print the version
   okashi --help       show this help
 
-Files open in $OKASHI_DIR, else iCloud Drive's okashi folder, else
-~/Documents/okashi. Inside the app, ctrl+p toggles a Markdown preview.`
+With no path, files open in $OKASHI_DIR, else iCloud Drive's okashi folder,
+else ~/Documents/okashi. Inside the app, ctrl+p toggles a Markdown preview.`
 
 // defaultColumnWidth is the target writing measure (the readable "ideal
 // measure" is ~66). Override with OKASHI_WIDTH.
@@ -2738,6 +2739,29 @@ func (m *model) saveIfDirty() {
 	}
 }
 
+// resolveDirArg interprets a positional path argument (`okashi <dir>`). It returns (absDir, true, nil)
+// for a valid existing directory (which should override OKASHI_DIR), ("", true, err) for a bad path
+// (missing, or a file — single-file open is deferred), and ("", false, nil) when there is no
+// positional path arg (a flag, or none). Flags/subcommands are handled by main's switch first.
+func resolveDirArg(args []string) (string, bool, error) {
+	if len(args) < 2 || strings.HasPrefix(args[1], "-") {
+		return "", false, nil
+	}
+	a := args[1]
+	info, err := os.Stat(a)
+	if err != nil {
+		return "", true, fmt.Errorf("no such file or directory: %s", a)
+	}
+	if !info.IsDir() {
+		return "", true, fmt.Errorf("%s is a file — pass a folder (opening a single file isn't supported yet)", a)
+	}
+	abs, err := filepath.Abs(a)
+	if err != nil {
+		return "", true, err
+	}
+	return abs, true, nil
+}
+
 func main() {
 	if len(os.Args) > 1 {
 		switch os.Args[1] {
@@ -2747,6 +2771,14 @@ func main() {
 		case "--help", "-h", "help":
 			fmt.Println(usage)
 			return
+		}
+		// A positional path opens okashi in that folder, overriding $OKASHI_DIR.
+		if dir, isDirArg, err := resolveDirArg(os.Args); isDirArg {
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "okashi: "+err.Error())
+				os.Exit(1)
+			}
+			os.Setenv("OKASHI_DIR", dir)
 		}
 	}
 
