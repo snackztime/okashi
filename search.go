@@ -308,16 +308,46 @@ func (m *model) replaceAllInDoc() {
 	if q == "" {
 		return
 	}
-	cur := m.editor.Value()
-	n := strings.Count(cur, q)
-	if n == 0 {
-		m.status = "no matches for \"" + q + "\""
-		return
+	out, status, changed := replaceStatus(m.editor.Value(), q, r)
+	if changed {
+		m.checkpointUndo()
+		m.editor.SetValue(out)
+		m.dirty = true
 	}
-	m.checkpointUndo()
-	m.editor.SetValue(strings.ReplaceAll(cur, q, r))
-	m.dirty = true
-	m.status = fmt.Sprintf("replaced %d × \"%s\" → \"%s\"", n, q, r)
+	m.status = status
+}
+
+// replaceStatus computes the literal (case-sensitive) replace-all of q→r in text, plus a status line
+// that is honest about the mismatch with search: search is case-insensitive, so it can highlight
+// matches this literal replace won't touch. The status flags those case-variants rather than silently
+// leaving them (a surprise on a destructive action). Replace stays literal on purpose — a
+// case-insensitive replace would clobber capitalization (turning "The" into "a").
+func replaceStatus(text, q, r string) (out, status string, changed bool) {
+	if q == "" {
+		return text, "", false
+	}
+	n := strings.Count(text, q)
+	ci := countFold(text, q)
+	if n == 0 {
+		if ci > 0 {
+			return text, "no exact-case matches for \"" + q + "\" (search ignores case; replace matches it)", false
+		}
+		return text, "no matches for \"" + q + "\"", false
+	}
+	out = strings.ReplaceAll(text, q, r)
+	status = fmt.Sprintf("replaced %d × \"%s\" → \"%s\"", n, q, r)
+	if ci > n {
+		status += fmt.Sprintf(" · %d case-variant(s) left (replace matches case)", ci-n)
+	}
+	return out, status, true
+}
+
+// countFold counts case-insensitive, non-overlapping occurrences of sub in s.
+func countFold(s, sub string) int {
+	if sub == "" {
+		return 0
+	}
+	return strings.Count(strings.ToLower(s), strings.ToLower(sub))
 }
 
 // searchView renders the search screen.

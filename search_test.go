@@ -156,3 +156,24 @@ func TestSearchAllSourcesTagsAndSkips(t *testing.T) {
 		t.Fatalf("hits should be tagged with their source name, got %+v", hits)
 	}
 }
+
+func TestReplaceStatusFlagsCaseVariants(t *testing.T) {
+	// Literal replace only touches exact-case matches; the status flags what the
+	// (case-insensitive) search would have shown.
+	out, status, changed := replaceStatus("The the THE", "the", "x")
+	if !changed || out != "The x THE" {
+		t.Fatalf("out=%q changed=%v", out, changed)
+	}
+	if !strings.Contains(status, "replaced 1") || !strings.Contains(status, "case-variant") {
+		t.Fatalf("status should flag case-variants left, got %q", status)
+	}
+	// No exact-case match, but case-insensitive matches exist → explain, don't just say "no matches".
+	_, status, changed = replaceStatus("The THE", "the", "x")
+	if changed || !strings.Contains(status, "exact-case") {
+		t.Fatalf("want an exact-case explanation, got %q changed=%v", status, changed)
+	}
+	// All-same-case → no case-variant note.
+	if _, status, _ = replaceStatus("the the", "the", "x"); strings.Contains(status, "case-variant") {
+		t.Fatalf("no case-variant note expected, got %q", status)
+	}
+}
