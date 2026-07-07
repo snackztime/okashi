@@ -1,9 +1,16 @@
 # Full-review roadmap — Tiers 1–3 + non-goals
 
+> **⚠️ SUPERSEDED (2026-07-07). Historical record — do not action from this doc.**
+> Nearly all of Tier 0–3 shipped: data safety, prebuilt binaries + **v0.1.0 released**, first-run
+> onboarding, DOCX, undo, find & replace, resume-at-cursor, snapshots, Project Properties, readability,
+> corkboard, outline mode. Homebrew is the one deliberately-deferred item (binaries-only for now — see
+> `RELEASING.md`). For current state and open work, see the project-status memory and the latest review
+> `docs/claude-review-decision-prompt.md`. Kept for provenance only.
+
 **Date:** 2026-07-03
 **Source:** 3-agent full product review (adoption/opus, features/sonnet, reliability/sonnet), controller-synthesized.
-**Status:** Roadmap. Tier-0 (data safety) is specced separately and built first
-(`2026-07-03-tier0-data-safety-design.md`). Each item below gets its own spec+plan when scheduled.
+**Status:** Superseded (was: Roadmap). Tier-0 (data safety) was specced separately and built first
+(`2026-07-03-tier0-data-safety-design.md`).
 
 ---
 
