@@ -4,11 +4,10 @@
 #   vhs demo.tape           # writes docs/demo.gif
 #
 # The tape builds okashi, copies the sample manuscript to a throwaway /tmp dir
-# (so typing in the demo never dirties the committed corpus), then drives a short
-# tour: open a project, flip the pane into the CORKBOARD (synopsis cards) and its
-# full-screen spread, open a chapter and write a line, show the F1 help, and finish
-# on the Tufte book preview. Tweak the Sleep values or navigation keys below if your
-# terminal's timing/layout differs.
+# (so the demo never dirties the committed corpus), then drives a short tour: open a
+# project, the full-screen CORKBOARD (ctrl+k), the OUTLINE (ctrl+l), the F1 help,
+# writing with sentence-focus dimming, and the Tufte book preview. Tweak the Sleep
+# values or navigation keys below if your terminal's timing/layout differs.
 
 Output docs/demo.gif
 
@@ -39,47 +38,51 @@ Type "/tmp/okashi-demo-bin"
 Enter
 Sleep 2.5s
 
-# The launch hub focuses the LIBRARY on "The Lighthouse" — open it.
-Enter
-Sleep 1.5s
-
-# Step onto the first chapter (row 0 is the ".." up-entry).
-Down
-Sleep 0.8s
-
-# --- the CORKBOARD: the manuscript navigator ---
-# ctrl+k flips the left pane from the chapter list to synopsis cards.
-Ctrl+K
-Sleep 3s
-
-# `c` opens the full-screen corkboard — the roomy spread (J/K reorder, e synopsis).
-Type "c"
-Sleep 3.5s
-
-# esc back to the pane; ctrl+k returns it to the compact chapter list.
-Escape
-Sleep 1s
-Ctrl+K
-Sleep 1s
-
-# --- the help overlay (categorized shortcuts) ---
-# `?` opens it from the sidebar (F1 works too in the app; VHS 0.11 has no F1 key).
-Type "?"
-Sleep 3.5s
-Escape
-Sleep 1s
-
-# --- write (full-focus, dimmed) ---
-# Open "The Keeper", collapse the file panel for a full-width surface, then add two lines.
-# The first sentence dims once the cursor moves to the second — okashi's sentence-focus dimming.
-Down
-Sleep 0.5s
+# The launch hub focuses the LIBRARY on the sample — open it.
 Enter
 Sleep 1.2s
+
+# Open the first chapter, then step back to the chapter list (so ctrl+l has a chapter to return to).
+Down
+Sleep 0.4s
+Enter
+Sleep 1.2s
+Escape
+Sleep 0.8s
+
+# --- the CORKBOARD (ctrl+k): the full-screen manuscript navigator ---
+# Synopsis cards + a progress header (chapters · words · goal); J/K or shift+↑↓ reorder.
+Ctrl+K
+Sleep 3.5s
+Escape
+Sleep 1s
+
+# --- the OUTLINE (ctrl+l): two-level beats + notes; a checked beat has been promoted to a chapter ---
+Ctrl+L
+Sleep 3.5s
+Escape
+Sleep 0.8s
+
+# --- the help overlay (categorized shortcuts) ---
+# esc from the editor returns to the sidebar; `?` opens help there (F1 works too).
+Escape
+Sleep 0.4s
+Type "?"
+Sleep 3s
+Escape
+Sleep 0.8s
+
+# --- write (full-focus, sentence dimming) ---
+# Open a chapter, collapse the file panel for a full-width surface, then add two lines.
+# The first sentence dims once the cursor moves to the second — okashi's sentence-focus dimming.
+Down
+Sleep 0.4s
+Enter
+Sleep 1s
 Ctrl+B
-Sleep 1.5s
+Sleep 1.2s
 Type "The sea kept its own accounts, and the light was how a keeper settled them."
-Sleep 1.5s
+Sleep 1.2s
 Enter
 Type "He did not hurry."
 Sleep 2.5s
@@ -87,16 +90,16 @@ Sleep 2.5s
 # --- the Tufte book preview ---
 # ctrl+p preview, then `t` for the warm Tufte view; scroll to the endnotes.
 Ctrl+P
-Sleep 2s
+Sleep 1.8s
 Type "t"
 Sleep 2.5s
 Down
 Down
 Down
-Sleep 3s
+Sleep 2.5s
 
 # Back to editing, then quit.
 Ctrl+P
-Sleep 1.5s
+Sleep 1.2s
 Ctrl+C
 Sleep 1s
