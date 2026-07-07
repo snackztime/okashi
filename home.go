@@ -1190,16 +1190,18 @@ func (m model) homeView() string {
 	hint := statusStyle.Width(m.width).Align(lipgloss.Center).Render("F1 · ?  keybindings")
 	center := m.height - 1
 	if m.freshWorkspace() {
-		center -= 3 // reserve rows for the primer
+		center -= 4 // reserve rows for the tagline + primer
 	}
 	view := lipgloss.JoinVertical(lipgloss.Left,
 		lipgloss.Place(m.width, center, lipgloss.Center, lipgloss.Center, block),
 	)
 	if m.freshWorkspace() {
+		tagline := lipgloss.NewStyle().Foreground(accent).Align(lipgloss.Center).Width(m.width).Render(
+			"write a whole book in plain Markdown — chapters, outline, export")
 		primer := lipgloss.NewStyle().Foreground(subtle).Align(lipgloss.Center).Width(m.width).Render(
 			"manuscript  ordered chapters (a book)   ·   category  a plain folder of notes\n" +
 				"+  new manuscript or folder   ·   ctrl+n  new doc   ·   open Demo/ to explore")
-		view = lipgloss.JoinVertical(lipgloss.Left, view, primer)
+		view = lipgloss.JoinVertical(lipgloss.Left, view, tagline, primer)
 	}
 	return lipgloss.JoinVertical(lipgloss.Left, view, hint)
 }

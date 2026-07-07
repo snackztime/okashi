@@ -1,8 +1,17 @@
 # okashi
 
-A terminal writing app for long-form manuscripts and prose. Plain `.md` files, a
-manuscript-aware sidebar, live word counts, RTF, PDF & DOCX export, and a full-screen
-distraction-free editor — all from the command line.
+**Write a whole book in your terminal, in plain Markdown.** okashi is a
+distraction-free writing app for long-form manuscripts — split your work into
+chapters it keeps in order, brainstorm in an outline, read the whole thing
+through, and export an agent-ready `.docx` or an elegant PDF. No database, no
+proprietary bundle, no lock-in: it's just `.md` files in ordinary folders.
+
+For writers who live in the terminal (vim, Markdown, plain text) and want a real
+manuscript workflow — ordered chapters, a corkboard, word-count goals, snapshots —
+without leaving the keyboard or handing their prose to someone else's cloud.
+
+Plain `.md` files · manuscript-aware sidebar · live word counts · outline &
+corkboard · RTF / PDF / DOCX export · full-screen focus — all from the command line.
 
 <!-- Generate with `vhs demo.tape` (see demo.tape). -->
 ![okashi — opening a chapter and toggling the Tufte preview](docs/demo.gif)
