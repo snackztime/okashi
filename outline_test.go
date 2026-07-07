@@ -43,6 +43,33 @@ func TestOutlineMoveBeatKeys(t *testing.T) {
 	}
 }
 
+func TestOutlineMoveBeatShiftKeys(t *testing.T) {
+	// shift+↑/↓ is the Terminal.app-safe move chord (Option isn't Meta there).
+	m, _ := outlineOnManuscript(t)
+	m.editor.SetValue("- Alpha\n- Beta")
+	m.editor.MoveToLine(1) // on "- Beta"
+	nm, _ := m.updateOutline(tea.KeyMsg{Type: tea.KeyShiftUp})
+	m = nm.(model)
+	if got := m.editor.Value(); !strings.HasPrefix(got, "- Beta\n- Alpha") {
+		t.Fatalf("shift+up should move Beta above Alpha, got:\n%s", got)
+	}
+}
+
+func TestOutlinePromoteCtrlP(t *testing.T) {
+	// ctrl+p is the Terminal.app-safe promote chord.
+	m, dir := outlineOnManuscript(t) // 3 chapters
+	m.editor.SetValue("- New Chapter\n  - note")
+	m.editor.MoveToLine(0)
+	nm, _ := m.updateOutline(tea.KeyMsg{Type: tea.KeyCtrlP})
+	m = nm.(model)
+	if mani, _, _ := readManifest(dir); len(mani.Items) != 4 {
+		t.Fatalf("ctrl+p should promote (want 4 chapters), got %d", len(mani.Items))
+	}
+	if line0 := strings.SplitN(m.editor.Value(), "\n", 2)[0]; line0 != "- [x] New Chapter" {
+		t.Fatalf("ctrl+p promote should mark the beat, got %q", line0)
+	}
+}
+
 func TestOutlinePromoteBeat(t *testing.T) {
 	m, dir := outlineOnManuscript(t) // seedCorkManuscript starts with 3 chapters
 	m.editor.SetValue("- New Chapter\n  - a note\n  - two")

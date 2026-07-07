@@ -54,7 +54,7 @@ MANUSCRIPT  (corkboard: ctrl+k or c)
   m pager   b snapshots/diff   n notes
 
 OUTLINE  (ctrl+l)
-  alt+↑/↓ move beat   alt+↵ promote → chapter   esc done
+  shift+↑/↓ move beat   ctrl+p promote → chapter   (alt works too)
 
 WRITE
   ctrl+s save   ctrl+z undo   ⇥/⇧⇥ indent
