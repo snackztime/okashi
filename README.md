@@ -1,8 +1,17 @@
 # okashi
 
-A terminal writing app for long-form manuscripts and prose. Plain `.md` files, a
-manuscript-aware sidebar, live word counts, RTF, PDF & DOCX export, and a full-screen
-distraction-free editor — all from the command line.
+**Write a whole book in your terminal, in plain Markdown.** okashi is a
+distraction-free writing app for long-form manuscripts — split your work into
+chapters it keeps in order, brainstorm in an outline, read the whole thing
+through, and export an agent-ready `.docx` or an elegant PDF. No database, no
+proprietary bundle, no lock-in: it's just `.md` files in ordinary folders.
+
+For writers who live in the terminal (vim, Markdown, plain text) and want a real
+manuscript workflow — ordered chapters, a corkboard, word-count goals, snapshots —
+without leaving the keyboard or handing their prose to someone else's cloud.
+
+Plain `.md` files · manuscript-aware sidebar · live word counts · outline &
+corkboard · RTF / PDF / DOCX export · full-screen focus — all from the command line.
 
 <!-- Generate with `vhs demo.tape` (see demo.tape). -->
 ![okashi — opening a chapter and toggling the Tufte preview](docs/demo.gif)
@@ -303,14 +312,16 @@ Then **⌘C** (or your terminal's copy key) to copy.
 
 ## Terminals
 
-okashi runs anywhere, but a few flourishes need a capable terminal:
+okashi runs anywhere. The **outline and corkboard** — reordering, promoting,
+navigating — all have keys that work on any terminal, including macOS
+**Terminal.app**, where the **Option** key types accented characters instead of
+acting as Meta:
 
-- **Option/Alt shortcuts** — the outline's `alt+↑/↓` (move a beat) and `alt+↵`
-  (promote) need a terminal that sends **Option as Meta**: iTerm2, Ghostty,
-  kitty, WezTerm, Alacritty. macOS **Terminal.app** doesn't by default (Option
-  types accented characters), so those keys won't fire there — the corkboard's
-  `J/K` reorder still works, and okashi shows a hint in the outline. In iTerm2:
-  *Settings → Profiles → Keys → Left Option key: Esc+*.
+- **Moving things** — reorder with `shift+↑/↓` (a chapter in the corkboard, a beat
+  in the outline; `J/K` also works in the corkboard). **Promote** a beat with
+  `ctrl+p`. The `alt+↑/↓` / `alt+↵` aliases are a convenience on Meta-capable
+  terminals (iTerm2, Ghostty, kitty, WezTerm, Alacritty). To use them in
+  Terminal.app: *Settings → Profiles → Keys → Left Option key → Esc+*.
 - **Nerd Font glyphs** degrade to plain Unicode automatically on Terminal.app and
   the Linux console (override with `OKASHI_ICONS`).
 - **Truecolor** renders best in a 24-bit terminal; through tmux, enable `RGB`/`Tc`.

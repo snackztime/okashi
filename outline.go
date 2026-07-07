@@ -59,13 +59,14 @@ func (m model) updateOutline(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case "esc":
 		m.exitOutline()
 		return m, nil
-	case "alt+up":
+	case "shift+up", "alt+up": // shift+↑ is the Terminal.app-safe move (Option isn't Meta there)
 		m.moveOutlineBeat(-1)
 		return m, nil
-	case "alt+down":
+	case "shift+down", "alt+down":
 		m.moveOutlineBeat(1)
 		return m, nil
-	case "alt+enter", "ctrl+enter":
+	case "ctrl+p", "alt+enter", "ctrl+enter": // ctrl+p = Terminal.app-safe promote (mnemonic; the
+		// editor's ctrl+p prev-line is redundant with ↑ in the outline)
 		m.promoteOutlineBeat()
 		return m, nil
 	case "enter":
@@ -180,11 +181,7 @@ func markBeatPromoted(line string) string {
 func (m model) outlineView() string {
 	title := projectTitle(filepath.Base(m.files.dir))
 	header := sectionHeader("OUTLINE · "+title, m.width)
-	footText := "alt+↑/↓ move beat · alt+↵ promote · esc done"
-	if terminalLacksMeta() {
-		footText += "   (alt keys need iTerm2/Ghostty)"
-	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render(footText)
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("shift/alt+↑↓ move beat · ctrl+p promote · esc done")
 	body := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Top, m.editor.View())
 	return lipgloss.JoinVertical(lipgloss.Left, header, body,
 		lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))

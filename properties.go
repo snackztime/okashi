@@ -375,7 +375,7 @@ func (m model) propertiesView() string {
 		b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, bar))
 		return b.String()
 	}
-	foot := lipgloss.NewStyle().Foreground(subtle).Render("⇥ field · ⏎ edit · space toggle · ctrl+s save · esc back")
+	foot := lipgloss.NewStyle().Foreground(subtle).Render("⇥ field · ⏎ edit · space toggles smart quotes · ctrl+s save · esc back")
 	b.WriteString("\n" + lipgloss.PlaceHorizontal(m.width, lipgloss.Center, foot))
 	return b.String()
 }
