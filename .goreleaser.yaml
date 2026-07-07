@@ -1,6 +1,7 @@
 # GoReleaser config for okashi — https://goreleaser.com
-# Cuts prebuilt macOS + Linux binaries (arm64 + amd64), uploads them to the GitHub
-# Release, and updates the Homebrew formula in the snackztime/homebrew-okashi tap.
+# Cuts prebuilt macOS + Linux binaries (arm64 + amd64) and uploads them + checksums to
+# the GitHub Release. Homebrew is a planned follow-up (needs a homebrew_casks block + a
+# tap repo/token — see RELEASING.md).
 #
 # Validate locally:   goreleaser check
 # Dry run (no upload): goreleaser release --snapshot --clean
@@ -39,18 +40,3 @@ release:
   github:
     owner: snackztime
     name: okashi
-
-# Homebrew: installs the PREBUILT binary (no Go toolchain needed on the user's machine).
-# Requires a one-time tap repo + token — see RELEASING.md. Remove this block to ship
-# binaries only.
-brews:
-  - name: okashi
-    repository:
-      owner: snackztime
-      name: homebrew-okashi
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: "https://github.com/snackztime/okashi"
-    description: "A lean terminal writing app for long-form manuscripts"
-    license: "MIT"
-    test: |
-      assert_match "okashi #{version}", shell_output("#{bin}/okashi --version")

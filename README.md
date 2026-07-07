@@ -20,21 +20,23 @@ corkboard · RTF / PDF / DOCX export · full-screen focus — all from the comma
 
 ## Install
 
-### Homebrew (macOS & Linux)
-
-```sh
-brew install snackztime/okashi/okashi
-```
-
-### Prebuilt binary
+### Prebuilt binary (macOS & Linux)
 
 Download the archive for your OS/architecture from the
 [Releases](https://github.com/snackztime/okashi/releases) page, extract it, and put
 `okashi` on your `PATH`:
 
 ```sh
+# pick the file matching your OS/arch on the Releases page (darwin/linux, arm64/amd64)
 tar -xzf okashi_*_darwin_arm64.tar.gz
 sudo mv okashi /usr/local/bin/
+okashi --version
+```
+
+On macOS, if Gatekeeper blocks the unsigned binary, clear the quarantine flag once:
+
+```sh
+xattr -d com.apple.quarantine /usr/local/bin/okashi   # or: right-click → Open
 ```
 
 ### From source (Go 1.25)
@@ -45,6 +47,10 @@ cd okashi
 go build -o okashi .     # build the binary
 go run .                # or run without installing
 ```
+
+### Homebrew
+
+Coming soon.
 
 ---
 
